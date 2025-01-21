@@ -47,7 +47,7 @@ export async function fetchGlideRecords(tableId: string): Promise<GlideRecord[]>
     
     let errorMessage = 'Glide API error';
     if (glideResponse.status === 401) {
-      errorMessage = 'Invalid or expired Glide API token. Please check your configuration.';
+      errorMessage = 'Invalid or expired Glide API token. Please check your Edge Function secrets.';
     } else if (glideResponse.status === 403) {
       errorMessage = 'Access forbidden. Please verify your Glide API permissions.';
     } else if (glideResponse.status === 404) {
@@ -57,17 +57,28 @@ export async function fetchGlideRecords(tableId: string): Promise<GlideRecord[]>
     throw new Error(`${errorMessage}: ${JSON.stringify(errorDetails, null, 2)}`);
   }
 
-  return await glideResponse.json() as GlideRecord[];
+  const responseData = await glideResponse.json();
+  console.log('Successfully fetched records from Glide:', {
+    record_count: responseData.length,
+    table_id: tableId
+  });
+
+  return responseData;
 }
 
 export async function createGlideRecord(tableId: string, recordData: any): Promise<void> {
   const apiToken = Deno.env.get('GLIDE_API_TOKEN')?.trim();
   if (!apiToken) {
-    throw new Error('GLIDE_API_TOKEN is not set');
+    throw new Error('GLIDE_API_TOKEN is not set in Edge Function secrets');
   }
 
+  console.log('Creating record in Glide:', {
+    table_id: tableId,
+    data_preview: JSON.stringify(recordData).substring(0, 100) + '...'
+  });
+
   const createResponse = await fetch(
-    `https://api.glideapp.io/api/tables/${tableId}/rows`,
+    `https://api.glideapp.io/api/tables/${encodeURIComponent(tableId)}/rows`,
     {
       method: 'POST',
       headers: {
@@ -79,18 +90,27 @@ export async function createGlideRecord(tableId: string, recordData: any): Promi
   );
 
   if (!createResponse.ok) {
-    throw new Error(`Failed to create Glide record: ${await createResponse.text()}`);
+    const errorText = await createResponse.text();
+    throw new Error(`Failed to create Glide record: ${errorText}`);
   }
+
+  console.log('Successfully created record in Glide');
 }
 
 export async function updateGlideRecord(tableId: string, recordId: string, recordData: any): Promise<void> {
   const apiToken = Deno.env.get('GLIDE_API_TOKEN')?.trim();
   if (!apiToken) {
-    throw new Error('GLIDE_API_TOKEN is not set');
+    throw new Error('GLIDE_API_TOKEN is not set in Edge Function secrets');
   }
 
+  console.log('Updating record in Glide:', {
+    table_id: tableId,
+    record_id: recordId,
+    data_preview: JSON.stringify(recordData).substring(0, 100) + '...'
+  });
+
   const updateResponse = await fetch(
-    `https://api.glideapp.io/api/tables/${tableId}/rows/${recordId}`,
+    `https://api.glideapp.io/api/tables/${encodeURIComponent(tableId)}/rows/${encodeURIComponent(recordId)}`,
     {
       method: 'PATCH',
       headers: {
@@ -102,6 +122,9 @@ export async function updateGlideRecord(tableId: string, recordId: string, recor
   );
 
   if (!updateResponse.ok) {
-    throw new Error(`Failed to update Glide record: ${await updateResponse.text()}`);
+    const errorText = await updateResponse.text();
+    throw new Error(`Failed to update Glide record: ${errorText}`);
   }
+
+  console.log('Successfully updated record in Glide');
 }
