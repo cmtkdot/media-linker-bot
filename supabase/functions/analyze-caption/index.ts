@@ -22,7 +22,6 @@ serve(async (req) => {
     
     console.log('Analyzing data:', { messageId, mediaGroupId, caption });
 
-    // Allow processing without IDs if we're just analyzing caption
     const isAnalysisOnly = !messageId && !mediaGroupId;
     
     if (!caption) {
@@ -46,21 +45,24 @@ serve(async (req) => {
         messages: [
           {
             role: 'system',
-            content: `Extract product information from captions following these rules:
-            1. product_name: Product name from caption
-            2. product_code: Code after # (without the #)
-            3. quantity: Number after "x" (if present)
-            4. vendor_uid: Letters before numbers in the code
+            content: `Extract product information from captions following these strict rules:
+            1. product_name: Everything before the # symbol, trimmed
+            2. product_code: Text between # and x, excluding any parentheses content
+            3. quantity: ONLY the number after "x" and before any parentheses
+               - Example: "x 3 (20 behind)" should extract just 3
+               - Ignore any numbers inside parentheses
+            4. vendor_uid: Letters before numbers in the product code
             5. purchase_date: Convert 6 digits from code (mmDDyy) to YYYY-MM-DD
-            6. notes: Any text in parentheses
+            6. notes: Any text in parentheses () should be captured as notes
+               - Multiple parentheses should be combined with spaces
 
             Return a JSON object with:
             - product_name: string or null
             - product_code: string or null
-            - quantity: number or null 
+            - quantity: number or null (ONLY the main quantity, not numbers in notes)
             - vendor_uid: string or null
             - purchase_date: string or null (in YYYY-MM-DD format)
-            - notes: string or null 
+            - notes: string or null (text from ALL parentheses)
             - raw_caption: the original caption
             - analyzed_at: current timestamp in ISO format`
           },
@@ -85,7 +87,6 @@ serve(async (req) => {
     const result = JSON.parse(data.choices[0].message.content);
     console.log('Parsed result:', result);
 
-    // If this is just analysis, return the result without updating DB
     if (isAnalysisOnly) {
       return new Response(
         JSON.stringify(result),
@@ -93,7 +94,6 @@ serve(async (req) => {
       );
     }
 
-    // Initialize Supabase client for DB updates
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
@@ -103,7 +103,6 @@ serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Update records based on messageId or mediaGroupId
     if (messageId) {
       const { error: updateError } = await supabase
         .from('telegram_media')
