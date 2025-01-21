@@ -1,7 +1,106 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { getAndDownloadTelegramFile, generateSafeFileName } from './telegram-service.ts';
+import { getAndDownloadTelegramFile } from './telegram-service';
+import { handleMediaGroup } from './media-group-handler';
 
-export async function processMediaFile(
+export async function updateExistingMedia(supabase: any, mediaFile: any, message: any, messageRecord: any) {
+  console.log('Updating existing media record for file_unique_id:', mediaFile.file_unique_id, {
+    message_id: message.message_id,
+    chat_id: message.chat.id
+  });
+  
+  try {
+    // Get existing media record
+    const { data: existingMedia, error: mediaFetchError } = await supabase
+      .from('telegram_media')
+      .select('*')
+      .eq('file_unique_id', mediaFile.file_unique_id)
+      .maybeSingle();
+
+    if (mediaFetchError) {
+      console.error('Error fetching existing media:', {
+        error: mediaFetchError,
+        file_unique_id: mediaFile.file_unique_id
+      });
+      throw mediaFetchError;
+    }
+
+    if (!existingMedia) {
+      console.error('Existing media record not found:', {
+        file_unique_id: mediaFile.file_unique_id
+      });
+      throw new Error('Existing media record not found');
+    }
+
+    // Prepare telegram data with updated message info
+    const telegramData = {
+      ...existingMedia.telegram_data,
+      message_id: message.message_id,
+      chat_id: message.chat.id,
+      sender_chat: message.sender_chat,
+      chat: message.chat,
+      date: message.date,
+      caption: message.caption,
+      media_group_id: message.media_group_id,
+    };
+
+    console.log('Updating telegram_media record:', {
+      id: existingMedia.id,
+      message_id: message.message_id
+    });
+
+    // Update telegram_media record
+    const { error: mediaError } = await supabase
+      .from('telegram_media')
+      .update({
+        telegram_data: telegramData,
+        caption: message.caption,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', existingMedia.id);
+
+    if (mediaError) {
+      console.error('Error updating telegram_media:', {
+        error: mediaError,
+        media_id: existingMedia.id
+      });
+      throw mediaError;
+    }
+
+    console.log('Updating message record:', {
+      id: messageRecord.id,
+      message_id: message.message_id
+    });
+
+    // Update message record
+    const { error: messageError } = await supabase
+      .from('messages')
+      .update({
+        message_data: message,
+        updated_at: new Date().toISOString(),
+        status: 'success',
+        processed_at: new Date().toISOString()
+      })
+      .eq('id', messageRecord.id);
+
+    if (messageError) {
+      console.error('Error updating message:', {
+        error: messageError,
+        message_id: messageRecord.id
+      });
+      throw messageError;
+    }
+
+    return existingMedia;
+  } catch (error) {
+    console.error('Error in updateExistingMedia:', {
+      error: error.message,
+      stack: error.stack,
+      file_unique_id: mediaFile.file_unique_id
+    });
+    throw error;
+  }
+}
+
+export async function processNewMedia(
   supabase: any,
   mediaFile: any,
   mediaType: string,
@@ -10,25 +109,10 @@ export async function processMediaFile(
   botToken: string,
   productInfo: any = null
 ) {
-  console.log(`Processing ${mediaType} file:`, mediaFile.file_id);
+  console.log(`Processing new ${mediaType} file:`, mediaFile.file_id);
 
-  try {
-    // Check for existing media to prevent duplicates
-    const { data: existingMedia } = await supabase
-      .from('telegram_media')
-      .select('id, public_url')
-      .eq('file_unique_id', mediaFile.file_unique_id)
-      .eq('telegram_data->chat_id', message.chat.id)
-      .eq('telegram_data->message_id', message.message_id)
-      .single();
-
-    if (existingMedia?.public_url) {
-      console.log('Media already exists:', existingMedia);
-      return existingMedia;
-    }
-
-    const { buffer, filePath } = await getAndDownloadTelegramFile(mediaFile.file_id, botToken);
-    
+  const { buffer, filePath } = await getAndDownloadTelegramFile(mediaFile.file_id, botToken);
+  
     // Ensure proper file extension for photos
     let fileExt = filePath.split('.').pop() || '';
     if (mediaType === 'photo' && !fileExt) {
@@ -104,10 +188,7 @@ export async function processMediaFile(
       throw new Error(`Failed to insert into database: ${dbError.message}`);
     }
 
-    console.log(`Successfully processed ${mediaType} file:`, uniqueFileName);
-    return { public_url: publicUrl };
-  } catch (error) {
-    console.error(`Error processing ${mediaType} file:`, error);
-    throw error;
-  }
+  await handleMediaGroup(supabase, message, messageRecord);
+  
+  return { public_url: publicUrl };
 }
