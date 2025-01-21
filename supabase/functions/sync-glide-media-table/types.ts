@@ -35,7 +35,7 @@ export interface GlideMediaRow {
 }
 
 export interface SupabaseMediaRow {
-  id: uuid;
+  id: string;
   file_id: string;
   file_unique_id: string;
   file_type: string;
