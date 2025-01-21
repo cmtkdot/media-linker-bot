@@ -14,20 +14,34 @@ const corsHeaders = {
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { 
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'application/json'
+      }
+    });
   }
 
   try {
     console.log('Starting sync operation...');
     
-    const { operation, tableId } = await req.json();
+    // Parse request body
+    let body;
+    try {
+      body = await req.json();
+    } catch (error) {
+      console.error('Error parsing request body:', error);
+      throw new Error('Invalid request body');
+    }
+    
+    const { operation, tableId } = body;
     console.log('Received sync request:', { operation, tableId });
     
     if (!operation || !tableId) {
       throw new Error('Missing required parameters: operation and tableId');
     }
 
-    // Get Glide configuration
+    // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
@@ -37,11 +51,12 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Get Glide configuration
     const { data: glideConfig, error: configError } = await supabase
       .from('glide_config')
       .select('*')
       .eq('id', tableId)
-      .single();
+      .maybeSingle();
 
     if (configError || !glideConfig) {
       console.error('Failed to fetch Glide configuration:', configError);
@@ -53,10 +68,10 @@ serve(async (req) => {
       supabase_table_name: glideConfig.supabase_table_name
     });
 
-    // Initialize Glide table with proper configuration
+    // Initialize Glide table
     const table = new Table(glideConfig.api_token, glideConfig.table_id);
     
-    // Test the connection by getting table info
+    // Test the connection
     try {
       await table.getInfo();
       console.log('Successfully connected to Glide table');
@@ -65,104 +80,94 @@ serve(async (req) => {
       throw new Error(`Failed to connect to Glide table: ${error.message}`);
     }
 
-    let result: SyncResult;
-    switch (operation) {
-      case 'syncBidirectional': {
-        console.log('Starting bidirectional sync');
-        
-        // Get all rows from both systems
-        const [glideRows, { data: supabaseRows, error: supabaseError }] = await Promise.all([
-          table.getRows(),
-          supabase.from(glideConfig.supabase_table_name).select('*')
-        ]);
+    let result: SyncResult = {
+      added: 0,
+      updated: 0,
+      deleted: 0,
+      errors: []
+    };
 
-        if (supabaseError) {
-          console.error('Failed to fetch Supabase rows:', supabaseError);
-          throw new Error(`Failed to fetch Supabase rows: ${supabaseError.message}`);
-        }
+    if (operation === 'syncBidirectional') {
+      console.log('Starting bidirectional sync');
+      
+      // Get all rows from both systems
+      const [glideRows, { data: supabaseRows, error: supabaseError }] = await Promise.all([
+        table.getRows(),
+        supabase.from(glideConfig.supabase_table_name).select('*')
+      ]);
 
-        console.log('Fetched rows:', {
-          glideCount: glideRows.length,
-          supabaseCount: supabaseRows?.length
-        });
-
-        // Create maps for easy lookup
-        const glideMap = new Map(glideRows.map(row => [row.id, row]));
-        const supabaseMap = new Map(supabaseRows?.map(row => [row.id, row]) || []);
-
-        const syncResult = {
-          added: 0,
-          updated: 0,
-          deleted: 0,
-          errors: [] as string[]
-        };
-
-        // Sync Supabase -> Glide
-        for (const [id, supabaseRow] of supabaseMap) {
-          try {
-            const mappedRow = mapSupabaseToGlide(supabaseRow);
-            if (!glideMap.has(id)) {
-              // For new rows, we need to create them in Glide
-              await table.addRow(mappedRow);
-              syncResult.added++;
-              console.log('Added new row to Glide:', id);
-            } else {
-              const glideRow = glideMap.get(id)!;
-              // Only update if Supabase has newer data
-              if (new Date(supabaseRow.updated_at) > new Date(glideRow.updatedAt)) {
-                await table.updateRow(id, mappedRow);
-                syncResult.updated++;
-                console.log('Updated row in Glide:', id);
-              }
-            }
-          } catch (error) {
-            console.error('Error syncing to Glide:', error);
-            syncResult.errors.push(`Error syncing to Glide: ${error.message}`);
-          }
-        }
-
-        // Sync Glide -> Supabase
-        for (const [id, glideRow] of glideMap) {
-          try {
-            const supabaseRow = supabaseMap.get(id);
-            if (!supabaseRow) {
-              // New row from Glide
-              const mappedRow = mapGlideToSupabase(glideRow);
-              const { error: insertError } = await supabase
-                .from(glideConfig.supabase_table_name)
-                .insert([mappedRow]);
-
-              if (insertError) throw insertError;
-              syncResult.added++;
-              console.log('Added new row to Supabase:', id);
-            } else {
-              // Update existing row if Glide has newer data
-              const glideUpdatedAt = new Date(glideRow.updatedAt);
-              const supabaseUpdatedAt = new Date(supabaseRow.updated_at);
-
-              if (glideUpdatedAt > supabaseUpdatedAt) {
-                const mappedRow = mapGlideToSupabase(glideRow);
-                const { error: updateError } = await supabase
-                  .from(glideConfig.supabase_table_name)
-                  .update(mappedRow)
-                  .eq('id', id);
-
-                if (updateError) throw updateError;
-                syncResult.updated++;
-                console.log('Updated row in Supabase:', id);
-              }
-            }
-          } catch (error) {
-            console.error('Error syncing from Glide:', error);
-            syncResult.errors.push(`Error syncing from Glide: ${error.message}`);
-          }
-        }
-
-        result = syncResult;
-        break;
+      if (supabaseError) {
+        console.error('Failed to fetch Supabase rows:', supabaseError);
+        throw new Error(`Failed to fetch Supabase rows: ${supabaseError.message}`);
       }
-      default:
-        throw new Error(`Invalid operation: ${operation}`);
+
+      console.log('Fetched rows:', {
+        glideCount: glideRows.length,
+        supabaseCount: supabaseRows?.length
+      });
+
+      // Create maps for easy lookup
+      const glideMap = new Map(glideRows.map(row => [row.id, row]));
+      const supabaseMap = new Map(supabaseRows?.map(row => [row.id, row]) || []);
+
+      // Sync Supabase -> Glide
+      for (const [id, supabaseRow] of supabaseMap) {
+        try {
+          const mappedRow = mapSupabaseToGlide(supabaseRow);
+          if (!glideMap.has(id)) {
+            await table.addRow(mappedRow);
+            result.added++;
+            console.log('Added new row to Glide:', id);
+          } else {
+            const glideRow = glideMap.get(id)!;
+            if (new Date(supabaseRow.updated_at) > new Date(glideRow.updatedAt)) {
+              await table.updateRow(id, mappedRow);
+              result.updated++;
+              console.log('Updated row in Glide:', id);
+            }
+          }
+        } catch (error) {
+          console.error('Error syncing to Glide:', error);
+          result.errors.push(`Error syncing to Glide: ${error.message}`);
+        }
+      }
+
+      // Sync Glide -> Supabase
+      for (const [id, glideRow] of glideMap) {
+        try {
+          const supabaseRow = supabaseMap.get(id);
+          if (!supabaseRow) {
+            const mappedRow = mapGlideToSupabase(glideRow);
+            const { error: insertError } = await supabase
+              .from(glideConfig.supabase_table_name)
+              .insert([mappedRow]);
+
+            if (insertError) throw insertError;
+            result.added++;
+            console.log('Added new row to Supabase:', id);
+          } else {
+            const glideUpdatedAt = new Date(glideRow.updatedAt);
+            const supabaseUpdatedAt = new Date(supabaseRow.updated_at);
+
+            if (glideUpdatedAt > supabaseUpdatedAt) {
+              const mappedRow = mapGlideToSupabase(glideRow);
+              const { error: updateError } = await supabase
+                .from(glideConfig.supabase_table_name)
+                .update(mappedRow)
+                .eq('id', id);
+
+              if (updateError) throw updateError;
+              result.updated++;
+              console.log('Updated row in Supabase:', id);
+            }
+          }
+        } catch (error) {
+          console.error('Error syncing from Glide:', error);
+          result.errors.push(`Error syncing from Glide: ${error.message}`);
+        }
+      }
+    } else {
+      throw new Error(`Invalid operation: ${operation}`);
     }
 
     console.log('Sync completed successfully:', result);
@@ -187,7 +192,7 @@ serve(async (req) => {
         stack: error.stack
       }),
       { 
-        status: 400,
+        status: 500,
         headers: { 
           ...corsHeaders,
           'Content-Type': 'application/json' 
