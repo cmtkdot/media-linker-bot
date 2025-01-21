@@ -98,6 +98,7 @@ export type Database = {
       }
       telegram_media: {
         Row: {
+          caption: string | null
           created_at: string
           file_id: string
           file_type: string
@@ -117,6 +118,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          caption?: string | null
           created_at?: string
           file_id: string
           file_type: string
@@ -136,6 +138,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          caption?: string | null
           created_at?: string
           file_id?: string
           file_type?: string
