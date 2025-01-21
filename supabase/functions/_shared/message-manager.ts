@@ -13,25 +13,25 @@ export async function handleMessageProcessing(
   });
 
   try {
-    // Prepare message data
+    // Determine message type with proper validation
+    const messageType = determineMessageType(message);
+    if (!messageType) {
+      console.error('Invalid message type:', message);
+      throw new Error('Invalid message type');
+    }
+
+    // Prepare message data with validated type
     const messageData = {
       message_id: message.message_id,
       chat_id: message.chat.id,
       sender_info: message.from || message.sender_chat || {},
-      message_type: message.photo ? 'photo' : 
-                   message.video ? 'video' : 
-                   message.document ? 'document' : 
-                   message.animation ? 'animation' : 'unknown',
+      message_type: messageType,
       message_data: message,
       caption: message.caption,
       media_group_id: message.media_group_id,
       status: 'pending',
-      retry_count: existingMessage?.retry_count || 0
-    };
-
-    // Add product info if available
-    if (productInfo) {
-      Object.assign(messageData, {
+      retry_count: existingMessage?.retry_count || 0,
+      ...(productInfo && {
         product_name: productInfo.product_name,
         product_code: productInfo.product_code,
         quantity: productInfo.quantity,
@@ -39,8 +39,8 @@ export async function handleMessageProcessing(
         purchase_date: productInfo.purchase_date,
         notes: productInfo.notes,
         analyzed_content: productInfo
-      });
-    }
+      })
+    };
 
     let messageRecord;
     if (existingMessage) {
@@ -49,7 +49,6 @@ export async function handleMessageProcessing(
         message_id: message.message_id
       });
 
-      // Check if there are actual updates to apply
       const hasUpdates = Object.keys(messageData).some(key => 
         JSON.stringify(messageData[key]) !== JSON.stringify(existingMessage[key])
       );
@@ -59,7 +58,6 @@ export async function handleMessageProcessing(
           .from('messages')
           .update({
             ...messageData,
-            // Reset processing status if no previous successful processing
             status: existingMessage.processed_at ? existingMessage.status : 'pending',
             retry_count: existingMessage.processed_at ? existingMessage.retry_count : 0
           })
@@ -67,8 +65,14 @@ export async function handleMessageProcessing(
           .select()
           .maybeSingle();
 
-        if (updateError) throw updateError;
-        if (!updatedMessage) throw new Error('Failed to update message record');
+        if (updateError) {
+          console.error('Error updating message:', updateError);
+          throw updateError;
+        }
+        if (!updatedMessage) {
+          console.error('Failed to update message record');
+          throw new Error('Failed to update message record');
+        }
         
         messageRecord = updatedMessage;
       } else {
@@ -77,7 +81,8 @@ export async function handleMessageProcessing(
     } else {
       console.log('Creating new message:', {
         message_id: message.message_id,
-        chat_id: message.chat.id
+        chat_id: message.chat.id,
+        message_type: messageType
       });
 
       const { data: newMessage, error: insertError } = await supabase
@@ -86,8 +91,14 @@ export async function handleMessageProcessing(
         .select()
         .maybeSingle();
 
-      if (insertError) throw insertError;
-      if (!newMessage) throw new Error('Failed to create message record');
+      if (insertError) {
+        console.error('Error creating message:', insertError);
+        throw insertError;
+      }
+      if (!newMessage) {
+        console.error('Failed to create message record');
+        throw new Error('Failed to create message record');
+      }
       
       messageRecord = newMessage;
     }
@@ -101,4 +112,12 @@ export async function handleMessageProcessing(
     console.error('Error in handleMessageProcessing:', error);
     throw error;
   }
+}
+
+function determineMessageType(message: any): string | null {
+  if (message.photo && message.photo.length > 0) return 'photo';
+  if (message.video) return 'video';
+  if (message.document) return 'document';
+  if (message.animation) return 'animation';
+  return null;
 }

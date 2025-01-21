@@ -53,6 +53,9 @@ export const uploadMediaToStorage = async (
   }
 
   try {
+    // Ensure storage bucket exists before upload
+    await ensureStorageBucket(supabase);
+
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('media')
       .upload(fileName, buffer, {
