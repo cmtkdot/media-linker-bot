@@ -15,6 +15,26 @@ export async function handleProcessingError(
   });
 
   try {
+    // Log the failed update to the failed_webhook_updates table
+    const { error: logError } = await supabase
+      .from('failed_webhook_updates')
+      .insert({
+        message_id: messageRecord.message_id,
+        chat_id: messageRecord.chat_id,
+        error_message: error.message,
+        error_stack: error.stack,
+        retry_count: retryCount,
+        message_data: messageRecord.message_data,
+        status: retryCount >= MAX_RETRY_ATTEMPTS ? 'failed' : 'pending'
+      });
+
+    if (logError) {
+      console.error('Error logging failed webhook:', {
+        error: logError,
+        message_id: messageRecord.id
+      });
+    }
+
     // Update message with retry information
     const { error: updateError } = await supabase
       .from('messages')

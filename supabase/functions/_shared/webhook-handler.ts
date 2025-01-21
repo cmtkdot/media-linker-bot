@@ -47,7 +47,21 @@ export async function handleWebhookUpdate(
         message_id: message.message_id,
         chat_id: message.chat.id
       });
-      throw fetchError;
+      
+      // Log the error and continue with next message
+      await supabase.from('failed_webhook_updates').insert({
+        message_id: message.message_id,
+        chat_id: message.chat.id,
+        error_message: fetchError.message,
+        error_stack: fetchError.stack,
+        message_data: message,
+        status: 'failed'
+      });
+      
+      return { 
+        error: 'Failed to check for existing message',
+        details: fetchError.message
+      };
     }
 
     let messageRecord = existingMessage;
@@ -75,32 +89,21 @@ export async function handleWebhookUpdate(
           error: error.message,
           message_id: message.message_id
         });
-        throw error;
-      }
-    }
-
-    // Update existing message status to processing
-    if (existingMessage) {
-      console.log('Updating existing message status:', {
-        id: existingMessage.id,
-        retry_count: retryCount
-      });
-
-      const { error: updateError } = await supabase
-        .from('messages')
-        .update({
-          status: 'processing',
-          retry_count: retryCount,
-          last_retry_at: new Date().toISOString(),
-        })
-        .eq('id', existingMessage.id);
-
-      if (updateError) {
-        console.error('Error updating message status:', {
-          error: updateError,
-          message_id: existingMessage.id
+        
+        // Log the error and continue with next message
+        await supabase.from('failed_webhook_updates').insert({
+          message_id: message.message_id,
+          chat_id: message.chat.id,
+          error_message: error.message,
+          error_stack: error.stack,
+          message_data: message,
+          status: 'failed'
         });
-        throw updateError;
+        
+        return { 
+          error: 'Failed to create message',
+          details: error.message
+        };
       }
     }
 
@@ -138,10 +141,6 @@ export async function handleWebhookUpdate(
           .maybeSingle();
 
         if (mediaCheckError) {
-          console.error('Error checking for existing media:', {
-            error: mediaCheckError,
-            file_unique_id: mediaFile.file_unique_id
-          });
           throw mediaCheckError;
         }
 
@@ -179,10 +178,6 @@ export async function handleWebhookUpdate(
           .eq('id', messageRecord.id);
 
         if (statusError) {
-          console.error('Error updating message status:', {
-            error: statusError,
-            message_id: messageRecord.id
-          });
           throw statusError;
         }
 
@@ -199,6 +194,21 @@ export async function handleWebhookUpdate(
 
       } catch (error) {
         retryCount++;
+        if (error.message === 'Duplicate file_id found in message_data') {
+          // For duplicate file_id errors, log and continue without retrying
+          await supabase.from('failed_webhook_updates').insert({
+            message_id: message.message_id,
+            chat_id: message.chat.id,
+            error_message: error.message,
+            error_stack: error.stack,
+            message_data: message,
+            status: 'duplicate'
+          });
+          return {
+            error: 'Duplicate media file',
+            details: error.message
+          };
+        }
         await handleProcessingError(supabase, error, messageRecord, retryCount);
       }
     }
@@ -211,6 +221,17 @@ export async function handleWebhookUpdate(
       message_id: message?.message_id,
       chat_id: message?.chat?.id
     });
+    
+    // Ensure the error is logged in the failed_webhook_updates table
+    await supabase.from('failed_webhook_updates').insert({
+      message_id: message?.message_id,
+      chat_id: message?.chat?.id,
+      error_message: error.message,
+      error_stack: error.stack,
+      message_data: message,
+      status: 'failed'
+    });
+    
     throw error;
   }
 }
