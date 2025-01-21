@@ -43,17 +43,27 @@ export async function updateExistingMedia(supabase: any, mediaFile: any, message
       media_group_id: message.media_group_id,
     };
 
-    console.log('Updating telegram_media record:', {
+    // Extract product info from caption
+    const productInfo = {
+      caption: message.caption,
+      product_name: messageRecord.product_name,
+      product_code: messageRecord.product_code,
+      quantity: messageRecord.quantity,
+      vendor_uid: messageRecord.vendor_uid,
+      purchase_date: messageRecord.purchase_date
+    };
+
+    console.log('Updating telegram_media record with new data:', {
       id: existingMedia.id,
-      message_id: message.message_id
+      ...productInfo
     });
 
-    // Update telegram_media record
+    // Update telegram_media record with new data
     const { error: mediaError } = await supabase
       .from('telegram_media')
       .update({
         telegram_data: telegramData,
-        caption: message.caption,
+        ...productInfo,
         updated_at: new Date().toISOString()
       })
       .eq('id', existingMedia.id);
@@ -71,11 +81,17 @@ export async function updateExistingMedia(supabase: any, mediaFile: any, message
       message_id: message.message_id
     });
 
-    // Update message record
+    // Update message record with new data
     const { error: messageError } = await supabase
       .from('messages')
       .update({
         message_data: message,
+        caption: message.caption,
+        product_name: messageRecord.product_name,
+        product_code: messageRecord.product_code,
+        quantity: messageRecord.quantity,
+        vendor_uid: messageRecord.vendor_uid,
+        purchase_date: messageRecord.purchase_date,
         updated_at: new Date().toISOString(),
         status: 'success',
         processed_at: new Date().toISOString()
