@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { corsHeaders } from "../_shared/cors.ts"
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -8,11 +9,14 @@ serve(async (req) => {
 
   try {
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY')
-    if (!OPENAI_API_KEY) {
-      throw new Error('Missing OpenAI API key')
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+
+    if (!OPENAI_API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      throw new Error('Missing required environment variables')
     }
 
-    const { caption } = await req.json()
+    const { caption, mediaGroupId } = await req.json()
     
     if (!caption) {
       return new Response(
@@ -53,6 +57,32 @@ serve(async (req) => {
     const result = JSON.parse(data.choices[0].message.content)
 
     console.log('AI Analysis result:', result)
+
+    // Initialize Supabase client
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+
+    // Update all media items in the same group
+    if (mediaGroupId) {
+      const { error: updateError } = await supabase
+        .from('telegram_media')
+        .update({
+          caption: caption,
+          product_name: result.product_name,
+          product_code: result.product_code,
+          quantity: result.quantity
+        })
+        .eq('telegram_data->media_group_id', mediaGroupId)
+
+      if (updateError) {
+        console.error('Error updating media group:', updateError)
+        throw updateError
+      }
+
+      console.log('Successfully updated all media in group:', mediaGroupId)
+    } else {
+      // If no media group, just return the analysis result
+      console.log('No media group ID provided, skipping update')
+    }
 
     return new Response(
       JSON.stringify(result),
