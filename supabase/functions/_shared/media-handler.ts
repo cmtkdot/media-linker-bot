@@ -36,6 +36,7 @@ export async function processMedia(
         retry_count: retryCount
       });
 
+      // Check for existing media within transaction
       const { data: existingMedia, error: mediaCheckError } = await supabase
         .from('telegram_media')
         .select('*')
@@ -53,35 +54,33 @@ export async function processMedia(
           file_unique_id: mediaFile.file_unique_id
         });
 
-        if (productInfo) {
-          const { error: mediaUpdateError } = await supabase
-            .from('telegram_media')
-            .update({
-              caption: message.caption,
-              product_name: productInfo.product_name,
-              product_code: productInfo.product_code,
-              quantity: productInfo.quantity,
-              vendor_uid: productInfo.vendor_uid,
-              purchase_date: productInfo.purchase_date,
-              notes: productInfo.notes,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', existingMedia.id);
+        // Update existing media with new product info
+        const { error: mediaUpdateError } = await supabase
+          .from('telegram_media')
+          .update({
+            caption: message.caption,
+            product_name: productInfo?.product_name,
+            product_code: productInfo?.product_code,
+            quantity: productInfo?.quantity,
+            vendor_uid: productInfo?.vendor_uid,
+            purchase_date: productInfo?.purchase_date,
+            notes: productInfo?.notes,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingMedia.id);
 
-          if (mediaUpdateError) {
-            console.error('Error updating existing media with new product info:', mediaUpdateError);
-          } else {
-            console.log('Updated existing media with new product info:', {
-              id: existingMedia.id,
-              product_info: productInfo
-            });
-          }
+        if (mediaUpdateError) {
+          console.error('Error updating existing media:', mediaUpdateError);
+          throw mediaUpdateError;
         }
+
+        result = existingMedia;
       } else {
         console.log('Processing new media file:', {
           file_id: mediaFile.file_id,
           type: mediaType
         });
+        
         result = await processMediaFile(
           supabase,
           mediaFile,
@@ -93,6 +92,7 @@ export async function processMedia(
         );
       }
 
+      // Update message status
       const { error: statusError } = await supabase
         .from('messages')
         .update({

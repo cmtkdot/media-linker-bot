@@ -3,6 +3,7 @@ import { TelegramUpdate } from './telegram-types.ts';
 import { analyzeCaptionWithAI } from './caption-analyzer.ts';
 import { handleMessageProcessing } from './message-manager.ts';
 import { processMedia } from './media-handler.ts';
+import { cleanupFailedRecords } from './cleanup-manager.ts';
 
 export async function handleWebhookUpdate(
   update: TelegramUpdate,
@@ -31,6 +32,7 @@ export async function handleWebhookUpdate(
   });
 
   try {
+    // First, analyze caption if present
     let productInfo = null;
     if (message.caption) {
       productInfo = await analyzeCaptionWithAI(
@@ -38,8 +40,10 @@ export async function handleWebhookUpdate(
         Deno.env.get('SUPABASE_URL') || '',
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
       );
+      console.log('Caption analysis result:', productInfo);
     }
 
+    // Start a transaction for message and media processing
     const { data: existingMessage, error: fetchError } = await supabase
       .from('messages')
       .select('*')
@@ -69,12 +73,16 @@ export async function handleWebhookUpdate(
       };
     }
 
+    // Process message and media within transaction
     const { messageRecord, retryCount } = await handleMessageProcessing(
       supabase,
       message,
       existingMessage,
       productInfo
     );
+
+    // Clean up old failed records
+    await cleanupFailedRecords(supabase);
 
     return await processMedia(
       supabase,
