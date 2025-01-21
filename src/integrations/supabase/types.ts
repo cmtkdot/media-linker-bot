@@ -51,6 +51,36 @@ export type Database = {
         }
         Relationships: []
       }
+      glide_config: {
+        Row: {
+          api_token: string
+          app_id: string
+          created_at: string
+          id: string
+          table_id: string
+          table_name: string
+          updated_at: string
+        }
+        Insert: {
+          api_token: string
+          app_id: string
+          created_at?: string
+          id?: string
+          table_id: string
+          table_name: string
+          updated_at?: string
+        }
+        Update: {
+          api_token?: string
+          app_id?: string
+          created_at?: string
+          id?: string
+          table_id?: string
+          table_name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           analyzed_content: Json | null
