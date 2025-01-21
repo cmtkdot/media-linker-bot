@@ -1,5 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -7,7 +8,6 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -19,7 +19,15 @@ serve(async (req) => {
       throw new Error('OpenAI API key is not configured');
     }
 
-    const { caption, mediaGroupId, messageId, telegramMediaId } = await req.json();
+    const { caption, messageData } = await req.json();
+    
+    // Extract required IDs from messageData
+    const telegramMediaId = messageData?.telegram_media_id;
+    const mediaGroupId = messageData?.media_group_id;
+    
+    if (!telegramMediaId && !mediaGroupId) {
+      throw new Error('Either telegramMediaId or mediaGroupId is required for updates');
+    }
     
     if (!caption) {
       console.log('No caption provided, returning null result');
@@ -38,7 +46,7 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4',
         messages: [
           {
             role: 'system',
@@ -92,6 +100,58 @@ serve(async (req) => {
     } catch (parseError) {
       console.error('Error parsing OpenAI response:', parseError);
       throw new Error('Failed to parse OpenAI response');
+    }
+
+    // Initialize Supabase client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error('Missing Supabase configuration');
+    }
+    
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Update telegram_media table with analyzed content
+    if (telegramMediaId) {
+      const { error: updateError } = await supabase
+        .from('telegram_media')
+        .update({
+          analyzed_content: result,
+          product_name: result.product_name,
+          product_code: result.product_code,
+          quantity: result.quantity,
+          vendor_uid: result.vendor_uid,
+          purchase_date: result.purchase_date,
+          notes: result.notes
+        })
+        .eq('id', telegramMediaId);
+
+      if (updateError) {
+        console.error('Error updating telegram_media:', updateError);
+        throw updateError;
+      }
+    }
+
+    // If media_group_id exists, update all related media
+    if (mediaGroupId) {
+      const { error: groupUpdateError } = await supabase
+        .from('telegram_media')
+        .update({
+          analyzed_content: result,
+          product_name: result.product_name,
+          product_code: result.product_code,
+          quantity: result.quantity,
+          vendor_uid: result.vendor_uid,
+          purchase_date: result.purchase_date,
+          notes: result.notes
+        })
+        .eq('telegram_data->>media_group_id', mediaGroupId);
+
+      if (groupUpdateError) {
+        console.error('Error updating media group:', groupUpdateError);
+        throw groupUpdateError;
+      }
     }
 
     return new Response(
