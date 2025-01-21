@@ -15,26 +15,47 @@ export async function handleProcessingError(
   });
 
   try {
-    const { error: logError } = await supabase
+    // First try to update existing record
+    const { error: updateError } = await supabase
       .from('failed_webhook_updates')
-      .insert({
-        message_id: messageRecord.message_id,
-        chat_id: messageRecord.chat_id,
+      .update({
         error_message: error.message,
         error_stack: error.stack,
         retry_count: retryCount,
         message_data: messageRecord.message_data,
-        status: retryCount >= MAX_RETRY_ATTEMPTS ? 'failed' : 'pending'
+        status: retryCount >= MAX_RETRY_ATTEMPTS ? 'failed' : 'pending',
+        last_retry_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .match({ 
+        message_id: messageRecord.message_id,
+        chat_id: messageRecord.chat_id 
       });
 
-    if (logError) {
-      console.error('Error logging failed webhook:', {
-        error: logError,
-        message_id: messageRecord.id
-      });
+    // If no record exists, create a new one
+    if (updateError) {
+      const { error: insertError } = await supabase
+        .from('failed_webhook_updates')
+        .insert({
+          message_id: messageRecord.message_id,
+          chat_id: messageRecord.chat_id,
+          error_message: error.message,
+          error_stack: error.stack,
+          retry_count: retryCount,
+          message_data: messageRecord.message_data,
+          status: retryCount >= MAX_RETRY_ATTEMPTS ? 'failed' : 'pending',
+          last_retry_at: new Date().toISOString()
+        });
+
+      if (insertError) {
+        console.error('Error logging failed webhook:', {
+          error: insertError,
+          message_id: messageRecord.id
+        });
+      }
     }
 
-    const { error: updateError } = await supabase
+    const { error: updateMessageError } = await supabase
       .from('messages')
       .update({
         retry_count: retryCount,
@@ -45,7 +66,7 @@ export async function handleProcessingError(
       })
       .eq('id', messageRecord.id);
 
-    if (updateError) throw updateError;
+    if (updateMessageError) throw updateMessageError;
 
     if (error.message?.includes('Too Many Requests') || error.code === 429) {
       const backoffDelay = calculateBackoffDelay(retryCount);
