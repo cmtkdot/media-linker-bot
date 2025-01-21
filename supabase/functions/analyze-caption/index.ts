@@ -42,15 +42,10 @@ serve(async (req) => {
 
             1. product_name: Product name from caption
             2. product_code: Code after # (without the #)
-            3. quantity: Number after "x" (if present), ignore anything in () which should be added to notes or if there a space or anything after the quantity that should be in notes too. example Candy Paint #FISH011425 x 3 (20 behind) should be quantity of 3              
+            3. quantity: Number after "x" (if present), ignore anything in () which should be added to notes
             4. vendor_uid: Letters before numbers in the code
             5. purchase_date: Convert 6 digits from code (mmDDyy) to YYYY-MM-DD
             6. notes: Any text in parentheses or text that is not part of the product name, product code, purchase date, vendor uid, or quantity
-
-            Date format in code:
-            - First 2 digits = month
-            - Next 2 digits = day
-            - Last 2 digits = year (assume 2024)
 
             Return a JSON object with:
             - product_name: string or null
