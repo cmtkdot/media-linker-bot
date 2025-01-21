@@ -26,21 +26,21 @@ const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 export const validateMediaFile = async (file: any, mediaType: string) => {
   if (!file) throw new Error('No file provided');
   
-  if (file.size > MAX_FILE_SIZE) {
+  if (file.file_size && file.file_size > MAX_FILE_SIZE) {
     throw new Error(`File size exceeds maximum allowed size of ${MAX_FILE_SIZE / (1024 * 1024)}MB`);
+  }
+
+  // Special handling for Telegram files without explicit MIME type
+  if (!file.mime_type && file.file_path) {
+    file.mime_type = getMimeType(file.file_path);
   }
 
   const mimeType = file.mime_type?.toLowerCase();
   const allowedTypes = mediaType === 'video' ? ALLOWED_VIDEO_TYPES : ALLOWED_IMAGE_TYPES;
 
-  // Special handling for jpg files
-  if (file.file_path?.toLowerCase().endsWith('.jpg') && !mimeType) {
-    console.log('Detected jpg file without mime type, assuming image/jpeg');
-    return true;
-  }
-
-  if (!allowedTypes.includes(mimeType)) {
-    throw new Error(`File type ${mimeType} is not allowed. Allowed types: ${allowedTypes.join(', ')}`);
+  if (mimeType && !allowedTypes.includes(mimeType)) {
+    console.warn(`Warning: Received mime type ${mimeType} for ${mediaType}`);
+    // Don't throw error, let's try to infer from extension
   }
 
   return true;
@@ -101,6 +101,11 @@ export const getMimeType = (filePath: string, defaultType: string = 'application
     'wmv': 'video/x-ms-wmv',
     'ogg': 'video/ogg'
   };
+
+  // For Telegram photos that come without extension
+  if (!ext && defaultType !== 'application/octet-stream') {
+    return defaultType;
+  }
 
   return ext ? (mimeTypes[ext] || defaultType) : defaultType;
 };

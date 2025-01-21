@@ -41,7 +41,9 @@ export const uploadMediaToStorage = async (
 ) => {
   console.log('Uploading file:', fileName);
   
+  // Get proper MIME type based on file extension or default
   const mimeType = getMimeType(fileName, defaultMimeType);
+  console.log('Determined MIME type:', mimeType);
   
   const { data: uploadData, error: uploadError } = await supabase.storage
     .from('media')
