@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import { GlideClient } from 'https://esm.sh/@glideapps/tables@1.0.5';
 
 const corsHeaders = {
@@ -16,9 +16,8 @@ serve(async (req) => {
   try {
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    const GLIDE_API_TOKEN = Deno.env.get('GLIDE_API_TOKEN');
 
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !GLIDE_API_TOKEN) {
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
       throw new Error('Missing required environment variables');
     }
 
@@ -161,6 +160,16 @@ serve(async (req) => {
             console.error('Error syncing from Glide:', error);
             syncResult.errors.push(`Error syncing from Glide: ${error.message}`);
           }
+        }
+
+        // Update last_synced_at for all synced records
+        const { error: syncTimeError } = await supabase
+          .from('telegram_media')
+          .update({ last_synced_at: new Date().toISOString() })
+          .in('id', [...supabaseMap.keys()]);
+
+        if (syncTimeError) {
+          console.error('Error updating last_synced_at:', syncTimeError);
         }
 
         result = syncResult;
