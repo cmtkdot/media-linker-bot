@@ -1,10 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { corsHeaders } from "../_shared/cors.ts"
 
 interface TelegramUpdate {
   message?: {
@@ -106,50 +102,46 @@ async function downloadTelegramFile(filePath: string, botToken: string) {
   return response;
 }
 
+async function analyzeCaption(caption: string, supabaseUrl: string, supabaseKey: string) {
+  try {
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    const { data, error } = await supabase.functions.invoke('analyze-caption', {
+      body: { caption },
+    });
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error analyzing caption:', error);
+    return null;
+  }
+}
+
 async function syncMediaGroupCaption(
   supabase: any,
   mediaGroupId: string,
   caption: string | undefined,
-  telegramData: any
+  telegramData: any,
+  productInfo: any
 ) {
-  if (!mediaGroupId || !caption) return;
+  if (!mediaGroupId) return;
 
-  // Extract product information from caption
-  const productInfo = {
-    product_name: undefined as string | undefined,
-    product_code: undefined as string | undefined,
-    quantity: undefined as number | undefined,
+  const updateData: any = {
+    telegram_data: {
+      ...telegramData,
+      caption,
+    },
   };
 
-  if (caption) {
-    const parts = caption.split('#');
-    if (parts.length > 1) {
-      productInfo.product_name = parts[0].trim();
-      const codeParts = parts[1].split('x').map(part => part.trim());
-      if (codeParts.length > 0) {
-        productInfo.product_code = codeParts[0];
-        if (codeParts.length > 1) {
-          const quantity = parseFloat(codeParts[1]);
-          if (!isNaN(quantity)) {
-            productInfo.quantity = quantity;
-          }
-        }
-      }
-    }
+  if (productInfo) {
+    updateData.product_name = productInfo.product_name;
+    updateData.product_code = productInfo.product_code;
+    updateData.quantity = productInfo.quantity;
   }
 
-  // Update all media in the same group
   const { error } = await supabase
     .from('telegram_media')
-    .update({
-      product_name: productInfo.product_name,
-      product_code: productInfo.product_code,
-      quantity: productInfo.quantity,
-      telegram_data: {
-        ...telegramData,
-        caption,
-      },
-    })
+    .update(updateData)
     .eq('telegram_data->>media_group_id', mediaGroupId);
 
   if (error) {
@@ -165,8 +157,10 @@ serve(async (req) => {
   try {
     const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN');
     const TELEGRAM_WEBHOOK_SECRET = Deno.env.get('TELEGRAM_WEBHOOK_SECRET');
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
-    if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_WEBHOOK_SECRET) {
+    if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_WEBHOOK_SECRET || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
       throw new Error('Missing required environment variables');
     }
 
@@ -179,15 +173,11 @@ serve(async (req) => {
       );
     }
 
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     const update: TelegramUpdate = await req.json();
     console.log('Received Telegram update:', JSON.stringify(update));
 
-    // Handle both regular messages and channel posts
     const message = update.message || update.channel_post;
     if (!message) {
       return new Response(
@@ -259,6 +249,13 @@ serve(async (req) => {
       storage_path: uniqueFileName
     };
 
+    // Analyze caption with AI if present
+    let productInfo = null;
+    if (message.caption) {
+      productInfo = await analyzeCaption(message.caption, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+      console.log('AI-extracted product info:', productInfo);
+    }
+
     // Insert into telegram_media table
     const { error: dbError } = await supabase
       .from('telegram_media')
@@ -268,6 +265,11 @@ serve(async (req) => {
         file_type: mediaType,
         telegram_data: telegramData,
         public_url: `https://kzfamethztziwqiocbwz.supabase.co/storage/v1/object/public/media/${uniqueFileName}`,
+        ...(productInfo && {
+          product_name: productInfo.product_name,
+          product_code: productInfo.product_code,
+          quantity: productInfo.quantity
+        })
       });
 
     if (dbError) {
@@ -275,12 +277,13 @@ serve(async (req) => {
     }
 
     // Sync caption for media group if applicable
-    if (message.media_group_id && message.caption) {
+    if (message.media_group_id && (message.caption || productInfo)) {
       await syncMediaGroupCaption(
         supabase,
         message.media_group_id,
         message.caption,
-        telegramData
+        telegramData,
+        productInfo
       );
     }
 
