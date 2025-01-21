@@ -60,6 +60,18 @@ const MediaTable = ({ data, onEdit }: MediaTableProps) => {
     setViewerOpen(true);
   };
 
+  const handleVideoError = (video: HTMLVideoElement, defaultUrl: string) => {
+    if (video.src !== defaultUrl) {
+      video.src = defaultUrl;
+    }
+  };
+
+  const handleImageError = (img: HTMLImageElement, defaultUrl: string) => {
+    if (img.src !== defaultUrl) {
+      img.src = defaultUrl;
+    }
+  };
+
   return (
     <>
       <div className="rounded-md border">
@@ -87,26 +99,16 @@ const MediaTable = ({ data, onEdit }: MediaTableProps) => {
                 <TableCell onClick={(e) => e.stopPropagation()}>
                   {item.file_type === 'video' ? (
                     <video 
-                      src={item.public_url}
+                      src={item.public_url || item.default_public_url}
                       className="w-16 h-16 object-cover rounded"
-                      onError={(e) => {
-                        const video = e.target as HTMLVideoElement;
-                        if (video.src !== item.default_public_url) {
-                          video.src = item.default_public_url;
-                        }
-                      }}
+                      onError={(e) => handleVideoError(e.target as HTMLVideoElement, item.default_public_url)}
                     />
                   ) : (
                     <img
-                      src={item.public_url}
+                      src={item.public_url || item.default_public_url}
                       alt={item.caption || "Media"}
                       className="w-16 h-16 object-cover rounded"
-                      onError={(e) => {
-                        const img = e.target as HTMLImageElement;
-                        if (img.src !== item.default_public_url) {
-                          img.src = item.default_public_url;
-                        }
-                      }}
+                      onError={(e) => handleImageError(e.target as HTMLImageElement, item.default_public_url)}
                     />
                   )}
                 </TableCell>

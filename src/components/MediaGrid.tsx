@@ -137,6 +137,18 @@ const MediaGrid = () => {
     return `${year}-${month}-${day}`;
   };
 
+  const handleVideoError = (video: HTMLVideoElement, defaultUrl: string) => {
+    if (video.src !== defaultUrl) {
+      video.src = defaultUrl;
+    }
+  };
+
+  const handleImageError = (img: HTMLImageElement, defaultUrl: string) => {
+    if (img.src !== defaultUrl) {
+      img.src = defaultUrl;
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
@@ -191,24 +203,14 @@ const MediaGrid = () => {
                     playsInline
                     onMouseEnter={(e) => handleVideoHover(e.target as HTMLVideoElement)}
                     onMouseLeave={(e) => handleVideoLeave(e.target as HTMLVideoElement)}
-                    onError={(e) => {
-                      const video = e.target as HTMLVideoElement;
-                      if (video.src !== item.default_public_url) {
-                        video.src = item.default_public_url;
-                      }
-                    }}
+                    onError={(e) => handleVideoError(e.target as HTMLVideoElement, item.default_public_url)}
                   />
                 ) : (
                   <img
                     src={item.public_url || item.default_public_url}
                     alt={item.caption || "Media item"}
                     className="object-cover w-full h-full"
-                    onError={(e) => {
-                      const img = e.target as HTMLImageElement;
-                      if (img.src !== item.default_public_url) {
-                        img.src = item.default_public_url;
-                      }
-                    }}
+                    onError={(e) => handleImageError(e.target as HTMLImageElement, item.default_public_url)}
                   />
                 )}
                 <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity p-4">
