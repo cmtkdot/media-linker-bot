@@ -128,7 +128,7 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
           <span className="capitalize">{item.file_type}</span>
         </div>
       </div>
-      <div className="p-2 text-sm space-y-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/95 absolute bottom-0 left-0 right-0">
+      <div className="p-2 text-sm space-y-1 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-full group-hover:translate-y-0 bg-white absolute bottom-0 left-0 right-0">
         <div className="grid grid-cols-2 gap-x-2 gap-y-1">
           <div>
             <p className="font-medium truncate">{item.product_name || 'Untitled'}</p>
