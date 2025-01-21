@@ -39,18 +39,13 @@ const MediaGrid = () => {
     setIsSyncing(true);
     try {
       // Get all media groups that have at least one item without a caption
-      const { data: mediaGroups } = await supabase
+      const { data: mediaGroups, error: groupsError } = await supabase
         .from('telegram_media')
         .select('telegram_data->media_group_id')
         .is('caption', null)
-        .not('telegram_data->media_group_id', 'is', null)
-        .then(result => ({
-          ...result,
-          data: result.data?.filter((item, index, self) => 
-            item.media_group_id && 
-            self.findIndex(t => t.media_group_id === item.media_group_id) === index
-          )
-        }));
+        .not('telegram_data->media_group_id', 'is', null);
+
+      if (groupsError) throw groupsError;
 
       if (!mediaGroups?.length) {
         toast({
@@ -60,18 +55,35 @@ const MediaGrid = () => {
         return;
       }
 
-      // Sync each media group
-      for (const group of mediaGroups) {
-        const mediaGroupId = group.media_group_id;
-        if (!mediaGroupId) continue;
+      // Filter unique media group IDs
+      const uniqueGroups = mediaGroups.reduce((acc: string[], item) => {
+        const groupId = item.media_group_id;
+        if (groupId && !acc.includes(groupId)) {
+          acc.push(groupId);
+        }
+        return acc;
+      }, []);
 
-        // Get first item from the group to use for syncing
-        const { data: firstItem } = await supabase
+      if (!uniqueGroups.length) {
+        toast({
+          title: "No media groups to sync",
+          description: "All media groups have captions.",
+        });
+        return;
+      }
+
+      // Sync each media group
+      for (const groupId of uniqueGroups) {
+        const { data: firstItem, error: itemError } = await supabase
           .from('telegram_media')
           .select('id')
-          .eq('telegram_data->media_group_id', mediaGroupId)
-          .limit(1)
-          .single();
+          .eq('telegram_data->media_group_id', groupId)
+          .maybeSingle();
+
+        if (itemError) {
+          console.error('Error finding media item:', itemError);
+          continue;
+        }
 
         if (firstItem) {
           const { error: syncError } = await supabase
@@ -80,7 +92,7 @@ const MediaGrid = () => {
             });
 
           if (syncError) {
-            console.error('Error syncing media group:', mediaGroupId, syncError);
+            console.error('Error syncing media group:', groupId, syncError);
             continue;
           }
         }
