@@ -35,7 +35,8 @@ export async function processMedia(
         file_id: mediaFile.file_id,
         type: mediaType,
         retry_count: retryCount,
-        existing: !!existingMedia
+        existing: !!existingMedia,
+        message_record: messageRecord?.id || 'none'
       });
 
       let result;
@@ -45,12 +46,19 @@ export async function processMedia(
           file_unique_id: mediaFile.file_unique_id
         });
         
-        // Check if media needs reprocessing
-        const needsReprocessing = !existingMedia.processed || 
-                                !existingMedia.public_url || 
-                                existingMedia.processing_error;
+        // Always process media if it hasn't been processed successfully
+        const needsProcessing = !existingMedia.processed || 
+                              !existingMedia.public_url || 
+                              existingMedia.processing_error ||
+                              (productInfo && (
+                                productInfo.product_name !== existingMedia.product_name ||
+                                productInfo.product_code !== existingMedia.product_code ||
+                                productInfo.quantity !== existingMedia.quantity ||
+                                productInfo.vendor_uid !== existingMedia.vendor_uid ||
+                                productInfo.purchase_date !== existingMedia.purchase_date
+                              ));
 
-        if (needsReprocessing) {
+        if (needsProcessing) {
           result = await processMediaFile(
             supabase,
             mediaFile,
@@ -82,13 +90,22 @@ export async function processMedia(
 
       return { 
         message: 'Media processed successfully', 
-        messageId: messageRecord.id, 
+        messageId: messageRecord?.id || 'none',
         ...result 
       };
 
     } catch (error) {
       retryCount++;
-      await handleProcessingError(supabase, error, messageRecord, retryCount);
+      
+      // Only handle processing error if we have a message record
+      if (messageRecord) {
+        await handleProcessingError(supabase, error, messageRecord, retryCount);
+      } else {
+        console.error('Processing error without message record:', {
+          error: error.message,
+          retry_count: retryCount
+        });
+      }
       
       if (retryCount >= MAX_RETRY_ATTEMPTS) {
         throw error;
