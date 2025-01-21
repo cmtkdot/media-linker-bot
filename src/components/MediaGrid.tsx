@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Card } from "@/components/ui/card";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,7 @@ const MediaGrid = () => {
   const [search, setSearch] = useState("");
   const [editItem, setEditItem] = useState<MediaItem | null>(null);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const { data: mediaItems, isLoading, error } = useQuery({
     queryKey: ['telegram-media', search],
