@@ -15,7 +15,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 
-// Define the schema to match the required database fields
 const formSchema = z.object({
   app_id: z.string().min(1, "App ID is required"),
   table_id: z.string().min(1, "Table ID is required"),
@@ -41,11 +40,11 @@ export function NewGlideConfigForm({ onSuccess }: NewGlideConfigFormProps) {
     try {
       const { error } = await supabase
         .from('glide_config')
-        .insert({
+        .insert([{
           ...values,
           active: false,
           supabase_table_name: null
-        });
+        }]);
 
       if (error) throw error;
 

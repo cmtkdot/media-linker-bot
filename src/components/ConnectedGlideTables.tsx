@@ -4,7 +4,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { NewGlideConfigForm } from "./NewGlideConfigForm";
 import { TableLinkDialog } from "./TableLinkDialog";
 import { useState } from "react";
-import { CheckCircle, XCircle } from "lucide-react";
+import { CheckCircle, XCircle, Edit2, Trash2 } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface GlideConfig {
   id: string;
@@ -25,6 +27,35 @@ interface ConnectedGlideTablesProps {
 
 export function ConnectedGlideTables({ configs, onRefresh }: ConnectedGlideTablesProps) {
   const [selectedConfig, setSelectedConfig] = useState<GlideConfig | null>(null);
+  const { toast } = useToast();
+
+  const handleDelete = async (config: GlideConfig) => {
+    try {
+      const { error } = await supabase
+        .from('glide_config')
+        .update({ 
+          active: false,
+          supabase_table_name: null
+        })
+        .eq('id', config.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Table unlinked successfully",
+      });
+      
+      onRefresh();
+    } catch (error) {
+      console.error('Error unlinking table:', error);
+      toast({
+        title: "Error",
+        description: "Failed to unlink table",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <div className="rounded-lg border bg-card">
@@ -50,8 +81,7 @@ export function ConnectedGlideTables({ configs, onRefresh }: ConnectedGlideTable
           {configs?.map((config) => (
             <div
               key={config.id}
-              className="flex items-center justify-between p-4 rounded-lg border bg-background hover:bg-accent/50 cursor-pointer transition-colors"
-              onClick={() => setSelectedConfig(config)}
+              className="flex items-center justify-between p-4 rounded-lg border bg-background hover:bg-accent/50 transition-colors"
             >
               <div>
                 <h3 className="font-medium">{config.table_name}</h3>
@@ -59,7 +89,11 @@ export function ConnectedGlideTables({ configs, onRefresh }: ConnectedGlideTable
                   Table ID: {config.table_id}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  Syncs with: {config.supabase_table_name || 'Not linked'}
+                  {config.supabase_table_name ? (
+                    <>Linked to: <span className="font-medium">{config.supabase_table_name}</span></>
+                  ) : (
+                    'Not linked to any table'
+                  )}
                 </p>
               </div>
               <div className="flex items-center gap-4">
@@ -80,6 +114,26 @@ export function ConnectedGlideTables({ configs, onRefresh }: ConnectedGlideTable
                     </>
                   )}
                 </span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedConfig(config)}
+                    className="h-8 w-8 p-0"
+                  >
+                    <Edit2 className="h-4 w-4" />
+                  </Button>
+                  {config.active && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDelete(config)}
+                      className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
                 <div className="text-sm text-muted-foreground">
                   Last updated: {new Date(config.updated_at).toLocaleString()}
                 </div>

@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface GlideConfig {
   id: string;
@@ -27,7 +29,34 @@ interface TableLinkDialogProps {
 export function TableLinkDialog({ config, onClose, onSuccess }: TableLinkDialogProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [newTableName, setNewTableName] = useState("");
+  const [selectedTable, setSelectedTable] = useState<string>("");
+  const [availableTables, setAvailableTables] = useState<string[]>([]);
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (config) {
+      fetchAvailableTables();
+    }
+  }, [config]);
+
+  const fetchAvailableTables = async () => {
+    try {
+      // Get all tables that start with 'glide_'
+      const { data, error } = await supabase
+        .from('glide_config')
+        .select('supabase_table_name')
+        .not('supabase_table_name', 'is', null);
+
+      if (error) throw error;
+
+      // Filter out tables that are already linked
+      const linkedTables = new Set(data.map(d => d.supabase_table_name));
+      const tables = ['telegram_media']; // Add default table
+      setAvailableTables(tables.filter(table => !linkedTables.has(table)));
+    } catch (error) {
+      console.error('Error fetching tables:', error);
+    }
+  };
 
   const handleCreateTable = async () => {
     if (!config || !newTableName) return;
@@ -71,6 +100,39 @@ export function TableLinkDialog({ config, onClose, onSuccess }: TableLinkDialogP
     }
   };
 
+  const handleLinkTable = async () => {
+    if (!config || !selectedTable) return;
+
+    setIsCreating(true);
+    try {
+      const { error: updateError } = await supabase
+        .from('glide_config')
+        .update({ 
+          supabase_table_name: selectedTable,
+          active: true 
+        })
+        .eq('id', config.id);
+
+      if (updateError) throw updateError;
+
+      toast({
+        title: "Success",
+        description: "Table linked successfully",
+      });
+      
+      onSuccess();
+    } catch (error) {
+      console.error('Error linking table:', error);
+      toast({
+        title: "Error",
+        description: "Failed to link table",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   return (
     <Dialog open={!!config} onOpenChange={() => onClose()}>
       <DialogContent>
@@ -78,39 +140,83 @@ export function TableLinkDialog({ config, onClose, onSuccess }: TableLinkDialogP
           <DialogTitle>Link Table: {config?.table_name}</DialogTitle>
         </DialogHeader>
         
-        <div className="space-y-4">
-          <div>
-            <label className="text-sm font-medium">New Table Name</label>
-            <Input
-              placeholder="Enter table name"
-              value={newTableName}
-              onChange={(e) => setNewTableName(e.target.value)}
-              className="mt-1"
-            />
-            <p className="text-sm text-muted-foreground mt-1">
-              This will create a new table: glide_{newTableName}
-            </p>
-          </div>
+        <Tabs defaultValue="existing">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="existing">Link Existing Table</TabsTrigger>
+            <TabsTrigger value="new">Create New Table</TabsTrigger>
+          </TabsList>
 
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleCreateTable}
-              disabled={!newTableName || isCreating}
-            >
-              {isCreating ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Creating...
-                </>
-              ) : (
-                'Create & Link Table'
-              )}
-            </Button>
-          </div>
-        </div>
+          <TabsContent value="existing" className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">Select Table</label>
+              <Select value={selectedTable} onValueChange={setSelectedTable}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a table" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableTables.map((table) => (
+                    <SelectItem key={table} value={table}>
+                      {table}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleLinkTable}
+                disabled={!selectedTable || isCreating}
+              >
+                {isCreating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Linking...
+                  </>
+                ) : (
+                  'Link Table'
+                )}
+              </Button>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="new" className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">New Table Name</label>
+              <Input
+                placeholder="Enter table name"
+                value={newTableName}
+                onChange={(e) => setNewTableName(e.target.value)}
+                className="mt-1"
+              />
+              <p className="text-sm text-muted-foreground mt-1">
+                This will create a new table: glide_{newTableName}
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleCreateTable}
+                disabled={!newTableName || isCreating}
+              >
+                {isCreating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  'Create & Link Table'
+                )}
+              </Button>
+            </div>
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );
