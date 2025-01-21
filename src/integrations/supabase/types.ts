@@ -87,6 +87,45 @@ export type Database = {
         }
         Relationships: []
       }
+      glide_sync_queue: {
+        Row: {
+          created_at: string | null
+          error: string | null
+          id: string
+          new_data: Json | null
+          old_data: Json | null
+          operation: string
+          processed_at: string | null
+          record_id: string
+          retry_count: number | null
+          table_name: string
+        }
+        Insert: {
+          created_at?: string | null
+          error?: string | null
+          id?: string
+          new_data?: Json | null
+          old_data?: Json | null
+          operation: string
+          processed_at?: string | null
+          record_id: string
+          retry_count?: number | null
+          table_name: string
+        }
+        Update: {
+          created_at?: string | null
+          error?: string | null
+          id?: string
+          new_data?: Json | null
+          old_data?: Json | null
+          operation?: string
+          processed_at?: string | null
+          record_id?: string
+          retry_count?: number | null
+          table_name?: string
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           analyzed_content: Json | null
