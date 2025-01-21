@@ -30,7 +30,7 @@ export async function processMediaFile(
       caption: message.caption || (message.media_group_id ? messageRecord.caption : null),
       media_group_id: message.media_group_id,
       file_size: mediaFile.file_size ? BigInt(mediaFile.file_size).toString() : null,
-      mime_type: mediaFile.mime_type || (mediaType === 'photo' ? 'image/jpeg' : 'application/octet-stream'),
+      mime_type: mediaFile.mime_type || (mediaType === 'photo' ? 'image/jpeg' : 'video/mp4'),
       width: mediaFile.width ? BigInt(mediaFile.width).toString() : null,
       height: mediaFile.height ? BigInt(mediaFile.height).toString() : null,
       duration: 'duration' in mediaFile ? BigInt(mediaFile.duration).toString() : null
@@ -100,7 +100,7 @@ export async function processMediaFile(
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('media')
       .upload(uniqueFileName, buffer, {
-        contentType: mediaFile.mime_type || 'application/octet-stream',
+        contentType: mediaFile.mime_type || (mediaType === 'video' ? 'video/mp4' : 'application/octet-stream'),
         upsert: false,
         cacheControl: '3600'
       });
