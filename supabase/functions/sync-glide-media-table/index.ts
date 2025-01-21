@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import { corsHeaders } from './cors.ts';
 import { fetchGlideRecords, createGlideRecord, updateGlideRecord } from './glideApi.ts';
+import { mapGlideToSupabase, mapSupabaseToGlide } from './productMapper.ts';
 import type { SyncResult, GlideConfig } from './types.ts';
 
 serve(async (req) => {
@@ -40,7 +41,84 @@ serve(async (req) => {
       supabase_table_name: config.supabase_table_name,
     });
 
-    // Get all telegram_media records from Supabase
+    // Process any pending items in the sync queue first
+    const { data: queueItems, error: queueError } = await supabase
+      .from('glide_sync_queue')
+      .select('*')
+      .is('processed_at', null)
+      .eq('table_name', config.supabase_table_name)
+      .order('created_at', { ascending: true });
+
+    if (queueError) throw queueError;
+
+    console.log(`Found ${queueItems?.length || 0} pending sync items`);
+
+    const result: SyncResult = {
+      added: 0,
+      updated: 0,
+      deleted: 0,
+      errors: []
+    };
+
+    // Process queue items
+    for (const item of queueItems || []) {
+      try {
+        switch (item.operation) {
+          case 'INSERT':
+          case 'UPDATE':
+            const recordData = item.new_data;
+            if (!recordData) continue;
+
+            const glideData = mapSupabaseToGlide(recordData);
+            
+            if (item.operation === 'INSERT') {
+              await createGlideRecord(config.table_id, glideData);
+              result.added++;
+            } else {
+              const glideId = recordData.telegram_media_row_id;
+              if (glideId) {
+                await updateGlideRecord(config.table_id, glideId, glideData);
+                result.updated++;
+              }
+            }
+            break;
+
+          case 'DELETE':
+            // Handle deletion if needed
+            // Note: Current implementation doesn't delete records from Glide
+            break;
+        }
+
+        // Mark queue item as processed
+        await supabase
+          .from('glide_sync_queue')
+          .update({
+            processed_at: new Date().toISOString(),
+            error: null
+          })
+          .eq('id', item.id);
+
+      } catch (error) {
+        console.error('Error processing queue item:', {
+          item_id: item.id,
+          error: error.message,
+          stack: error.stack
+        });
+
+        // Update queue item with error
+        await supabase
+          .from('glide_sync_queue')
+          .update({
+            error: error.message,
+            retry_count: (item.retry_count || 0) + 1
+          })
+          .eq('id', item.id);
+
+        result.errors.push(`Error processing ${item.id}: ${error.message}`);
+      }
+    }
+
+    // Now perform full sync with Glide
     const { data: supabaseRows, error: fetchError } = await supabase
       .from(config.supabase_table_name)
       .select('*');
@@ -51,13 +129,6 @@ serve(async (req) => {
     const glideData = await fetchGlideRecords(config.table_id);
     console.log('Fetched records - Supabase:', supabaseRows.length, 'Glide:', glideData.length);
 
-    const result: SyncResult = {
-      added: 0,
-      updated: 0,
-      deleted: 0,
-      errors: []
-    };
-
     // Create a map of existing Glide records by telegram_media_row_id
     const glideRecordsMap = new Map(
       glideData.map(record => [record.telegram_media_row_id, record])
@@ -67,19 +138,7 @@ serve(async (req) => {
     for (const supabaseRecord of supabaseRows) {
       try {
         const glideRecord = glideRecordsMap.get(supabaseRecord.id);
-        const recordData = {
-          telegram_media_row_id: supabaseRecord.id,
-          file_id: supabaseRecord.file_id,
-          file_type: supabaseRecord.file_type,
-          caption: supabaseRecord.caption,
-          product_name: supabaseRecord.product_name,
-          product_code: supabaseRecord.product_code,
-          quantity: supabaseRecord.quantity,
-          vendor_uid: supabaseRecord.vendor_uid,
-          purchase_date: supabaseRecord.purchase_date,
-          notes: supabaseRecord.notes,
-          public_url: supabaseRecord.public_url || supabaseRecord.default_public_url,
-        };
+        const recordData = mapSupabaseToGlide(supabaseRecord);
 
         if (!glideRecord) {
           await createGlideRecord(config.table_id, recordData);
@@ -114,41 +173,6 @@ serve(async (req) => {
           stack: error.stack
         });
         result.errors.push(`Error processing ${supabaseRecord.id}: ${error.message}`);
-      }
-    }
-
-    // Process Glide records that don't exist in Supabase
-    const supabaseIds = new Set(supabaseRows.map(row => row.id));
-    const glideOnlyRecords = glideData.filter(
-      record => record.telegram_media_row_id && !supabaseIds.has(record.telegram_media_row_id)
-    );
-
-    // Update Supabase with any new data from Glide
-    for (const glideRecord of glideOnlyRecords) {
-      try {
-        const { error: updateError } = await supabase
-          .from(config.supabase_table_name)
-          .update({
-            caption: glideRecord.caption,
-            product_name: glideRecord.product_name,
-            product_code: glideRecord.product_code,
-            quantity: glideRecord.quantity,
-            vendor_uid: glideRecord.vendor_uid,
-            purchase_date: glideRecord.purchase_date,
-            notes: glideRecord.notes,
-            last_synced_at: new Date().toISOString()
-          })
-          .eq('id', glideRecord.telegram_media_row_id);
-
-        if (updateError) throw updateError;
-        result.updated++;
-      } catch (error) {
-        console.error('Error updating Supabase from Glide:', {
-          record_id: glideRecord.telegram_media_row_id,
-          error: error.message,
-          stack: error.stack
-        });
-        result.errors.push(`Error updating Supabase record ${glideRecord.telegram_media_row_id}: ${error.message}`);
       }
     }
 
