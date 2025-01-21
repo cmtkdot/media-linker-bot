@@ -42,8 +42,7 @@ serve(async (req) => {
 
             1. product_name: Product name from caption
             2. product_code: Code after # (without the #)
-            3. quantity: Number after "x" (if present)
-            4. vendor_uid: Letters before numbers in the code
+            3. quantity: Number after "x" (if present), ignore anything in () which should be added to notes or if there a space or anything after the quantity that should be in notes too. example Candy Paint #FISH011425 x 3 (20 behind) should be quantity of 3              4. vendor_uid: Letters before numbers in the code
             5. purchase_date: Convert 6 digits from code (mmDDyy) to MM/DD/YYYY
             6. notes: Any text in parentheses or text that is not part of the product name, product code, purchase date, vendor uid, or quantity
 
