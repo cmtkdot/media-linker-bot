@@ -44,9 +44,6 @@ serve(async (req) => {
                    update.message?.animation ? 'animation' : 'unknown'
     });
 
-    const result = await handleWebhookUpdate(update, supabase, TELEGRAM_BOT_TOKEN);
-
-    // After processing the webhook update, check for missing telegram_media records
     const message = update.message || update.channel_post;
     if (message) {
       const { data: messageRecord } = await supabase
@@ -94,7 +91,9 @@ serve(async (req) => {
             if (messageCreatedAt > mediaCreatedAt) {
               console.log('Updating existing telegram_media record:', existingMedia.id);
               
-              const defaultPublicUrl = `https://kzfamethztziwqiocbwz.supabase.co/storage/v1/object/public/media/${fileUniqueId}.jpg`;
+              const defaultPublicUrl = fileType === 'video' || fileType === 'document' || fileType === 'animation'
+                ? `https://kzfamethztziwqiocbwz.supabase.co/storage/v1/object/public/media/${fileUniqueId}.MOV`
+                : `https://kzfamethztziwqiocbwz.supabase.co/storage/v1/object/public/media/${fileUniqueId}.jpg`;
               
               const { error: updateError } = await supabase
                 .from('telegram_media')
@@ -132,7 +131,9 @@ serve(async (req) => {
           } else {
             console.log('Creating new telegram_media record for message:', messageRecord.id);
             
-            const defaultPublicUrl = `https://kzfamethztziwqiocbwz.supabase.co/storage/v1/object/public/media/${fileUniqueId}.jpg`;
+            const defaultPublicUrl = fileType === 'video' || fileType === 'document' || fileType === 'animation'
+              ? `https://kzfamethztziwqiocbwz.supabase.co/storage/v1/object/public/media/${fileUniqueId}.MOV`
+              : `https://kzfamethztziwqiocbwz.supabase.co/storage/v1/object/public/media/${fileUniqueId}.jpg`;
             
             const { error: insertError } = await supabase
               .from('telegram_media')
@@ -170,6 +171,8 @@ serve(async (req) => {
         }
       }
     }
+
+    const result = await handleWebhookUpdate(update, supabase, TELEGRAM_BOT_TOKEN);
     
     console.log('Successfully processed update:', {
       update_id: update.update_id,
