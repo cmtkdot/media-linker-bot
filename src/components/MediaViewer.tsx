@@ -29,32 +29,37 @@ const MediaViewer = ({ open, onOpenChange, media }: MediaViewerProps) => {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl">
-        <DialogHeader>
-          <DialogTitle>{media.product_name || "Media Preview"}</DialogTitle>
+      <DialogContent className="max-w-5xl">
+        <DialogHeader className="w-full">
+          <DialogTitle className="text-center">{media.product_name || "Media Preview"}</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4">
-          <div className="relative aspect-video bg-black/5 rounded-lg overflow-hidden">
-            {media.file_type === "video" ? (
-              <video
-                src={media.public_url}
-                className="w-full h-full object-contain"
-                controls
-                autoPlay
-              />
-            ) : (
-              <img
-                src={media.public_url}
-                alt={media.caption || "Media preview"}
-                className="w-full h-full object-contain"
-              />
-            )}
+        <div className="flex flex-col lg:flex-row gap-6">
+          {/* Media Column */}
+          <div className="flex-1">
+            <div className="relative aspect-video bg-black/5 rounded-lg overflow-hidden">
+              {media.file_type === "video" ? (
+                <video
+                  src={media.public_url}
+                  className="w-full h-full object-contain"
+                  controls
+                  autoPlay
+                />
+              ) : (
+                <img
+                  src={media.public_url}
+                  alt={media.caption || "Media preview"}
+                  className="w-full h-full object-contain"
+                />
+              )}
+            </div>
           </div>
-          <div className="grid gap-2 text-sm">
+
+          {/* Details Column */}
+          <div className="flex-1 space-y-4">
             {media.caption && (
               <p className="text-muted-foreground">{media.caption}</p>
             )}
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid gap-3">
               {media.product_name && (
                 <div>
                   <span className="font-medium">Product: </span>
@@ -92,22 +97,23 @@ const MediaViewer = ({ open, onOpenChange, media }: MediaViewerProps) => {
                 </div>
               )}
             </div>
-          </div>
-          <div className="flex justify-end">
-            <Button
-              variant="outline"
-              size="sm"
-              asChild
-            >
-              <a
-                href={media.public_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2"
+            <div className="pt-4">
+              <Button
+                variant="outline"
+                size="sm"
+                asChild
+                className="w-full"
               >
-                Open File <ExternalLink className="h-4 w-4" />
-              </a>
-            </Button>
+                <a
+                  href={media.public_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2"
+                >
+                  Open File <ExternalLink className="h-4 w-4" />
+                </a>
+              </Button>
+            </div>
           </div>
         </div>
       </DialogContent>
