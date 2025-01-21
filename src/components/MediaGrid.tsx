@@ -60,7 +60,19 @@ const MediaGrid = () => {
     try {
       console.log('Deleting media item:', item);
 
-      // First delete the file from storage if it exists
+      // First delete the telegram_media record
+      console.log('Deleting telegram_media record:', item.id);
+      const { error: mediaError } = await supabase
+        .from('telegram_media')
+        .delete()
+        .eq('id', item.id);
+
+      if (mediaError) {
+        console.error('Error deleting media:', mediaError);
+        throw mediaError;
+      }
+
+      // Then delete the file from storage if it exists
       if (item.telegram_data?.storage_path) {
         console.log('Deleting file from storage:', item.telegram_data.storage_path);
         const { error: storageError } = await supabase.storage
@@ -73,7 +85,7 @@ const MediaGrid = () => {
         }
       }
 
-      // Delete the linked message if it exists
+      // Finally delete the linked message if it exists
       if (item.message_id) {
         console.log('Deleting linked message:', item.message_id);
         const { error: messageError } = await supabase
@@ -85,18 +97,6 @@ const MediaGrid = () => {
           console.error('Error deleting message:', messageError);
           throw messageError;
         }
-      }
-
-      // Finally delete the media record
-      console.log('Deleting telegram_media record:', item.id);
-      const { error: mediaError } = await supabase
-        .from('telegram_media')
-        .delete()
-        .eq('id', item.id);
-
-      if (mediaError) {
-        console.error('Error deleting media:', mediaError);
-        throw mediaError;
       }
 
       toast({
