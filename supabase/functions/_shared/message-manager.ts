@@ -23,13 +23,18 @@ export async function handleMessageProcessing(
 
     console.log('Determined message type:', messageType);
 
-    // Check for existing message
-    const { data: existingRecord } = await supabase
+    // Check for existing message using maybeSingle to handle no results
+    const { data: existingRecord, error: existingError } = await supabase
       .from('messages')
       .select('*')
       .eq('message_id', message.message_id)
       .eq('chat_id', message.chat.id)
       .maybeSingle();
+
+    if (existingError) {
+      console.error('Error checking existing message:', existingError);
+      // Don't throw here, continue with upsert
+    }
 
     // Prepare message data with validated type
     const messageData = {
@@ -54,61 +59,36 @@ export async function handleMessageProcessing(
     };
 
     let messageRecord;
-    if (existingRecord) {
-      console.log('Updating existing message:', {
-        id: existingRecord.id,
-        message_id: message.message_id
-      });
+    
+    // Use upsert instead of separate update/insert
+    const { data: upsertedMessage, error: upsertError } = await supabase
+      .from('messages')
+      .upsert(messageData, { 
+        onConflict: 'message_id,chat_id',
+        returning: 'representation'
+      })
+      .select()
+      .maybeSingle();
 
-      const { data: updatedMessage, error: updateError } = await supabase
-        .from('messages')
-        .update({
-          ...messageData,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', existingRecord.id)
-        .select()
-        .maybeSingle();
-
-      if (updateError) {
-        console.error('Error updating message:', updateError);
-        throw updateError;
-      }
-
-      messageRecord = updatedMessage;
-    } else {
-      console.log('Creating new message:', {
-        message_id: message.message_id,
-        chat_id: message.chat.id
-      });
-
-      const { data: newMessage, error: insertError } = await supabase
-        .from('messages')
-        .insert({
-          ...messageData,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .select()
-        .maybeSingle();
-
-      if (insertError) {
-        console.error('Error creating message:', insertError);
-        throw insertError;
-      }
-
-      messageRecord = newMessage;
+    if (upsertError) {
+      console.error('Error upserting message:', upsertError);
+      // Don't throw here, return partial success
+      return { 
+        success: false,
+        error: upsertError,
+        messageRecord: null
+      };
     }
 
-    if (!messageRecord) {
-      throw new Error('Failed to create/update message record');
-    }
+    messageRecord = upsertedMessage;
 
     return { 
-      messageRecord, 
-      retryCount: messageRecord.retry_count,
+      success: true,
+      messageRecord,
+      retryCount: messageRecord?.retry_count || 0,
       analyzedContent: productInfo 
     };
+
   } catch (error) {
     console.error('Error in handleMessageProcessing:', {
       error: error.message,
@@ -116,7 +96,13 @@ export async function handleMessageProcessing(
       message_id: message?.message_id,
       chat_id: message?.chat?.id
     });
-    throw error;
+    
+    // Return partial success instead of throwing
+    return {
+      success: false,
+      error,
+      messageRecord: null
+    };
   }
 }
 

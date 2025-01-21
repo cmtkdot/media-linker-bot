@@ -64,29 +64,36 @@ export async function handleWebhookUpdate(
         console.log('Caption analysis result:', productInfo);
       } catch (error) {
         console.error('Error analyzing caption:', error);
+        // Continue processing even if caption analysis fails
       }
     }
 
+    // Step 3: Try to process message, but don't stop if it fails
     let messageRecord = null;
     try {
-      // Step 3: Try to process message
-      const result = await handleMessageProcessing(
+      const messageResult = await handleMessageProcessing(
         supabase,
         message,
         null,
         productInfo
       );
-      messageRecord = result.messageRecord;
+      
+      if (messageResult.success) {
+        messageRecord = messageResult.messageRecord;
+      } else {
+        console.error('Message processing warning:', messageResult.error);
+        // Continue with media processing even if message processing failed
+      }
     } catch (error) {
-      console.error('Error in message processing:', error);
-      // Continue with media processing even if message processing fails
+      console.error('Message processing error:', error);
+      // Continue with media processing even if message processing failed
     }
 
     // Step 4: Process media with gathered data
     const mediaResult = await processMedia(
       supabase,
       message,
-      messageRecord,
+      messageRecord, // This might be null, and that's okay
       botToken,
       productInfo,
       0,
@@ -109,31 +116,29 @@ export async function handleWebhookUpdate(
             status: 'success',
             processed_at: new Date().toISOString(),
             analyzed_content: productInfo
+          }, {
+            onConflict: 'message_id,chat_id',
+            returning: 'representation'
           })
           .select()
           .maybeSingle();
 
         if (!messageError && newMessage) {
           messageRecord = newMessage;
+          // Update telegram_media with message_id if needed
+          if (mediaResult.id) {
+            await supabase
+              .from('telegram_media')
+              .update({ message_id: messageRecord.id })
+              .eq('id', mediaResult.id);
+          }
         }
       } catch (error) {
         console.error('Error in secondary message creation:', error);
       }
     }
 
-    // Step 6: Update telegram_media with message_id if available
-    if (messageRecord && mediaResult) {
-      try {
-        await supabase
-          .from('telegram_media')
-          .update({ message_id: messageRecord.id })
-          .eq('file_unique_id', mediaFile.file_unique_id);
-      } catch (error) {
-        console.error('Error linking message to media:', error);
-      }
-    }
-
-    // Step 7: Clean up old failed records
+    // Step 6: Clean up old failed records
     await cleanupFailedRecords(supabase);
 
     console.log('Successfully processed update:', {
@@ -163,7 +168,7 @@ export async function handleWebhookUpdate(
       const result = await processMedia(
         supabase,
         message,
-        null,
+        null, // No message record in error case
         botToken,
         productInfo,
         0,
