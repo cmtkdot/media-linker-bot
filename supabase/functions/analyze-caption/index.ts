@@ -40,12 +40,12 @@ serve(async (req) => {
             role: 'system',
             content: `Extract product information from captions following these rules:
 
-            1. Product Name: Everything before the # symbol, excluding quantities and codes
-            2. Product Code: Full code starting with #
-            3. Quantity: Number after "x" symbol
-            4. Vendor UID: Letters before numbers in the code
-            5. Purchase Date: From the 6 digits in code (mmDDyy format, convert to MM/DD/YYYY)
-            6. Notes: Any text in parentheses
+            1. product_name: Product name from caption
+            2. product_code: Code after # (without the #)
+            3. quantity: Number after "x" (if present)
+            4. vendor_uid: Letters before numbers in the code
+            5. purchase_date: Convert 6 digits from code (mmDDyy) to MM/DD/YYYY
+            6. notes: Any text in parentheses or text that is not part of the product name, product code, purchase date, vendor uid, or quantity
 
             Date format in code:
             - First 2 digits = month
@@ -53,17 +53,17 @@ serve(async (req) => {
             - Last 2 digits = year (assume 2024)
 
             Return a JSON object with:
-            - product_name: string (text before #)
-            - product_code: string (full code with #)
-            - quantity: number or null (after x)
-            - vendor_uid: string (letters from code)
-            - purchase_date: string (MM/DD/YYYY format)
-            - notes: string or null (text in parentheses)
+            - product_name: string or null
+            - product_code: string or null
+            - quantity: number or null 
+            - vendor_uid: string or null
+            - purchase_date: string or null
+            - notes: string or null 
 
             Example caption: "Runtz Q #Q112124 x 1 (50 behind)"
             Example response: {
               "product_name": "Runtz Q",
-              "product_code": "#Q112124",
+              "product_code": "Q112124",
               "quantity": 1,
               "vendor_uid": "Q",
               "purchase_date": "11/21/2024",
