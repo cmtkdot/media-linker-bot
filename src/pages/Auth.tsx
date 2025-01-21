@@ -5,10 +5,30 @@ import { ThemeSupa } from "@supabase/auth-ui-shared";
 import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
+import { AuthError, AuthApiError } from "@supabase/supabase-js";
 
 const Auth = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  const getErrorMessage = (error: AuthError) => {
+    if (error instanceof AuthApiError) {
+      switch (error.status) {
+        case 400:
+          if (error.message.includes("missing email")) {
+            return "Please enter your email address";
+          }
+          return "Invalid login credentials. Please check your email and password.";
+        case 422:
+          return "Invalid email format. Please enter a valid email address.";
+        case 401:
+          return "Invalid credentials. Please check your email and password.";
+        default:
+          return error.message;
+      }
+    }
+    return "An unexpected error occurred. Please try again.";
+  };
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -19,6 +39,15 @@ const Auth = () => {
             title: "Welcome!",
             description: "You have successfully signed in.",
           });
+        } else if (event === "USER_UPDATED") {
+          const { error } = await supabase.auth.getSession();
+          if (error) {
+            toast({
+              variant: "destructive",
+              title: "Error",
+              description: getErrorMessage(error),
+            });
+          }
         }
       }
     );
