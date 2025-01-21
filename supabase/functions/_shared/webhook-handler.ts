@@ -33,7 +33,6 @@ export async function handleWebhookUpdate(
   });
 
   try {
-    // Always analyze caption if present, regardless of whether message exists
     let productInfo = null;
     if (message.caption) {
       console.log('Analyzing caption:', message.caption);
@@ -49,7 +48,7 @@ export async function handleWebhookUpdate(
       }
     }
 
-    // Check for existing message
+    // Check for existing message using maybeSingle() instead of single()
     const { data: existingMessage, error: fetchError } = await supabase
       .from('messages')
       .select('*')
@@ -82,7 +81,6 @@ export async function handleWebhookUpdate(
     let messageRecord = existingMessage;
     let retryCount = existingMessage?.retry_count || 0;
 
-    // If message exists and we have new product info, update it
     if (existingMessage && productInfo) {
       try {
         const { error: updateError } = await supabase
@@ -105,7 +103,6 @@ export async function handleWebhookUpdate(
           product_info: productInfo
         });
 
-        // Also update any related media records
         if (message.media_group_id) {
           const { error: mediaGroupUpdateError } = await supabase
             .from('telegram_media')
@@ -129,7 +126,6 @@ export async function handleWebhookUpdate(
         console.error('Error updating existing message:', error);
       }
     } else if (!existingMessage) {
-      // Create new message record if it doesn't exist
       try {
         messageRecord = await createMessage(supabase, message, productInfo);
         console.log('Created new message record:', {
@@ -278,6 +274,7 @@ export async function handleWebhookUpdate(
     }
 
     throw new Error(`Processing failed after ${MAX_RETRY_ATTEMPTS} attempts`);
+
   } catch (error) {
     console.error('Error in handleWebhookUpdate:', {
       error: error.message,
