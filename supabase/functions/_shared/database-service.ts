@@ -37,6 +37,20 @@ export async function processMediaFile(
   console.log(`Processing ${mediaType} file:`, mediaFile.file_id);
 
   try {
+    // Check for existing media to prevent duplicates
+    const { data: existingMedia } = await supabase
+      .from('telegram_media')
+      .select('id, public_url')
+      .eq('file_unique_id', mediaFile.file_unique_id)
+      .eq('telegram_data->chat_id', message.chat.id)
+      .eq('telegram_data->message_id', message.message_id)
+      .single();
+
+    if (existingMedia) {
+      console.log('Media already exists:', existingMedia);
+      return existingMedia;
+    }
+
     const { buffer, filePath } = await getAndDownloadTelegramFile(mediaFile.file_id, botToken);
     
     const fileExt = filePath.split('.').pop() || '';
@@ -57,8 +71,14 @@ export async function processMediaFile(
       throw new Error(`Failed to upload file: ${uploadError.message}`);
     }
 
+    // Get the public URL for the uploaded file
+    const { data: { publicUrl } } = await supabase.storage
+      .from('media')
+      .getPublicUrl(uniqueFileName);
+
     const telegramData = {
       message_id: message.message_id,
+      chat_id: message.chat.id,
       sender_chat: message.sender_chat,
       chat: message.chat,
       date: message.date,
@@ -80,7 +100,8 @@ export async function processMediaFile(
         file_type: mediaType,
         telegram_data: telegramData,
         message_id: messageRecord.id,
-        public_url: `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/media/${uniqueFileName}`,
+        public_url: publicUrl,
+        caption: message.caption,
         ...(productInfo && {
           product_name: productInfo.product_name,
           product_code: productInfo.product_code,
