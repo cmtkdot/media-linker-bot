@@ -38,7 +38,8 @@ const MediaGrid = () => {
   const handleSync = async () => {
     setIsSyncing(true);
     try {
-      // Get all media groups that have at least one item without a caption
+      type MediaGroupResult = { telegram_data: { media_group_id: string | null } }[];
+      
       const { data: mediaGroups, error: groupsError } = await supabase
         .from('telegram_media')
         .select('telegram_data->media_group_id')
@@ -56,7 +57,7 @@ const MediaGrid = () => {
       }
 
       // Filter unique media group IDs
-      const uniqueGroups = mediaGroups.reduce((acc: string[], item) => {
+      const uniqueGroups = mediaGroups.reduce((acc: string[], item: any) => {
         const groupId = item.media_group_id;
         if (groupId && !acc.includes(groupId)) {
           acc.push(groupId);
