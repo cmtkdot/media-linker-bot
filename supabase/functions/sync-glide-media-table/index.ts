@@ -1,40 +1,22 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
-import { GlideConfig, SyncResult } from './types.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Max-Age': '86400',
 };
 
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { 
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'application/json'
-      }
-    });
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    console.log('Starting sync operation...');
-    
-    // Parse request body
-    let body;
-    try {
-      body = await req.json();
-    } catch (error) {
-      console.error('Error parsing request body:', error);
-      throw new Error('Invalid request body');
-    }
-    
-    const { tableId } = body;
-    console.log('Received sync request:', { tableId });
-    
+    const { tableId } = await req.json();
+    console.log('Starting sync with tableId:', tableId);
+
     if (!tableId) {
       throw new Error('Missing required parameter: tableId');
     }
@@ -54,101 +36,78 @@ serve(async (req) => {
       .from('glide_config')
       .select('*')
       .eq('id', tableId)
-      .maybeSingle();
+      .single();
 
     if (configError || !glideConfig) {
       console.error('Failed to fetch Glide configuration:', configError);
       throw new Error(`Failed to fetch Glide configuration: ${configError?.message || 'Configuration not found'}`);
     }
 
-    console.log('Found Glide configuration:', { 
+    console.log('Found Glide configuration:', {
       table_name: glideConfig.table_name,
       table_id: glideConfig.table_id
     });
 
-    // Initialize Glide API client
-    const glideHeaders = {
-      'Authorization': `Bearer ${glideConfig.api_token}`,
-      'Content-Type': 'application/json',
-    };
-
-    let result: SyncResult = {
-      added: 0,
-      updated: 0,
-      deleted: 0,
-      errors: []
-    };
-
-    // Get all rows from Glide
+    // Fetch data from Glide
     const glideResponse = await fetch(
-      `https://api.glideapp.io/api/tables/${glideConfig.table_id}/rows`,
-      { headers: glideHeaders }
+      `https://api.glideapp.io/api/tables/${glideConfig.table_id}/rows`, 
+      {
+        headers: {
+          'Authorization': `Bearer ${glideConfig.api_token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
+      }
     );
 
     if (!glideResponse.ok) {
-      throw new Error(`Failed to fetch Glide data: ${await glideResponse.text()}`);
+      const errorText = await glideResponse.text();
+      console.error('Glide API error:', {
+        status: glideResponse.status,
+        statusText: glideResponse.statusText,
+        error: errorText
+      });
+      throw new Error(`Failed to fetch Glide data: ${errorText}`);
     }
 
-    const glideRows = await glideResponse.json();
-    
-    // Get all rows from telegram_media
-    const { data: telegramMedia, error: telegramError } = await supabase
-      .from('telegram_media')
-      .select('*');
+    const glideData = await glideResponse.json();
+    console.log(`Fetched ${glideData.length} rows from Glide`);
 
-    if (telegramError) {
-      console.error('Failed to fetch telegram_media rows:', telegramError);
-      throw new Error(`Failed to fetch telegram_media rows: ${telegramError.message}`);
-    }
+    let updated = 0;
+    const errors = [];
 
-    console.log('Fetched rows:', {
-      glideCount: glideRows.length,
-      telegramMediaCount: telegramMedia?.length
-    });
-
-    // Create maps for easy lookup
-    const glideMap = new Map(glideRows.map(row => [row.id, row]));
-    const telegramMap = new Map(telegramMedia?.map(row => [row.id, row]) || []);
-
-    // Update telegram_media with Glide data
-    for (const [id, glideRow] of glideMap) {
+    // Update telegram_media records with Glide data
+    for (const glideRow of glideData) {
       try {
-        const telegramRow = telegramMap.get(id);
-        
-        // Map Glide data to telegram_media format
-        const mappedData = {
-          glide_data: glideRow,
-          last_synced_at: new Date().toISOString()
-        };
-        
-        if (!telegramRow) {
-          // Skip creation of new records - we only update existing ones
-          continue;
+        if (!glideRow.id) continue; // Skip rows without ID
+
+        const { error: updateError } = await supabase
+          .from('telegram_media')
+          .update({ 
+            glide_data: glideRow,
+            last_synced_at: new Date().toISOString()
+          })
+          .eq('id', glideRow.id);
+
+        if (updateError) {
+          console.error('Error updating record:', updateError);
+          errors.push(`Failed to update record ${glideRow.id}: ${updateError.message}`);
         } else {
-          const glideUpdatedAt = new Date(glideRow.updatedAt);
-          const telegramUpdatedAt = new Date(telegramRow.updated_at);
-
-          if (glideUpdatedAt > telegramUpdatedAt) {
-            const { error: updateError } = await supabase
-              .from('telegram_media')
-              .update(mappedData)
-              .eq('id', id);
-
-            if (updateError) throw updateError;
-            result.updated++;
-            console.log('Updated telegram_media row:', id);
-          }
+          updated++;
         }
       } catch (error) {
-        console.error('Error syncing from Glide:', error);
-        result.errors.push(`Error syncing from Glide: ${error.message}`);
+        console.error('Error processing row:', error);
+        errors.push(`Error processing row: ${error.message}`);
       }
     }
 
-    console.log('Sync completed successfully:', result);
+    console.log('Sync completed:', { updated, errors });
 
     return new Response(
-      JSON.stringify({ success: true, data: result }),
+      JSON.stringify({
+        success: true,
+        data: { updated, errors }
+      }),
       { 
         headers: {
           ...corsHeaders,
@@ -170,7 +129,7 @@ serve(async (req) => {
         status: 500,
         headers: { 
           ...corsHeaders,
-          'Content-Type': 'application/json' 
+          'Content-Type': 'application/json'
         }
       }
     );
