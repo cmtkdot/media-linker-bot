@@ -22,26 +22,60 @@ const MediaTable = ({ data, onEdit }: MediaTableProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (item: any) => {
     try {
-      const { error } = await supabase
+      console.log('Deleting media item:', item);
+
+      // First delete the file from storage if it exists
+      if (item.telegram_data?.storage_path) {
+        console.log('Deleting file from storage:', item.telegram_data.storage_path);
+        const { error: storageError } = await supabase.storage
+          .from('media')
+          .remove([item.telegram_data.storage_path]);
+
+        if (storageError) {
+          console.error('Error deleting file from storage:', storageError);
+          throw storageError;
+        }
+      }
+
+      // Delete the linked message if it exists
+      if (item.message_id) {
+        console.log('Deleting linked message:', item.message_id);
+        const { error: messageError } = await supabase
+          .from('messages')
+          .delete()
+          .eq('id', item.message_id);
+
+        if (messageError) {
+          console.error('Error deleting message:', messageError);
+          throw messageError;
+        }
+      }
+
+      // Finally delete the media record
+      console.log('Deleting telegram_media record:', item.id);
+      const { error: mediaError } = await supabase
         .from('telegram_media')
         .delete()
-        .eq('id', id);
+        .eq('id', item.id);
 
-      if (error) throw error;
+      if (mediaError) {
+        console.error('Error deleting media:', mediaError);
+        throw mediaError;
+      }
 
       toast({
         title: "Media deleted",
-        description: "The media item has been successfully deleted.",
+        description: "The media item and associated data have been successfully deleted.",
       });
 
       queryClient.invalidateQueries({ queryKey: ['telegram-media'] });
     } catch (error) {
-      console.error('Error deleting media:', error);
+      console.error('Error in delete operation:', error);
       toast({
         title: "Error",
-        description: "Failed to delete media item.",
+        description: "Failed to delete media item and associated data.",
         variant: "destructive",
       });
     }
@@ -109,7 +143,7 @@ const MediaTable = ({ data, onEdit }: MediaTableProps) => {
                   <Button
                     variant="outline"
                     size="icon"
-                    onClick={() => handleDelete(item.id)}
+                    onClick={() => handleDelete(item)}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>

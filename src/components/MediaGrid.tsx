@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Grid, List } from "lucide-react";
+import { Grid, List, Trash2 } from "lucide-react";
 import MediaTable from "./MediaTable";
 import {
   Dialog,
@@ -27,6 +27,8 @@ interface MediaItem {
   vendor_uid?: string;
   purchase_date?: string;
   created_at: string;
+  telegram_data?: any;
+  message_id?: string;
 }
 
 const MediaGrid = () => {
@@ -52,6 +54,66 @@ const MediaGrid = () => {
       return data as MediaItem[];
     }
   });
+
+  const handleDelete = async (item: MediaItem) => {
+    try {
+      console.log('Deleting media item:', item);
+
+      // First delete the file from storage if it exists
+      if (item.telegram_data?.storage_path) {
+        console.log('Deleting file from storage:', item.telegram_data.storage_path);
+        const { error: storageError } = await supabase.storage
+          .from('media')
+          .remove([item.telegram_data.storage_path]);
+
+        if (storageError) {
+          console.error('Error deleting file from storage:', storageError);
+          throw storageError;
+        }
+      }
+
+      // Delete the linked message if it exists
+      if (item.message_id) {
+        console.log('Deleting linked message:', item.message_id);
+        const { error: messageError } = await supabase
+          .from('messages')
+          .delete()
+          .eq('id', item.message_id);
+
+        if (messageError) {
+          console.error('Error deleting message:', messageError);
+          throw messageError;
+        }
+      }
+
+      // Finally delete the media record
+      console.log('Deleting telegram_media record:', item.id);
+      const { error: mediaError } = await supabase
+        .from('telegram_media')
+        .delete()
+        .eq('id', item.id);
+
+      if (mediaError) {
+        console.error('Error deleting media:', mediaError);
+        throw mediaError;
+      }
+
+      toast({
+        title: "Media deleted",
+        description: "The media item and associated data have been successfully deleted.",
+      });
+
+      // Refresh the media items
+      queryClient.invalidateQueries({ queryKey: ['telegram-media'] });
+    } catch (error) {
+      console.error('Error in delete operation:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete media item and associated data.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const handleEdit = async () => {
     if (!editItem) return;
@@ -139,8 +201,23 @@ const MediaGrid = () => {
       {view === 'grid' ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {mediaItems.map((item) => (
-            <Card key={item.id} className="overflow-hidden group cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setEditItem(item)}>
-              <div className="aspect-square relative">
+            <Card key={item.id} className="overflow-hidden group relative">
+              <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                <Button
+                  variant="destructive"
+                  size="icon"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(item);
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+              <div 
+                className="aspect-square relative cursor-pointer" 
+                onClick={() => setEditItem(item)}
+              >
                 {item.file_type === 'video' ? (
                   <video 
                     src={item.public_url}
