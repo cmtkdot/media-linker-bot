@@ -7,6 +7,7 @@ import { SessionContextProvider, useSessionContext } from "@supabase/auth-helper
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import GlideSync from "./pages/GlideSync";
+import GlideConnections from "./pages/GlideConnections";
 import { supabase } from "@/integrations/supabase/client";
 
 const queryClient = new QueryClient();
@@ -47,6 +48,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <GlideSync />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/glide-connections"
+              element={
+                <ProtectedRoute>
+                  <GlideConnections />
                 </ProtectedRoute>
               }
             />

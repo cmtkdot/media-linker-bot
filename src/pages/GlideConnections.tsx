@@ -1,12 +1,10 @@
+import { ConnectedGlideTables } from "@/components/ConnectedGlideTables";
 import DashboardLayout from "@/components/DashboardLayout";
-import { GlideSyncHeader } from "@/components/GlideSyncHeader";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Link } from "react-router-dom";
 
-const GlideSync = () => {
+const GlideConnections = () => {
   const { data: configs, isLoading, refetch } = useQuery({
     queryKey: ['glide-configs'],
     queryFn: async () => {
@@ -33,16 +31,11 @@ const GlideSync = () => {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold">Glide Sync</h1>
-          <Button variant="outline" asChild>
-            <Link to="/glide-connections">Manage Connections</Link>
-          </Button>
-        </div>
-        <GlideSyncHeader configs={configs || []} isLoading={isLoading} />
+        <h1 className="text-2xl font-semibold">Glide Connections</h1>
+        <ConnectedGlideTables configs={configs || []} onRefresh={refetch} />
       </div>
     </DashboardLayout>
   );
 };
 
-export default GlideSync;
+export default GlideConnections;
