@@ -34,7 +34,7 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4',
         messages: [
           {
             role: 'system',
@@ -61,22 +61,7 @@ serve(async (req) => {
             - notes: string or null 
             - raw_caption: the original caption
             - analyzed_at: current timestamp in ISO format
-            - confidence_score: number between 0 and 1 indicating how confident you are in the analysis
-
-            Example caption: "Runtz Q #Q112124 x 1 (50 behind)"
-            Example response: {
-              "product_name": "Runtz Q",
-              "product_code": "Q112124",
-              "quantity": 1,
-              "vendor_uid": "Q",
-              "purchase_date": "2024-11-21",
-              "notes": "50 behind",
-              "raw_caption": "Runtz Q #Q112124 x 1 (50 behind)",
-              "analyzed_at": "2024-01-21T08:13:21.830Z",
-              "confidence_score": 0.95
-            }
-
-            If any part cannot be extracted, set it to null.`
+            - confidence_score: number between 0 and 1 indicating how confident you are in the analysis`
           },
           {
             role: 'user',
@@ -90,6 +75,10 @@ serve(async (req) => {
     const data = await response.json()
     console.log('AI Analysis result:', data)
     
+    if (!data.choices?.[0]?.message?.content) {
+      throw new Error('Invalid response from OpenAI')
+    }
+
     const result = JSON.parse(data.choices[0].message.content)
     console.log('Parsed result:', result)
 
@@ -114,11 +103,12 @@ serve(async (req) => {
 
       if (messageError) {
         console.error('Error updating message:', messageError)
+        throw messageError
       }
     }
 
-    // Update telegram_media table
-    const mediaQuery = supabase
+    // Update telegram_media table based on provided identifiers
+    let mediaQuery = supabase
       .from('telegram_media')
       .update({
         caption: caption,
@@ -133,11 +123,13 @@ serve(async (req) => {
 
     // If we have a specific media ID, update just that record
     if (telegramMediaId) {
-      mediaQuery.eq('id', telegramMediaId)
+      mediaQuery = mediaQuery.eq('id', telegramMediaId)
     } 
     // If we have a media group ID, update all media in the group
     else if (mediaGroupId) {
-      mediaQuery.eq('telegram_data->media_group_id', mediaGroupId)
+      mediaQuery = mediaQuery.eq('telegram_data->media_group_id', mediaGroupId)
+    } else {
+      throw new Error('Either telegramMediaId or mediaGroupId is required for updates')
     }
 
     const { error: mediaError } = await mediaQuery
