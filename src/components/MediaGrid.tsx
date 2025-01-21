@@ -1,36 +1,14 @@
 import React, { useState } from "react";
-import { Card } from "@/components/ui/card";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Grid, List, Trash2 } from "lucide-react";
-import MediaTable from "./MediaTable";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
+import { Grid, List } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
-
-interface MediaItem {
-  id: string;
-  public_url: string;
-  file_type: string;
-  caption?: string;
-  product_code?: string;
-  product_name?: string;
-  quantity?: number;
-  vendor_uid?: string;
-  purchase_date?: string;
-  notes?: string;
-  created_at: string;
-  telegram_data?: any;
-  message_id?: string;
-}
+import MediaTable from "./MediaTable";
+import MediaGridItem from "./MediaGridItem";
+import MediaEditDialog from "./MediaEditDialog";
+import { MediaItem } from "@/types/media";
 
 const MediaGrid = () => {
   const [view, setView] = useState<'grid' | 'table'>('grid');
@@ -61,19 +39,6 @@ const MediaGrid = () => {
     try {
       console.log('Deleting media item:', item);
 
-      // First delete the telegram_media record
-      console.log('Deleting telegram_media record:', item.id);
-      const { error: mediaError } = await supabase
-        .from('telegram_media')
-        .delete()
-        .eq('id', item.id);
-
-      if (mediaError) {
-        console.error('Error deleting media:', mediaError);
-        throw mediaError;
-      }
-
-      // Then delete the file from storage if it exists
       if (item.telegram_data?.storage_path) {
         console.log('Deleting file from storage:', item.telegram_data.storage_path);
         const { error: storageError } = await supabase.storage
@@ -86,7 +51,6 @@ const MediaGrid = () => {
         }
       }
 
-      // Finally delete the linked message if it exists
       if (item.message_id) {
         console.log('Deleting linked message:', item.message_id);
         const { error: messageError } = await supabase
@@ -100,12 +64,22 @@ const MediaGrid = () => {
         }
       }
 
+      console.log('Deleting telegram_media record:', item.id);
+      const { error: mediaError } = await supabase
+        .from('telegram_media')
+        .delete()
+        .eq('id', item.id);
+
+      if (mediaError) {
+        console.error('Error deleting media:', mediaError);
+        throw mediaError;
+      }
+
       toast({
         title: "Media deleted",
         description: "The media item and associated data have been successfully deleted.",
       });
 
-      // Refresh the media items
       queryClient.invalidateQueries({ queryKey: ['telegram-media'] });
     } catch (error) {
       console.error('Error in delete operation:', error);
@@ -142,6 +116,7 @@ const MediaGrid = () => {
       });
 
       setEditItem(null);
+      queryClient.invalidateQueries({ queryKey: ['telegram-media'] });
     } catch (error) {
       console.error('Error updating media:', error);
       toast({
@@ -150,6 +125,16 @@ const MediaGrid = () => {
         variant: "destructive",
       });
     }
+  };
+
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return null;
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      month: '2-digit',
+      day: '2-digit',
+      year: 'numeric'
+    });
   };
 
   if (isLoading) {
@@ -163,16 +148,6 @@ const MediaGrid = () => {
   if (!mediaItems?.length) {
     return <div className="text-center p-4">No media items found</div>;
   }
-
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return null;
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      month: '2-digit',
-      day: '2-digit',
-      year: 'numeric'
-    });
-  };
 
   return (
     <div className="space-y-4">
@@ -204,133 +179,24 @@ const MediaGrid = () => {
       {view === 'grid' ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {mediaItems.map((item) => (
-            <Card key={item.id} className="overflow-hidden group relative">
-              <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                <Button
-                  variant="destructive"
-                  size="icon"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDelete(item);
-                  }}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-              <div 
-                className="aspect-square relative cursor-pointer" 
-                onClick={() => setEditItem(item)}
-              >
-                {item.file_type === 'video' ? (
-                  <video 
-                    src={item.public_url}
-                    className="object-cover w-full h-full"
-                    controls
-                  />
-                ) : (
-                  <img
-                    src={item.public_url || "/placeholder.svg"}
-                    alt={item.caption || "Media item"}
-                    className="object-cover w-full h-full"
-                  />
-                )}
-                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity p-4">
-                  <div className="text-white space-y-1">
-                    {item.caption && <p className="font-medium mb-2">{item.caption}</p>}
-                    {item.product_name && <p className="text-sm">{item.product_name}</p>}
-                    {item.product_code && <p className="text-sm">Code: #{item.product_code}</p>}
-                    {item.vendor_uid && <p className="text-sm">Vendor: {item.vendor_uid}</p>}
-                    {item.purchase_date && <p className="text-sm">Purchased: {formatDate(item.purchase_date)}</p>}
-                    {item.quantity && <p className="text-sm">Quantity: {item.quantity}</p>}
-                    {item.notes && <p className="text-sm">Notes: {item.notes}</p>}
-                  </div>
-                </div>
-              </div>
-              <div className="p-2 space-y-1">
-                <p className="font-medium truncate">{item.product_name || 'Untitled'}</p>
-                <div className="flex justify-between text-sm text-muted-foreground">
-                  <span className="capitalize">{item.file_type}</span>
-                  {item.vendor_uid && <span>Vendor: {item.vendor_uid}</span>}
-                </div>
-              </div>
-            </Card>
+            <MediaGridItem
+              key={item.id}
+              item={item}
+              onEdit={setEditItem}
+              onDelete={handleDelete}
+              formatDate={formatDate}
+            />
           ))}
         </div>
       ) : (
         <MediaTable data={mediaItems} onEdit={setEditItem} />
       )}
 
-      <Dialog open={!!editItem} onOpenChange={() => setEditItem(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Media Item</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="caption">Caption</Label>
-              <Input
-                id="caption"
-                value={editItem?.caption || ''}
-                onChange={(e) => setEditItem(prev => prev ? {...prev, caption: e.target.value} : null)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="product_name">Product Name</Label>
-              <Input
-                id="product_name"
-                value={editItem?.product_name || ''}
-                onChange={(e) => setEditItem(prev => prev ? {...prev, product_name: e.target.value} : null)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="product_code">Product Code</Label>
-              <Input
-                id="product_code"
-                value={editItem?.product_code || ''}
-                onChange={(e) => setEditItem(prev => prev ? {...prev, product_code: e.target.value} : null)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="vendor_uid">Vendor UID</Label>
-              <Input
-                id="vendor_uid"
-                value={editItem?.vendor_uid || ''}
-                onChange={(e) => setEditItem(prev => prev ? {...prev, vendor_uid: e.target.value} : null)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="purchase_date">Purchase Date</Label>
-              <Input
-                id="purchase_date"
-                type="date"
-                value={editItem?.purchase_date || ''}
-                onChange={(e) => setEditItem(prev => prev ? {...prev, purchase_date: e.target.value} : null)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="quantity">Quantity</Label>
-              <Input
-                id="quantity"
-                type="number"
-                value={editItem?.quantity || ''}
-                onChange={(e) => setEditItem(prev => prev ? {...prev, quantity: Number(e.target.value)} : null)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="notes">Notes</Label>
-              <Input
-                id="notes"
-                value={editItem?.notes || ''}
-                onChange={(e) => setEditItem(prev => prev ? {...prev, notes: e.target.value} : null)}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditItem(null)}>Cancel</Button>
-            <Button onClick={handleEdit}>Save changes</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <MediaEditDialog
+        editItem={editItem}
+        setEditItem={setEditItem}
+        onSave={handleEdit}
+      />
     </div>
   );
 };
