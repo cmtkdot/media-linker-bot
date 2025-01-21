@@ -41,7 +41,7 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4',
         messages: [
           {
             role: 'system',
@@ -103,7 +103,30 @@ serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Update messages table if media group exists
+    if (mediaGroupId) {
+      console.log('Updating messages for media group:', mediaGroupId);
+      const { error: messagesError } = await supabase
+        .from('messages')
+        .update({
+          analyzed_content: result,
+          product_name: result.product_name,
+          product_code: result.product_code,
+          quantity: result.quantity,
+          vendor_uid: result.vendor_uid,
+          purchase_date: result.purchase_date,
+          notes: result.notes,
+          caption: caption
+        })
+        .eq('media_group_id', mediaGroupId);
+
+      if (messagesError) {
+        console.error('Error updating messages:', messagesError);
+      }
+    }
+
     if (messageId) {
+      console.log('Updating telegram media for message:', messageId);
       const { error: updateError } = await supabase
         .from('telegram_media')
         .update({
@@ -121,6 +144,7 @@ serve(async (req) => {
     }
 
     if (mediaGroupId) {
+      console.log('Syncing media group:', mediaGroupId);
       const { error: groupUpdateError } = await supabase
         .from('telegram_media')
         .update({
@@ -134,7 +158,10 @@ serve(async (req) => {
         })
         .eq('telegram_data->>media_group_id', mediaGroupId);
 
-      if (groupUpdateError) throw groupUpdateError;
+      if (groupUpdateError) {
+        console.error('Error updating media group:', groupUpdateError);
+        throw groupUpdateError;
+      }
     }
 
     return new Response(
