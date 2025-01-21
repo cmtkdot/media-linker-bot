@@ -74,7 +74,7 @@ const MediaViewer = ({ open, onOpenChange, media }: MediaViewerProps) => {
           </div>
 
           {/* Details Column */}
-          <div className="flex-1 space-y-4">
+          <div className="flex-1 flex flex-col justify-center space-y-4">
             {media.caption && (
               <p className="text-muted-foreground">{media.caption}</p>
             )}
