@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
 import { GlideSyncHeader } from "@/components/GlideSyncHeader";
-import { ConnectedGlideTables } from "@/components/ConnectedGlideTables";
+import { GlideDataGrid } from "@/components/GlideDataGrid";
 
 interface GlideConfig {
   id: string;
@@ -17,7 +17,7 @@ interface GlideConfig {
 }
 
 const GlideSync = () => {
-  const { data: configs, isLoading, refetch } = useQuery({
+  const { data: configs, isLoading } = useQuery({
     queryKey: ['glide-configs'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -41,7 +41,7 @@ const GlideSync = () => {
   return (
     <div className="container mx-auto py-6 space-y-6">
       <GlideSyncHeader configs={configs || []} isLoading={isLoading} />
-      <ConnectedGlideTables configs={configs || []} onRefresh={refetch} />
+      <GlideDataGrid configs={configs || []} />
     </div>
   );
 };
