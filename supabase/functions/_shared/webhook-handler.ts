@@ -13,6 +13,66 @@ async function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+async function updateExistingMedia(supabase: any, mediaFile: any, message: any, messageRecord: any) {
+  console.log('Updating existing media record for file_unique_id:', mediaFile.file_unique_id);
+  
+  // Get existing media record
+  const { data: existingMedia } = await supabase
+    .from('telegram_media')
+    .select('*')
+    .eq('file_unique_id', mediaFile.file_unique_id)
+    .single();
+
+  if (!existingMedia) {
+    throw new Error('Existing media record not found');
+  }
+
+  // Prepare telegram data with updated message info
+  const telegramData = {
+    ...existingMedia.telegram_data,
+    message_id: message.message_id,
+    chat_id: message.chat.id,
+    sender_chat: message.sender_chat,
+    chat: message.chat,
+    date: message.date,
+    caption: message.caption,
+    media_group_id: message.media_group_id,
+  };
+
+  // Update telegram_media record
+  const { error: mediaError } = await supabase
+    .from('telegram_media')
+    .update({
+      telegram_data: telegramData,
+      caption: message.caption,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', existingMedia.id);
+
+  if (mediaError) {
+    console.error('Error updating telegram_media:', mediaError);
+    throw mediaError;
+  }
+
+  // Update message record
+  const { error: messageError } = await supabase
+    .from('messages')
+    .update({
+      message_data: message,
+      updated_at: new Date().toISOString(),
+      status: 'success',
+      processed_at: new Date().toISOString()
+    })
+    .eq('id', messageRecord.id);
+
+  if (messageError) {
+    console.error('Error updating message:', messageError);
+    throw messageError;
+  }
+
+  return existingMedia;
+}
+
 export async function handleWebhookUpdate(
   update: TelegramUpdate,
   supabase: any,
@@ -30,7 +90,7 @@ export async function handleWebhookUpdate(
     return { message: 'Not a media message, skipping' };
   }
 
-  // Check for existing message with same chat_id and message_id
+  // Check for existing message
   const { data: existingMessage, error: fetchError } = await supabase
     .from('messages')
     .select('*')
@@ -43,16 +103,10 @@ export async function handleWebhookUpdate(
     throw fetchError;
   }
 
-  // If message exists and was processed successfully, skip
-  if (existingMessage?.status === 'success') {
-    console.log('Message already processed successfully:', existingMessage);
-    return { message: 'Message already processed', id: existingMessage.id };
-  }
-
   let messageRecord = existingMessage;
   let retryCount = existingMessage?.retry_count || 0;
 
-  // If no existing message, create new one
+  // Create new message record if it doesn't exist
   if (!existingMessage) {
     try {
       let productInfo = null;
@@ -112,15 +166,29 @@ export async function handleWebhookUpdate(
         throw new Error('No media file found in message');
       }
 
-      const result = await processMediaFile(
-        supabase,
-        mediaFile,
-        mediaType,
-        message,
-        messageRecord,
-        botToken,
-        messageRecord.product_info
-      );
+      // Check for existing media with same file_unique_id
+      const { data: existingMedia } = await supabase
+        .from('telegram_media')
+        .select('*')
+        .eq('file_unique_id', mediaFile.file_unique_id)
+        .single();
+
+      let result;
+      if (existingMedia) {
+        console.log('Found existing media, updating records without re-upload');
+        result = await updateExistingMedia(supabase, mediaFile, message, messageRecord);
+      } else {
+        console.log('Processing new media file');
+        result = await processMediaFile(
+          supabase,
+          mediaFile,
+          mediaType,
+          message,
+          messageRecord,
+          botToken,
+          messageRecord.product_info
+        );
+      }
 
       // Update message status to success
       await supabase
@@ -132,7 +200,7 @@ export async function handleWebhookUpdate(
         })
         .eq('id', messageRecord.id);
 
-      // If this is part of a media group, update all related media
+      // Handle media group updates
       if (message.media_group_id) {
         console.log('Processing media group:', message.media_group_id);
         await supabase
