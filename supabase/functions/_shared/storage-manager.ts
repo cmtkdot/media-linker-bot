@@ -42,39 +42,57 @@ export const uploadMediaToStorage = async (
   console.log('Uploading file:', fileName);
   
   // Get proper MIME type based on file extension or default
-  const mimeType = getMimeType(fileName, defaultMimeType);
-  console.log('Determined MIME type for upload:', mimeType);
+  let mimeType = getMimeType(fileName, defaultMimeType);
   
-  // For Telegram photos without extension, ensure they're treated as JPEGs
-  const finalMimeType = mimeType === 'application/octet-stream' && fileName.includes('photo') 
-    ? 'image/jpeg' 
-    : mimeType;
+  // Handle Telegram media files that come without proper MIME type
+  if (mimeType === 'application/octet-stream') {
+    if (fileName.includes('photo_')) {
+      mimeType = 'image/jpeg';  // Default for Telegram photos
+    } else if (fileName.match(/\.(jpg|jpeg|png|webp|gif|bmp)$/i)) {
+      // Use extension-based MIME type for known image formats
+      const ext = fileName.toLowerCase().split('.').pop();
+      const mimeMap: { [key: string]: string } = {
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'png': 'image/png',
+        'webp': 'image/webp',
+        'gif': 'image/gif',
+        'bmp': 'image/bmp'
+      };
+      mimeType = mimeMap[ext!] || 'image/jpeg';
+    }
+  }
   
-  console.log('Final MIME type for upload:', finalMimeType);
+  console.log('Using MIME type for upload:', mimeType);
 
-  const { data: uploadData, error: uploadError } = await supabase.storage
-    .from('media')
-    .upload(fileName, buffer, {
-      contentType: finalMimeType,
-      upsert: false,
-      cacheControl: '3600'
-    });
+  try {
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('media')
+      .upload(fileName, buffer, {
+        contentType: mimeType,
+        upsert: false,
+        cacheControl: '3600'
+      });
 
-  if (uploadError) {
-    console.error('Upload error:', uploadError);
-    throw new Error(`Failed to upload file: ${uploadError.message}`);
+    if (uploadError) {
+      console.error('Upload error:', { error: uploadError, mimeType, fileName });
+      throw new Error(`Failed to upload file: ${uploadError.message}`);
+    }
+
+    const { data: { publicUrl }, error: urlError } = await supabase.storage
+      .from('media')
+      .getPublicUrl(fileName);
+
+    if (urlError) {
+      console.error('Error getting public URL:', urlError);
+      throw new Error(`Failed to get public URL: ${urlError.message}`);
+    }
+
+    return { uploadData, publicUrl };
+  } catch (error) {
+    console.error('Storage upload error:', { error, mimeType, fileName });
+    throw error;
   }
-
-  const { data: { publicUrl }, error: urlError } = await supabase.storage
-    .from('media')
-    .getPublicUrl(fileName);
-
-  if (urlError) {
-    console.error('Error getting public URL:', urlError);
-    throw new Error(`Failed to get public URL: ${urlError.message}`);
-  }
-
-  return { uploadData, publicUrl };
 };
 
 export const getPublicUrl = (supabase: any, filePath: string) => {
