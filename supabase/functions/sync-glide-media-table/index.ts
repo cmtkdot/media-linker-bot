@@ -1,12 +1,26 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
-import { corsHeaders } from '../_shared/cors.ts';
-import { GlideConfig, SyncResult } from './types.ts';
 
-const GLIDE_API_BASE = 'https://api.glideapp.io/api/function';
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+interface GlideConfig {
+  app_id: string;
+  table_id: string;
+  api_token: string;
+}
+
+interface SyncResult {
+  added: number;
+  updated: number;
+  deleted: number;
+  errors: string[];
+}
 
 serve(async (req) => {
-  // Handle CORS
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -40,7 +54,6 @@ serve(async (req) => {
 
     if (configError) throw configError;
     if (!config) throw new Error('Configuration not found');
-    if (!config.supabase_table_name) throw new Error('No Supabase table linked');
 
     console.log('Starting sync with config:', {
       table_name: config.table_name,
@@ -69,10 +82,10 @@ serve(async (req) => {
     // Process each queue item
     for (const item of queueItems || []) {
       try {
-        const response = await fetch(`${GLIDE_API_BASE}/mutateTables`, {
+        const response = await fetch('https://api.glideapp.io/api/function/mutateTables', {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${glideApiToken}`,
+            'Authorization': `Bearer ${config.api_token}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
@@ -128,8 +141,6 @@ serve(async (req) => {
           .eq('id', item.id);
       }
     }
-
-    console.log('Sync completed:', result);
 
     return new Response(
       JSON.stringify({
