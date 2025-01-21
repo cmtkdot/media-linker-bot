@@ -28,19 +28,24 @@ interface MediaViewerProps {
 const MediaViewer = ({ open, onOpenChange, media }: MediaViewerProps) => {
   if (!media) return null;
 
+  const mediaUrl = media.public_url || media.default_public_url;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl p-4">
+      <DialogContent className="max-w-6xl p-4">
         <DialogHeader className="w-full">
           <DialogTitle className="text-right">{media.product_name || "Media Preview"}</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col lg:flex-row gap-4">
           {/* Media Column */}
           <div className="flex-[1.5]">
-            <div className="relative aspect-[3/4] bg-black/5 rounded-lg overflow-hidden">
+            <div className="relative bg-black/5 rounded-lg overflow-hidden" style={{ 
+              maxHeight: 'calc(90vh - 200px)',
+              minHeight: '500px'
+            }}>
               {media.file_type === "video" ? (
                 <video
-                  src={media.public_url}
+                  src={mediaUrl}
                   className="w-full h-full object-contain"
                   controls
                   autoPlay
@@ -53,7 +58,7 @@ const MediaViewer = ({ open, onOpenChange, media }: MediaViewerProps) => {
                 />
               ) : (
                 <img
-                  src={media.public_url}
+                  src={mediaUrl}
                   alt={media.caption || "Media preview"}
                   className="w-full h-full object-contain"
                   onError={(e) => {
@@ -118,7 +123,7 @@ const MediaViewer = ({ open, onOpenChange, media }: MediaViewerProps) => {
                 className="w-full"
               >
                 <a
-                  href={media.public_url || media.default_public_url}
+                  href={mediaUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center justify-center gap-2"
