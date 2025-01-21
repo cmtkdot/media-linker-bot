@@ -39,7 +39,7 @@ export async function createMessage(supabase: any, message: any, productInfo: an
         vendor_uid: productInfo.vendor_uid,
         purchase_date: productInfo.purchase_date,
         notes: productInfo.notes,
-        analyzed_content: productInfo
+        analyzed_content: productInfo // Store the complete analyzed content
       })
     };
 
@@ -182,7 +182,7 @@ export async function processMediaFile(
         vendor_uid: productInfo.vendor_uid,
         purchase_date: productInfo.purchase_date,
         notes: productInfo.notes,
-        analyzed_content: productInfo
+        analyzed_content: productInfo // Store the complete analyzed content
       })
     };
 
@@ -195,7 +195,7 @@ export async function processMediaFile(
       .from('telegram_media')
       .insert(mediaRecord)
       .select()
-      .maybeSingle();
+      .single();
 
     if (dbError) {
       console.error('Database error:', dbError);
