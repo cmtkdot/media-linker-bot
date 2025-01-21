@@ -2,51 +2,27 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getMessageType, getAndDownloadTelegramFile, generateSafeFileName } from './telegram-service.ts';
 
 export async function createMessage(supabase: any, message: any, productInfo: any = null) {
-  // First check for existing message
-  const { data: existingMessage, error: checkError } = await supabase
-    .from('messages')
-    .select('*')
-    .eq('message_id', message.message_id)
-    .eq('chat_id', message.chat.id)
-    .maybeSingle();
+  console.log('Creating message:', { 
+    message_id: message.message_id, 
+    chat_id: message.chat.id,
+    product_info: productInfo 
+  });
 
-  if (checkError) {
-    console.error('Error checking for existing message:', checkError);
-    throw checkError;
-  }
-
-  // If message exists, update it
-  if (existingMessage) {
-    const { data: updatedMessage, error: updateError } = await supabase
+  try {
+    // First check for existing message
+    const { data: existingMessage, error: checkError } = await supabase
       .from('messages')
-      .update({
-        sender_info: message.from || message.sender_chat || {},
-        message_type: getMessageType(message),
-        message_data: message,
-        caption: message.caption,
-        media_group_id: message.media_group_id,
-        ...(productInfo && {
-          product_name: productInfo.product_name,
-          product_code: productInfo.product_code,
-          quantity: productInfo.quantity,
-          vendor_uid: productInfo.vendor_uid,
-          purchase_date: productInfo.purchase_date,
-          notes: productInfo.notes
-        }),
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', existingMessage.id)
-      .select()
+      .select('*')
+      .eq('message_id', message.message_id)
+      .eq('chat_id', message.chat.id)
       .maybeSingle();
 
-    if (updateError) throw updateError;
-    return updatedMessage;
-  }
+    if (checkError) {
+      console.error('Error checking for existing message:', checkError);
+      throw checkError;
+    }
 
-  // If no existing message, create new one
-  const { data: messageData, error: messageError } = await supabase
-    .from('messages')
-    .insert({
+    const messageData = {
       message_id: message.message_id,
       chat_id: message.chat.id,
       sender_info: message.from || message.sender_chat || {},
@@ -62,14 +38,52 @@ export async function createMessage(supabase: any, message: any, productInfo: an
         quantity: productInfo.quantity,
         vendor_uid: productInfo.vendor_uid,
         purchase_date: productInfo.purchase_date,
-        notes: productInfo.notes
+        notes: productInfo.notes,
+        analyzed_content: productInfo
       })
-    })
-    .select()
-    .maybeSingle();
+    };
 
-  if (messageError) throw messageError;
-  return messageData;
+    // If message exists, update it
+    if (existingMessage) {
+      console.log('Updating existing message:', existingMessage.id);
+      const { data: updatedMessage, error: updateError } = await supabase
+        .from('messages')
+        .update(messageData)
+        .eq('id', existingMessage.id)
+        .select()
+        .maybeSingle();
+
+      if (updateError) {
+        console.error('Error updating message:', updateError);
+        throw updateError;
+      }
+
+      return updatedMessage;
+    }
+
+    // If no existing message, create new one
+    console.log('Creating new message');
+    const { data: newMessage, error: insertError } = await supabase
+      .from('messages')
+      .insert(messageData)
+      .select()
+      .maybeSingle();
+
+    if (insertError) {
+      console.error('Error inserting message:', insertError);
+      throw insertError;
+    }
+
+    if (!newMessage) {
+      throw new Error('Message creation failed - no data returned');
+    }
+
+    console.log('Successfully created message:', newMessage.id);
+    return newMessage;
+  } catch (error) {
+    console.error('Error in createMessage:', error);
+    throw error;
+  }
 }
 
 export async function processMediaFile(
@@ -81,7 +95,10 @@ export async function processMediaFile(
   botToken: string,
   productInfo: any = null
 ) {
-  console.log(`Processing ${mediaType} file:`, mediaFile.file_id);
+  console.log(`Processing ${mediaType} file:`, {
+    file_id: mediaFile.file_id,
+    message_id: messageRecord?.id
+  });
 
   try {
     // Check for existing media to prevent duplicates
@@ -91,7 +108,7 @@ export async function processMediaFile(
       .eq('file_unique_id', mediaFile.file_unique_id)
       .eq('telegram_data->chat_id', message.chat.id)
       .eq('telegram_data->message_id', message.message_id)
-      .single();
+      .maybeSingle();
 
     if (existingMedia) {
       console.log('Media already exists:', existingMedia);
@@ -102,7 +119,9 @@ export async function processMediaFile(
     
     const fileExt = filePath.split('.').pop() || '';
     const uniqueFileName = generateSafeFileName(
-      `${mediaType}_${mediaFile.file_unique_id}_${Date.now()}`,
+      productInfo?.product_name,
+      productInfo?.product_code,
+      mediaType,
       fileExt
     );
 
@@ -125,7 +144,6 @@ export async function processMediaFile(
       .from('media')
       .getPublicUrl(uniqueFileName);
 
-    // Ensure numeric values are properly handled
     const telegramData = {
       message_id: message.message_id,
       chat_id: message.chat.id,
@@ -142,36 +160,47 @@ export async function processMediaFile(
       storage_path: uniqueFileName
     };
 
-    console.log('Inserting media record with data:', {
+    const mediaRecord = {
       file_id: mediaFile.file_id,
+      file_unique_id: mediaFile.file_unique_id,
       file_type: mediaType,
+      telegram_data: telegramData,
+      message_id: messageRecord?.id,
       public_url: publicUrl,
-      message_id: messageRecord.id
+      caption: message.caption,
+      ...(productInfo && {
+        product_name: productInfo.product_name,
+        product_code: productInfo.product_code,
+        quantity: productInfo.quantity ? BigInt(productInfo.quantity).toString() : null,
+        vendor_uid: productInfo.vendor_uid,
+        purchase_date: productInfo.purchase_date,
+        notes: productInfo.notes,
+        analyzed_content: productInfo
+      })
+    };
+
+    console.log('Inserting media record:', {
+      file_id: mediaFile.file_id,
+      message_id: messageRecord?.id
     });
 
-    const { error: dbError } = await supabase
+    const { data: mediaData, error: dbError } = await supabase
       .from('telegram_media')
-      .insert({
-        file_id: mediaFile.file_id,
-        file_unique_id: mediaFile.file_unique_id,
-        file_type: mediaType,
-        telegram_data: telegramData,
-        message_id: messageRecord.id,
-        public_url: publicUrl,
-        caption: message.caption,
-        ...(productInfo && {
-          product_name: productInfo.product_name,
-          product_code: productInfo.product_code,
-          quantity: productInfo.quantity ? BigInt(productInfo.quantity).toString() : null
-        })
-      });
+      .insert(mediaRecord)
+      .select()
+      .maybeSingle();
 
     if (dbError) {
       console.error('Database error:', dbError);
       throw new Error(`Failed to insert into database: ${dbError.message}`);
     }
 
-    console.log(`Successfully processed ${mediaType} file:`, uniqueFileName);
+    if (!mediaData) {
+      throw new Error('Media record creation failed - no data returned');
+    }
+
+    console.log(`Successfully processed ${mediaType} file:`, mediaData.id);
+    return mediaData;
   } catch (error) {
     console.error(`Error processing ${mediaType} file:`, error);
     throw error;
