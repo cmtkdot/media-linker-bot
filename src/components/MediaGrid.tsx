@@ -129,7 +129,7 @@ const MediaGrid = () => {
           onViewChange={setView}
           onSync={handleSync}
           isSyncing={isSyncing}
-          canSync={!!editItem?.telegram_data?.media_group_id}
+          canSync={!!editItem}
         />
       </div>
 
