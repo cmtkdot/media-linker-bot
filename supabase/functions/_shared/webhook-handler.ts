@@ -1,8 +1,8 @@
 import { corsHeaders } from './cors.ts';
 import { validateWebhookUpdate } from './webhook-validator.ts';
-import { processWebhookUpdate } from './webhook-processor.ts';
-import { cleanupFailedRecords } from './cleanup-manager.ts';
 import { handleProcessingError } from './error-handler.ts';
+import { createMessage, processMedia } from './database-service.ts';
+import { analyzeCaptionWithAI } from './caption-analyzer.ts';
 import { TelegramWebhookUpdate } from './webhook-types.ts';
 
 export async function handleWebhookUpdate(
@@ -16,52 +16,66 @@ export async function handleWebhookUpdate(
     return { message: 'Invalid or non-media message, skipping' };
   }
 
-  console.log('[Webhook Processing] Starting update processing:', {
+  console.log('[Webhook] Processing update:', {
     update_id: update.update_id,
     message_id: message.message_id,
     chat_id: message.chat.id,
-    media_group_id: message.media_group_id,
-    timestamp: new Date().toISOString()
+    media_group_id: message.media_group_id
   });
 
   try {
-    // Add delay for media groups to ensure all items are received
+    // Add delay for media groups
     if (message.media_group_id) {
-      console.log('[Media Group Detected] Waiting for group completion...', {
-        media_group_id: message.media_group_id
-      });
+      console.log('[Media Group] Waiting for completion:', message.media_group_id);
       await new Promise(resolve => setTimeout(resolve, 2000));
     }
 
-    const result = await processWebhookUpdate(message, supabase, botToken);
-    
-    console.log('[Webhook Complete]', {
+    // Analyze caption if present
+    let productInfo = null;
+    if (message.caption) {
+      try {
+        productInfo = await analyzeCaptionWithAI(
+          message.caption,
+          Deno.env.get('SUPABASE_URL') || '',
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+        );
+        console.log('[Caption Analysis] Complete:', productInfo);
+      } catch (error) {
+        console.error('[Caption Analysis] Error:', error);
+      }
+    }
+
+    // Create or update message record
+    const messageRecord = await createMessage(supabase, message, productInfo);
+    console.log('[Message] Created/Updated:', messageRecord.id);
+
+    // Process media
+    const mediaResult = await processMedia(
+      supabase,
+      message,
+      messageRecord,
+      botToken,
+      productInfo
+    );
+
+    console.log('[Webhook] Complete:', {
       update_id: update.update_id,
       message_id: message.message_id,
-      result
+      media_result: mediaResult?.id
     });
-
-    // Clean up old failed records
-    try {
-      await cleanupFailedRecords(supabase);
-    } catch (error) {
-      console.error('[Cleanup Error]', error);
-    }
 
     return { 
       success: true,
-      message: 'Processing completed',
-      ...result
+      messageId: messageRecord.id,
+      mediaResult
     };
 
   } catch (error) {
-    console.error('[Fatal Error]', {
+    console.error('[Webhook] Error:', {
       error: error.message,
       stack: error.stack,
       update_id: update.update_id,
-      message_id: message?.message_id,
-      chat_id: message?.chat?.id,
-      timestamp: new Date().toISOString()
+      message_id: message?.message_id
     });
 
     if (message) {
