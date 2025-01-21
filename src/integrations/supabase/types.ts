@@ -69,6 +69,7 @@ export type Database = {
           product_code: string | null
           product_name: string | null
           purchase_date: string | null
+          purchase_order_uid: string | null
           quantity: number | null
           retry_count: number | null
           sender_info: Json
@@ -93,6 +94,7 @@ export type Database = {
           product_code?: string | null
           product_name?: string | null
           purchase_date?: string | null
+          purchase_order_uid?: string | null
           quantity?: number | null
           retry_count?: number | null
           sender_info?: Json
@@ -117,6 +119,7 @@ export type Database = {
           product_code?: string | null
           product_name?: string | null
           purchase_date?: string | null
+          purchase_order_uid?: string | null
           quantity?: number | null
           retry_count?: number | null
           sender_info?: Json
@@ -146,6 +149,7 @@ export type Database = {
           product_name: string | null
           public_url: string | null
           purchase_date: string | null
+          purchase_order_uid: string | null
           quantity: number | null
           telegram_data: Json
           updated_at: string
@@ -170,6 +174,7 @@ export type Database = {
           product_name?: string | null
           public_url?: string | null
           purchase_date?: string | null
+          purchase_order_uid?: string | null
           quantity?: number | null
           telegram_data?: Json
           updated_at?: string
@@ -194,6 +199,7 @@ export type Database = {
           product_name?: string | null
           public_url?: string | null
           purchase_date?: string | null
+          purchase_order_uid?: string | null
           quantity?: number | null
           telegram_data?: Json
           updated_at?: string
@@ -249,6 +255,7 @@ export type Database = {
           product_code: string | null
           product_name: string | null
           purchase_date: string | null
+          purchase_order_uid: string | null
           quantity: number | null
           retry_count: number | null
           sender_info: Json

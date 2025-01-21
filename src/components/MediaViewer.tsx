@@ -17,6 +17,7 @@ interface MediaViewerProps {
     caption?: string;
     product_name?: string;
     product_code?: string;
+    purchase_order_uid?: string;
     quantity?: number;
     vendor_uid?: string;
     purchase_date?: string;
@@ -64,6 +65,12 @@ const MediaViewer = ({ open, onOpenChange, media }: MediaViewerProps) => {
                 <div>
                   <span className="font-medium">Code: </span>
                   #{media.product_code}
+                </div>
+              )}
+              {media.purchase_order_uid && (
+                <div>
+                  <span className="font-medium">Purchase Order: </span>
+                  {media.purchase_order_uid}
                 </div>
               )}
               {media.quantity && (
