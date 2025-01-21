@@ -1,7 +1,7 @@
 import React from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Pencil, Play } from "lucide-react";
+import { Pencil, Play, Pause } from "lucide-react";
 
 interface MediaCardProps {
   item: {
@@ -28,23 +28,31 @@ interface MediaCardProps {
 }
 
 const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
+  const [isPlaying, setIsPlaying] = React.useState(false);
+
   const handleVideoHover = (videoElement: HTMLVideoElement) => {
-    videoElement.play().catch(error => {
-      console.log("Autoplay prevented:", error);
-    });
+    if (!isPlaying) {
+      videoElement.play().catch(error => {
+        console.log("Autoplay prevented:", error);
+      });
+    }
   };
 
   const handleVideoLeave = (videoElement: HTMLVideoElement) => {
-    videoElement.pause();
-    videoElement.currentTime = 0;
+    if (!isPlaying) {
+      videoElement.pause();
+      videoElement.currentTime = 0;
+    }
   };
 
   const handlePlayClick = (e: React.MouseEvent<HTMLButtonElement>, video: HTMLVideoElement) => {
     e.stopPropagation();
     if (video.paused) {
       video.play();
+      setIsPlaying(true);
     } else {
       video.pause();
+      setIsPlaying(false);
     }
   };
 
@@ -62,17 +70,29 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
 
   return (
     <Card className="overflow-hidden group relative hover:shadow-lg transition-all duration-300">
-      <Button
-        variant="outline"
-        size="icon"
-        className="absolute top-2 left-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity"
-        onClick={(e) => {
-          e.stopPropagation();
-          onEdit(item);
-        }}
-      >
-        <Pencil className="h-4 w-4" />
-      </Button>
+      <div className="absolute inset-0 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+        <Button
+          variant="outline"
+          size="icon"
+          className="bg-white/80 hover:bg-white"
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit(item);
+          }}
+        >
+          <Pencil className="h-4 w-4" />
+        </Button>
+        {item.file_type === 'video' && (
+          <Button
+            variant="outline"
+            size="icon"
+            className="bg-white/80 hover:bg-white"
+            onClick={(e) => handlePlayClick(e, e.currentTarget.parentElement?.parentElement?.querySelector('video') as HTMLVideoElement)}
+          >
+            {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+          </Button>
+        )}
+      </div>
       <div 
         className="aspect-square relative cursor-pointer" 
         onClick={() => onPreview(item)}
@@ -88,14 +108,6 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
               onMouseLeave={(e) => handleVideoLeave(e.target as HTMLVideoElement)}
               onError={(e) => handleVideoError(e.target as HTMLVideoElement, item.default_public_url)}
             />
-            <Button
-              variant="outline"
-              size="icon"
-              className="absolute bottom-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80"
-              onClick={(e) => handlePlayClick(e, e.currentTarget.parentElement?.querySelector('video') as HTMLVideoElement)}
-            >
-              <Play className="h-4 w-4" />
-            </Button>
           </div>
         ) : (
           <img
