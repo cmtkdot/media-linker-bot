@@ -9,7 +9,63 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      telegram_media: {
+        Row: {
+          created_at: string
+          file_id: string
+          file_type: string
+          file_unique_id: string
+          glide_data: Json
+          id: string
+          last_synced_at: string | null
+          media_metadata: Json
+          processed: boolean | null
+          processing_error: string | null
+          product_code: string | null
+          product_name: string | null
+          public_url: string | null
+          quantity: number | null
+          telegram_data: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          file_id: string
+          file_type: string
+          file_unique_id: string
+          glide_data?: Json
+          id?: string
+          last_synced_at?: string | null
+          media_metadata?: Json
+          processed?: boolean | null
+          processing_error?: string | null
+          product_code?: string | null
+          product_name?: string | null
+          public_url?: string | null
+          quantity?: number | null
+          telegram_data?: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          file_id?: string
+          file_type?: string
+          file_unique_id?: string
+          glide_data?: Json
+          id?: string
+          last_synced_at?: string | null
+          media_metadata?: Json
+          processed?: boolean | null
+          processing_error?: string | null
+          product_code?: string | null
+          product_name?: string | null
+          public_url?: string | null
+          quantity?: number | null
+          telegram_data?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
