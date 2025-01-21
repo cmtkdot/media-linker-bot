@@ -6,14 +6,19 @@ import { mapSupabaseToGlide, mapGlideToSupabase } from './productMapper.ts';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Max-Age': '86400',
 };
-
-const GLIDE_API_BASE = 'https://api.glideapp.io/api/function';
 
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { 
+      headers: {
+        ...corsHeaders,
+        'Access-Control-Max-Age': '86400',
+      }
+    });
   }
 
   try {
@@ -25,11 +30,22 @@ serve(async (req) => {
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    const { operation, tableId } = await req.json();
+    
+    // Parse request body
+    let body;
+    try {
+      body = await req.json();
+    } catch (e) {
+      throw new Error('Invalid request body');
+    }
+    
+    const { operation, tableId } = body;
 
     if (!operation || !tableId) {
-      throw new Error('Missing required parameters');
+      throw new Error('Missing required parameters: operation and tableId');
     }
+
+    console.log('Starting sync operation:', { operation, tableId });
 
     const { data: config, error: configError } = await supabase
       .from('glide_config')
@@ -41,11 +57,6 @@ serve(async (req) => {
     if (!config) throw new Error('Configuration not found');
     if (!config.supabase_table_name) throw new Error('No Supabase table linked');
     if (!config.api_token) throw new Error('Glide API token not configured');
-
-    console.log('Starting sync with config:', {
-      table_name: config.table_name,
-      supabase_table_name: config.supabase_table_name,
-    });
 
     const result: SyncResult = {
       added: 0,
@@ -75,11 +86,11 @@ serve(async (req) => {
 
         // Map data according to operation type
         if (item.operation !== 'DELETE') {
-          const data = item.operation === 'UPDATE' ? item.new_data : item.old_data;
+          const data = item.operation === 'UPDATE' ? item.new_data : item.new_data;
           columnValues = mapSupabaseToGlide(data);
         }
 
-        const response = await fetch(`${GLIDE_API_BASE}/mutateTables`, {
+        const response = await fetch('https://api.glideapp.io/api/function/mutateTables', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${config.api_token}`,
@@ -105,7 +116,7 @@ serve(async (req) => {
 
         const responseData = await response.json() as GlideResponse;
         
-        // If this was an INSERT, store the Glide row ID
+        // Store Glide rowID for new records
         if (item.operation === 'INSERT' && responseData.rowIDs?.[0]) {
           const newRowID = responseData.rowIDs[0];
           await supabase
@@ -117,7 +128,6 @@ serve(async (req) => {
             })
             .eq('id', item.new_data.id);
         } else if (item.operation === 'UPDATE') {
-          // Store the updated Glide data for comparison
           await supabase
             .from(config.supabase_table_name)
             .update({ 
@@ -158,35 +168,6 @@ serve(async (req) => {
             retry_count: (item.retry_count || 0) + 1
           })
           .eq('id', item.id);
-      }
-    }
-
-    // Verify data consistency
-    const { data: mediaRecords, error: mediaError } = await supabase
-      .from(config.supabase_table_name)
-      .select('*')
-      .not('telegram_media_row_id', 'is', null);
-
-    if (!mediaError && mediaRecords) {
-      for (const record of mediaRecords) {
-        const currentData = mapSupabaseToGlide(record);
-        const mappedGlideData = mapGlideToSupabase(currentData, record.telegram_media_row_id);
-
-        // Compare with stored Glide data
-        if (record.glide_data && JSON.stringify(currentData) !== JSON.stringify(record.glide_data)) {
-          console.log('Data mismatch detected for record:', record.id);
-          
-          // Queue an update
-          await supabase
-            .from('glide_sync_queue')
-            .insert({
-              table_name: config.supabase_table_name,
-              record_id: record.id,
-              operation: 'UPDATE',
-              new_data: mappedGlideData,
-              old_data: record.glide_data
-            });
-        }
       }
     }
 

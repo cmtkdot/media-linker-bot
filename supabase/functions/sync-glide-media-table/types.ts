@@ -5,6 +5,11 @@ export interface SyncResult {
   errors: string[];
 }
 
+export interface GlideResponse {
+  rowIDs?: string[];
+  error?: string;
+}
+
 export interface GlideTableSchema {
   id: { type: "string"; name: "6u01A" };
   fileType: { type: "string"; name: "kprTT" };
@@ -20,18 +25,6 @@ export interface GlideTableSchema {
   analyzedContent: { type: "string"; name: "c2o7S" };
   purchaseOrderUid: { type: "string"; name: "Ve1EB" };
   defaultPublicUrl: { type: "uri"; name: "XIJQs" };
-}
-
-export interface GlideConfig {
-  id: string;
-  app_id: string;
-  table_id: string;
-  table_name: string;
-  api_token: string;
-  created_at: string;
-  updated_at: string;
-  active: boolean;
-  supabase_table_name: string;
 }
 
 export interface TelegramMedia {
@@ -54,9 +47,4 @@ export interface TelegramMedia {
   purchase_order_uid?: string;
   default_public_url?: string;
   telegram_media_row_id?: string;
-}
-
-export interface GlideResponse {
-  rowIDs?: string[];
-  error?: string;
 }
