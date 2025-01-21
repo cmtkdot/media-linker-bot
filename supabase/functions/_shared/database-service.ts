@@ -38,51 +38,22 @@ export async function createMessage(supabase: any, message: any, productInfo: an
       })
     };
 
-    const { data: existingMessage, error: checkError } = await supabase
+    // Use upsert with conflict resolution to handle potential duplicates efficiently
+    const { data: upsertedMessage, error: upsertError } = await supabase
       .from('messages')
-      .select('*')
-      .eq('message_id', message.message_id)
-      .eq('chat_id', message.chat.id)
+      .upsert(messageData, {
+        onConflict: 'message_id,chat_id',
+        returning: 'representation'
+      })
+      .select()
       .maybeSingle();
 
-    if (checkError) {
-      console.error('Error checking for existing message:', checkError);
-      throw checkError;
+    if (upsertError) {
+      console.error('Error upserting message:', upsertError);
+      throw upsertError;
     }
 
-    if (existingMessage) {
-      console.log('Updating existing message:', existingMessage.id);
-      const { data: updatedMessage, error: updateError } = await supabase
-        .from('messages')
-        .update(messageData)
-        .eq('id', existingMessage.id)
-        .select()
-        .single();
-
-      if (updateError) {
-        console.error('Error updating message:', updateError);
-        throw updateError;
-      }
-      return updatedMessage;
-    }
-
-    console.log('Creating new message with data:', messageData);
-    const { data: newMessage, error: insertError } = await supabase
-      .from('messages')
-      .insert(messageData)
-      .select()
-      .single();
-
-    if (insertError) {
-      console.error('Error creating message:', insertError);
-      throw insertError;
-    }
-
-    if (!newMessage) {
-      throw new Error('Failed to create message record: no data returned');
-    }
-
-    return newMessage;
+    return upsertedMessage;
   } catch (error) {
     console.error('Error in createMessage:', error);
     throw error;
@@ -123,12 +94,19 @@ export async function processMedia(
         retry_count: retryCount
       });
 
-      // Check for existing media
-      const { data: existingMedia } = await supabase
-        .from('telegram_media')
-        .select('*')
-        .eq('file_unique_id', mediaFile.file_unique_id)
-        .single();
+      // Check for existing media with timeout handling
+      const { data: existingMedia, error: queryError } = await Promise.race([
+        supabase
+          .from('telegram_media')
+          .select('*')
+          .eq('file_unique_id', mediaFile.file_unique_id)
+          .maybeSingle(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Query timeout')), 15000)
+        )
+      ]);
+
+      if (queryError) throw queryError;
 
       let result;
       if (existingMedia) {
@@ -142,12 +120,20 @@ export async function processMedia(
           fileExt
         );
 
-        const { data: uploadData, error: uploadError } = await supabase.storage
+        // Upload with timeout handling
+        const uploadPromise = supabase.storage
           .from('media')
           .upload(uniqueFileName, buffer, {
             contentType: getMimeType(filePath, mediaType === 'photo' ? 'image/jpeg' : 'application/octet-stream'),
             upsert: true
           });
+
+        const { data: uploadData, error: uploadError } = await Promise.race([
+          uploadPromise,
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Upload timeout')), 30000)
+          )
+        ]);
 
         if (uploadError) throw uploadError;
 
@@ -155,7 +141,8 @@ export async function processMedia(
           .from('media')
           .getPublicUrl(uniqueFileName);
 
-        const { error: updateError } = await supabase
+        // Update with timeout handling
+        const updatePromise = supabase
           .from('telegram_media')
           .update({
             public_url: publicUrl,
@@ -170,10 +157,19 @@ export async function processMedia(
               analyzed_content: productInfo
             })
           })
-          .eq('id', existingMedia.id);
+          .eq('id', existingMedia.id)
+          .select()
+          .single();
+
+        const { data: updatedMedia, error: updateError } = await Promise.race([
+          updatePromise,
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Update timeout')), 15000)
+          )
+        ]);
 
         if (updateError) throw updateError;
-        result = existingMedia;
+        result = updatedMedia;
       } else {
         console.log('[Media Processing] Processing new media');
         const { buffer, filePath } = await getAndDownloadTelegramFile(mediaFile.file_id, botToken);
@@ -185,12 +181,20 @@ export async function processMedia(
           fileExt
         );
 
-        const { data: uploadData, error: uploadError } = await supabase.storage
+        // Upload with timeout handling
+        const uploadPromise = supabase.storage
           .from('media')
           .upload(uniqueFileName, buffer, {
             contentType: getMimeType(filePath, mediaType === 'photo' ? 'image/jpeg' : 'application/octet-stream'),
             upsert: false
           });
+
+        const { data: uploadData, error: uploadError } = await Promise.race([
+          uploadPromise,
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Upload timeout')), 30000)
+          )
+        ]);
 
         if (uploadError) throw uploadError;
 
@@ -233,11 +237,19 @@ export async function processMedia(
           })
         };
 
-        const { data: newMedia, error: insertError } = await supabase
+        // Insert with timeout handling
+        const insertPromise = supabase
           .from('telegram_media')
           .insert(mediaRecord)
           .select()
           .single();
+
+        const { data: newMedia, error: insertError } = await Promise.race([
+          insertPromise,
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Insert timeout')), 15000)
+          )
+        ]);
 
         if (insertError) throw insertError;
         result = newMedia;
@@ -252,6 +264,10 @@ export async function processMedia(
       if (retryCount >= MAX_RETRY_ATTEMPTS) {
         throw error;
       }
+
+      // Add exponential backoff for retries
+      const backoffDelay = Math.min(1000 * Math.pow(2, retryCount), 10000);
+      await new Promise(resolve => setTimeout(resolve, backoffDelay));
     }
   }
 
