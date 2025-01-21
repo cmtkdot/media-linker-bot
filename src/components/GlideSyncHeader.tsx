@@ -75,6 +75,7 @@ export function GlideSyncHeader({ configs, isLoading }: GlideSyncHeaderProps) {
 
   return (
     <div className="flex items-center justify-between">
+      <h1 className="text-2xl font-semibold">Glide Sync Settings</h1>
       <div className="flex items-center gap-4">
         <Select value={selectedTableId} onValueChange={setSelectedTableId}>
           <SelectTrigger className="w-[200px]">
