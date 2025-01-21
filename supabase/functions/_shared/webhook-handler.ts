@@ -52,41 +52,102 @@ export async function handleWebhookUpdate(
     }
 
     // Step 2: Process message first to ensure we have a message record
-    const messageResult = await handleMessageProcessing(
-      supabase,
-      message,
-      null,
-      productInfo
-    );
-    
-    if (messageResult.success) {
-      messageRecord = messageResult.messageRecord;
-      console.log('Message record created/updated:', messageRecord?.id);
-    } else {
-      console.warn('Message processing warning:', messageResult.error);
+    try {
+      const messageResult = await handleMessageProcessing(
+        supabase,
+        message,
+        null,
+        productInfo
+      );
+      
+      if (messageResult.success) {
+        messageRecord = messageResult.messageRecord;
+        console.log('Message record created/updated:', messageRecord?.id);
+      } else {
+        // If it's a duplicate message error, log it and continue with media processing
+        if (messageResult.error?.includes('duplicate')) {
+          console.log('Duplicate message detected, continuing with media processing');
+          
+          // Get the existing message record
+          const { data: existingMessage } = await supabase
+            .from('messages')
+            .select('*')
+            .eq('message_id', message.message_id)
+            .eq('chat_id', message.chat.id)
+            .single();
+          
+          if (existingMessage) {
+            messageRecord = existingMessage;
+          } else {
+            // Log the duplicate in failed webhook updates
+            await supabase.from('failed_webhook_updates').insert({
+              message_id: message.message_id,
+              chat_id: message.chat.id,
+              error_message: 'Duplicate message upload detected',
+              message_data: message,
+              status: 'duplicate'
+            });
+            
+            return {
+              success: false,
+              error: 'Duplicate message detected',
+              messageId: null
+            };
+          }
+        } else {
+          console.error('Message processing error:', messageResult.error);
+          throw new Error(messageResult.error);
+        }
+      }
+    } catch (error) {
+      console.error('Error in message processing:', error);
+      throw error;
     }
 
     // Step 3: Process media with gathered data
     if (messageRecord) {
-      mediaResult = await processMedia(
-        supabase,
-        message,
-        messageRecord,
-        botToken,
-        productInfo,
-        0
-      );
+      try {
+        mediaResult = await processMedia(
+          supabase,
+          message,
+          messageRecord,
+          botToken,
+          productInfo,
+          0
+        );
 
-      // Step 4: If this is part of a media group, ensure all media is properly linked
-      if (message.media_group_id) {
-        console.log('Syncing media group:', message.media_group_id);
-        
-        // Update all media in the group to link to the same message
-        const { error: groupUpdateError } = await supabase
-          .from('telegram_media')
+        // Step 4: If this is part of a media group, ensure all media is properly linked
+        if (message.media_group_id) {
+          console.log('Syncing media group:', message.media_group_id);
+          
+          const { error: groupUpdateError } = await supabase
+            .from('telegram_media')
+            .update({
+              message_id: messageRecord.id,
+              caption: message.caption || null,
+              ...(productInfo && {
+                product_name: productInfo.product_name,
+                product_code: productInfo.product_code,
+                quantity: productInfo.quantity,
+                vendor_uid: productInfo.vendor_uid,
+                purchase_date: productInfo.purchase_date,
+                notes: productInfo.notes,
+                analyzed_content: productInfo
+              })
+            })
+            .eq('telegram_data->media_group_id', message.media_group_id);
+
+          if (groupUpdateError) {
+            console.error('Error updating media group:', groupUpdateError);
+          }
+        }
+
+        // Step 5: Update message with final status
+        const { error: messageUpdateError } = await supabase
+          .from('messages')
           .update({
-            message_id: messageRecord.id,
-            caption: message.caption || null,
+            status: 'success',
+            processed_at: new Date().toISOString(),
             ...(productInfo && {
               product_name: productInfo.product_name,
               product_code: productInfo.product_code,
@@ -97,33 +158,14 @@ export async function handleWebhookUpdate(
               analyzed_content: productInfo
             })
           })
-          .eq('telegram_data->media_group_id', message.media_group_id);
+          .eq('id', messageRecord.id);
 
-        if (groupUpdateError) {
-          console.error('Error updating media group:', groupUpdateError);
+        if (messageUpdateError) {
+          console.error('Error updating message status:', messageUpdateError);
         }
-      }
-
-      // Step 5: Update message with final status
-      const { error: messageUpdateError } = await supabase
-        .from('messages')
-        .update({
-          status: 'success',
-          processed_at: new Date().toISOString(),
-          ...(productInfo && {
-            product_name: productInfo.product_name,
-            product_code: productInfo.product_code,
-            quantity: productInfo.quantity,
-            vendor_uid: productInfo.vendor_uid,
-            purchase_date: productInfo.purchase_date,
-            notes: productInfo.notes,
-            analyzed_content: productInfo
-          })
-        })
-        .eq('id', messageRecord.id);
-
-      if (messageUpdateError) {
-        console.error('Error updating message status:', messageUpdateError);
+      } catch (error) {
+        console.error('Error processing media:', error);
+        throw error;
       }
     }
 
