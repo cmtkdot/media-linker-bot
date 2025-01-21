@@ -1,9 +1,9 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { getAndDownloadTelegramFile, generateSafeFileName } from './telegram-service.ts';
-import { getMimeType } from './media-validators.ts';
-import { handleProcessingError } from './error-handler.ts';
-import { MAX_RETRY_ATTEMPTS } from './constants.ts';
-import { syncMediaGroupCaptions, getMediaGroupInfo } from './media-group-manager.ts';
+import { createClient } from '@supabase/supabase-js';
+import { getAndDownloadTelegramFile, generateSafeFileName } from './telegram-service';
+import { getMimeType } from './media-validators';
+import { handleProcessingError } from './error-handler';
+import { MAX_RETRY_ATTEMPTS } from './constants';
+import { syncMediaGroupCaptions, getMediaGroupInfo } from './media-group-manager';
 
 export async function createMessage(supabase: any, message: any, productInfo: any = null) {
   if (!message?.message_id || !message?.chat?.id) {
