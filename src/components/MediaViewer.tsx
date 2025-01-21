@@ -13,6 +13,7 @@ interface MediaViewerProps {
   onOpenChange: (open: boolean) => void;
   media: {
     public_url: string;
+    default_public_url: string;
     file_type: string;
     caption?: string;
     product_name?: string;
@@ -29,26 +30,38 @@ const MediaViewer = ({ open, onOpenChange, media }: MediaViewerProps) => {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl">
+      <DialogContent className="max-w-5xl p-4">
         <DialogHeader className="w-full">
-          <DialogTitle className="text-center">{media.product_name || "Media Preview"}</DialogTitle>
+          <DialogTitle className="text-right">{media.product_name || "Media Preview"}</DialogTitle>
         </DialogHeader>
-        <div className="flex flex-col lg:flex-row gap-6">
+        <div className="flex flex-col lg:flex-row gap-4">
           {/* Media Column */}
-          <div className="flex-1">
-            <div className="relative aspect-video bg-black/5 rounded-lg overflow-hidden">
+          <div className="flex-[1.5]">
+            <div className="relative aspect-[3/4] bg-black/5 rounded-lg overflow-hidden">
               {media.file_type === "video" ? (
                 <video
                   src={media.public_url}
                   className="w-full h-full object-contain"
                   controls
                   autoPlay
+                  onError={(e) => {
+                    const video = e.target as HTMLVideoElement;
+                    if (video.src !== media.default_public_url) {
+                      video.src = media.default_public_url;
+                    }
+                  }}
                 />
               ) : (
                 <img
                   src={media.public_url}
                   alt={media.caption || "Media preview"}
                   className="w-full h-full object-contain"
+                  onError={(e) => {
+                    const img = e.target as HTMLImageElement;
+                    if (img.src !== media.default_public_url) {
+                      img.src = media.default_public_url;
+                    }
+                  }}
                 />
               )}
             </div>
@@ -105,7 +118,7 @@ const MediaViewer = ({ open, onOpenChange, media }: MediaViewerProps) => {
                 className="w-full"
               >
                 <a
-                  href={media.public_url}
+                  href={media.public_url || media.default_public_url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center justify-center gap-2"
