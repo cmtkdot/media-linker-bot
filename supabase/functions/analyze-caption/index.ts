@@ -16,7 +16,7 @@ serve(async (req) => {
       throw new Error('Missing required environment variables')
     }
 
-    const { caption, mediaGroupId } = await req.json()
+    const { caption, mediaGroupId, messageId } = await req.json()
     
     if (!caption) {
       return new Response(
@@ -34,7 +34,7 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4',
         messages: [
           {
             role: 'system',
@@ -97,32 +97,64 @@ serve(async (req) => {
       dbPurchaseDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
     }
 
-    // Update all media items in the same group
-    if (mediaGroupId) {
-      console.log('Updating media group:', mediaGroupId, 'with data:', {
+    // First update the message if messageId is provided
+    if (messageId) {
+      console.log('Updating message:', messageId, 'with data:', {
         caption,
         ...result,
         purchase_date: dbPurchaseDate
       })
 
-      const { error: updateError } = await supabase
-        .from('telegram_media')
+      const { error: messageError } = await supabase
+        .from('messages')
         .update({
           caption: caption,
           product_name: result.product_name,
           product_code: result.product_code,
           quantity: result.quantity,
           vendor_uid: result.vendor_uid,
-          purchase_date: dbPurchaseDate
+          purchase_date: dbPurchaseDate,
+          notes: Array.isArray(result.notes) ? result.notes[0] : result.notes
         })
+        .eq('id', messageId)
+
+      if (messageError) {
+        console.error('Error updating message:', messageError)
+        throw messageError
+      }
+    }
+
+    // Update media items - either by group or single item
+    const mediaQuery = supabase
+      .from('telegram_media')
+      .update({
+        caption: caption,
+        product_name: result.product_name,
+        product_code: result.product_code,
+        quantity: result.quantity,
+        vendor_uid: result.vendor_uid,
+        purchase_date: dbPurchaseDate,
+        notes: Array.isArray(result.notes) ? result.notes[0] : result.notes
+      })
+
+    if (mediaGroupId) {
+      console.log('Updating media group:', mediaGroupId)
+      const { error: updateError } = await mediaQuery
         .eq('telegram_data->media_group_id', mediaGroupId)
 
       if (updateError) {
         console.error('Error updating media group:', updateError)
         throw updateError
       }
+    } else if (messageId) {
+      console.log('Updating single media item for message:', messageId)
+      const { error: updateError } = await mediaQuery
+        .eq('message_id', messageId)
 
-      console.log('Successfully updated all media in group:', mediaGroupId)
+      if (updateError) {
+        console.error('Error updating single media item:', updateError)
+        throw updateError
+      }
     }
 
     return new Response(
