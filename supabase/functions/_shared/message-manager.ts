@@ -1,30 +1,29 @@
+import { syncMediaGroupCaptions } from './media-group-manager.ts';
+
 export async function handleMessageProcessing(
   supabase: any,
   message: any,
   existingMessage: any,
   productInfo: any = null
 ) {
-  console.log('Processing message:', { 
+  console.log('[Message] Processing:', { 
     message_id: message.message_id, 
     chat_id: message.chat.id,
-    product_info: productInfo,
-    existing_message: existingMessage?.id
+    media_group_id: message.media_group_id,
+    has_product_info: !!productInfo
   });
 
   try {
-    // Determine message type with proper validation
     const messageType = determineMessageType(message);
     if (!messageType) {
-      console.error('Invalid message type:', message);
+      console.error('[Message] Invalid type:', message);
       return {
         success: false,
         error: 'Invalid message type'
       };
     }
 
-    console.log('Determined message type:', messageType);
-
-    // Try to get existing message using maybeSingle
+    // Check for existing message
     const { data: existingRecord, error: existingError } = await supabase
       .from('messages')
       .select('*')
@@ -32,13 +31,7 @@ export async function handleMessageProcessing(
       .eq('chat_id', message.chat.id)
       .maybeSingle();
 
-    if (existingError) {
-      console.error('Error checking existing message:', existingError);
-      return {
-        success: false,
-        error: existingError.message
-      };
-    }
+    if (existingError) throw existingError;
 
     // Prepare message data
     const messageData = {
@@ -62,7 +55,7 @@ export async function handleMessageProcessing(
       })
     };
 
-    // Use upsert to handle both insert and update cases
+    // Insert or update message
     const { data: messageRecord, error: upsertError } = await supabase
       .from('messages')
       .upsert(messageData, {
@@ -72,12 +65,16 @@ export async function handleMessageProcessing(
       .select()
       .maybeSingle();
 
-    if (upsertError) {
-      console.error('Error upserting message:', upsertError);
-      return {
-        success: false,
-        error: upsertError.message
-      };
+    if (upsertError) throw upsertError;
+
+    // If part of a media group, sync information
+    if (message.media_group_id && (message.caption || productInfo)) {
+      await syncMediaGroupCaptions(
+        supabase,
+        message.media_group_id,
+        productInfo,
+        message.caption
+      );
     }
 
     return { 
@@ -88,7 +85,7 @@ export async function handleMessageProcessing(
     };
 
   } catch (error) {
-    console.error('Error in handleMessageProcessing:', {
+    console.error('[Message] Processing error:', {
       error: error.message,
       stack: error.stack,
       message_id: message?.message_id,
