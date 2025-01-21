@@ -87,16 +87,32 @@ serve(async (req) => {
 
           const messageCreatedAt = new Date(messageRecord.created_at);
 
+          // Check if file exists in storage
+          const { data: storageData } = await supabase.storage
+            .from('media')
+            .list('', {
+              search: fileUniqueId
+            });
+
+          let publicUrl;
+          if (storageData && storageData.length > 0) {
+            const { data } = await supabase.storage
+              .from('media')
+              .getPublicUrl(storageData[0].name);
+            publicUrl = data.publicUrl;
+          } else {
+            // Set default public URL based on file type
+            publicUrl = fileType === 'photo' 
+              ? `https://kzfamethztziwqiocbwz.supabase.co/storage/v1/object/public/media/${fileUniqueId}.jpg`
+              : `https://kzfamethztziwqiocbwz.supabase.co/storage/v1/object/public/media/${fileUniqueId}.MOV`;
+          }
+          
           if (existingMedia) {
             const mediaCreatedAt = new Date(existingMedia.created_at);
             
             // Only update if message is newer than existing media record
             if (messageCreatedAt > mediaCreatedAt) {
               console.log('Updating existing telegram_media record:', existingMedia.id);
-              
-              const defaultPublicUrl = fileType === 'video' || fileType === 'document' || fileType === 'animation'
-                ? `https://kzfamethztziwqiocbwz.supabase.co/storage/v1/object/public/media/${fileUniqueId}.MOV`
-                : `https://kzfamethztziwqiocbwz.supabase.co/storage/v1/object/public/media/${fileUniqueId}.jpg`;
               
               const { error: updateError } = await supabase
                 .from('telegram_media')
@@ -111,7 +127,7 @@ serve(async (req) => {
                   purchase_date: messageRecord.purchase_date,
                   notes: messageRecord.notes,
                   analyzed_content: messageRecord.analyzed_content,
-                  public_url: existingMedia.public_url || defaultPublicUrl,
+                  public_url: publicUrl,
                   telegram_data: {
                     message_id: message.message_id,
                     chat_id: message.chat.id,
@@ -134,10 +150,6 @@ serve(async (req) => {
           } else {
             console.log('Creating new telegram_media record for message:', messageRecord.id);
             
-            const defaultPublicUrl = fileType === 'video' || fileType === 'document' || fileType === 'animation'
-              ? `https://kzfamethztziwqiocbwz.supabase.co/storage/v1/object/public/media/${fileUniqueId}.MOV`
-              : `https://kzfamethztziwqiocbwz.supabase.co/storage/v1/object/public/media/${fileUniqueId}.jpg`;
-            
             const { error: insertError } = await supabase
               .from('telegram_media')
               .insert({
@@ -153,7 +165,7 @@ serve(async (req) => {
                 purchase_date: messageRecord.purchase_date,
                 notes: messageRecord.notes,
                 analyzed_content: messageRecord.analyzed_content,
-                public_url: defaultPublicUrl,
+                public_url: publicUrl,
                 telegram_data: {
                   message_id: message.message_id,
                   chat_id: message.chat.id,
