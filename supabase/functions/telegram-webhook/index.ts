@@ -44,6 +44,9 @@ serve(async (req) => {
                    update.message?.animation ? 'animation' : 'unknown'
     });
 
+    // First process the webhook update to ensure message record is created
+    const result = await handleWebhookUpdate(update, supabase, TELEGRAM_BOT_TOKEN);
+
     const message = update.message || update.channel_post;
     if (message) {
       const { data: messageRecord } = await supabase
@@ -171,8 +174,6 @@ serve(async (req) => {
         }
       }
     }
-
-    const result = await handleWebhookUpdate(update, supabase, TELEGRAM_BOT_TOKEN);
     
     console.log('Successfully processed update:', {
       update_id: update.update_id,
