@@ -39,9 +39,22 @@ serve(async (req) => {
           {
             role: 'system',
             content: `Extract product information from captions following the format: "{Product Name} #{PurchaseCode} x {Quantity}". 
-            Return a JSON object with product_name, product_code, and quantity. 
+            The PurchaseCode consists of a VendorUID (first 4 characters) followed by the Purchase Date in mmDDYY format.
+            Return a JSON object with:
+            - product_name
+            - product_code
+            - quantity
+            - vendor_uid (first 4 characters of product_code)
+            - purchase_date (convert mmDDYY to MM/DD/YYYY format)
+            
             Example caption: "Cherry Blow Pop #FISH011625 x 3"
-            Example response: {"product_name": "Cherry Blow Pop", "product_code": "FISH011625", "quantity": 3}
+            Example response: {
+              "product_name": "Cherry Blow Pop",
+              "product_code": "FISH011625",
+              "quantity": 3,
+              "vendor_uid": "FISH",
+              "purchase_date": "01/16/2025"
+            }
             If any part is missing, set it to null.`
           },
           {
@@ -61,6 +74,13 @@ serve(async (req) => {
     // Initialize Supabase client
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
+    // Convert MM/DD/YYYY to YYYY-MM-DD for database storage
+    let dbPurchaseDate = null
+    if (result.purchase_date) {
+      const [month, day, year] = result.purchase_date.split('/')
+      dbPurchaseDate = `${year}-${month}-${day}`
+    }
+
     // Update all media items in the same group
     if (mediaGroupId) {
       const { error: updateError } = await supabase
@@ -69,7 +89,9 @@ serve(async (req) => {
           caption: caption,
           product_name: result.product_name,
           product_code: result.product_code,
-          quantity: result.quantity
+          quantity: result.quantity,
+          vendor_uid: result.vendor_uid,
+          purchase_date: dbPurchaseDate
         })
         .eq('telegram_data->media_group_id', mediaGroupId)
 
@@ -80,7 +102,6 @@ serve(async (req) => {
 
       console.log('Successfully updated all media in group:', mediaGroupId)
     } else {
-      // If no media group, just return the analysis result
       console.log('No media group ID provided, skipping update')
     }
 
