@@ -1,189 +1,112 @@
-import { corsHeaders } from './cors.ts';
-import { GlideRecord, GlideTableSchema } from './types.ts';
+import { GlideTableSchema } from './types.ts';
 
-const GLIDE_COLUMN_MAPPING: GlideTableSchema = {
-  id: { type: "string", name: "UkkMS" },
-  fileId: { type: "string", name: "9Bod8" },
-  fileUniqueId: { type: "string", name: "IYnip" },
-  fileType: { type: "string", name: "hbjE4" },
-  publicUrl: { type: "uri", name: "d8Di5" },
-  productName: { type: "string", name: "xGGv3" },
-  productCode: { type: "string", name: "xlfB9" },
-  quantity: { type: "number", name: "TWRwx" },
-  telegramData: { type: "string", name: "Wm1he" },
-  glideData: { type: "string", name: "ZRV7Z" },
-  mediaMetadata: { type: "string", name: "Eu9Zn" },
-  processed: { type: "boolean", name: "oj7fP" },
-  processingError: { type: "string", name: "A4sZX" },
-  lastSyncedAt: { type: "string", name: "PWhCr" },
-  createdAt: { type: "string", name: "Oa3L9" },
-  updatedAt: { type: "string", name: "9xwrl" },
-  messageId: { type: "string", name: "Uzkgt" },
-  caption: { type: "string", name: "pRsjz" },
-  vendorUid: { type: "string", name: "uxDo1" },
-  purchaseDate: { type: "date", name: "AMWxJ" },
-  notes: { type: "string", name: "BkUFO" },
-  analyzedContent: { type: "string", name: "QhAgy" },
-  purchaseOrderUid: { type: "string", name: "3y8Wt" },
-  defaultPublicUrl: { type: "uri", name: "rCJK2" }
-};
+const GLIDE_API_BASE = 'https://api.glideapp.io/api/function/mutateTables';
 
 function validateGlideToken(token: string | undefined): string {
   if (!token) {
-    throw new Error('GLIDE_API_TOKEN is not set in Edge Function secrets');
-  }
-  
-  const cleanToken = token.trim();
-  if (!cleanToken) {
-    throw new Error('GLIDE_API_TOKEN cannot be empty');
+    throw new Error('Glide API token is not set');
   }
 
-  if (cleanToken.length < 20) {
-    throw new Error('GLIDE_API_TOKEN appears to be invalid (too short)');
+  const trimmedToken = token.trim();
+  if (trimmedToken.length < 36) {
+    throw new Error('Invalid Glide API token format');
   }
 
-  return cleanToken;
+  return trimmedToken;
 }
 
-function mapToGlideColumns(data: Record<string, any>): Record<string, any> {
-  const mapped: Record<string, any> = {};
-  for (const [key, value] of Object.entries(data)) {
-    const glideColumn = GLIDE_COLUMN_MAPPING[key as keyof GlideTableSchema];
-    if (glideColumn) {
-      mapped[glideColumn.name] = value;
-    }
-  }
-  return mapped;
-}
-
-function mapFromGlideColumns(data: Record<string, any>): Record<string, any> {
-  const mapped: Record<string, any> = {};
-  for (const [key, column] of Object.entries(GLIDE_COLUMN_MAPPING)) {
-    if (data[column.name] !== undefined) {
-      mapped[key] = data[column.name];
-    }
-  }
-  return mapped;
-}
-
-export async function fetchGlideRecords(tableId: string): Promise<GlideRecord[]> {
-  const apiToken = validateGlideToken(Deno.env.get('GLIDE_API_TOKEN'));
-
-  console.log('Making request to Glide API:', {
-    table_id: tableId,
-    token_length: apiToken.length,
-    token_preview: `${apiToken.substring(0, 5)}...${apiToken.substring(apiToken.length - 5)}`,
-  });
-
-  const glideResponse = await fetch(
-    `https://api.glideapp.io/api/tables/${tableId}/rows`,
-    {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${apiToken}`,
-        'Content-Type': 'application/json; charset=utf-8',
-        ...corsHeaders
+async function handleGlideResponse(response: Response, operation: string) {
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Glide API error:', {
+      status: response.status,
+      statusText: response.statusText,
+      error: errorText,
+      config: {
+        table_id: 'native-table-crVqfFJXQde5cGcYmqWs',
+        has_token: !!Deno.env.get('GLIDE_API_TOKEN'),
+        token_length: Deno.env.get('GLIDE_API_TOKEN')?.length,
+        auth_header_preview: `Bearer ${Deno.env.get('GLIDE_API_TOKEN')?.substring(0, 5)}...${Deno.env.get('GLIDE_API_TOKEN')?.slice(-5)}`
       }
-    }
-  );
+    });
 
-  const errorDetails = {
-    status: glideResponse.status,
-    statusText: glideResponse.statusText,
-    error: await glideResponse.text(),
-    config: {
-      table_id: tableId,
-      has_token: !!apiToken,
-      token_length: apiToken.length,
-      auth_header_preview: `Bearer ${apiToken.substring(0, 5)}...${apiToken.substring(apiToken.length - 5)}`
+    let errorMessage = `Glide API ${operation} failed: ${response.status} ${response.statusText}`;
+    if (response.status === 401) {
+      errorMessage = 'Invalid or expired Glide API token';
+    } else if (response.status === 403) {
+      errorMessage = 'Access denied to Glide API';
+    } else if (response.status === 404) {
+      errorMessage = 'Glide table or record not found';
     }
-  };
 
-  if (!glideResponse.ok) {
-    let errorMessage = 'Glide API error';
-    if (glideResponse.status === 401) {
-      errorMessage = 'Invalid or expired Glide API token. Please check your Edge Function secrets and ensure the token is valid.';
-    } else if (glideResponse.status === 403) {
-      errorMessage = 'Access forbidden. Please verify your Glide API permissions and token scope.';
-    } else if (glideResponse.status === 404) {
-      errorMessage = 'Glide table not found. Please verify your table ID and API access.';
-    }
-    
-    throw new Error(`${errorMessage}: ${JSON.stringify(errorDetails, null, 2)}`);
+    throw new Error(errorMessage);
   }
 
-  try {
-    const data = await glideResponse.json();
-    return data.map(mapFromGlideColumns);
-  } catch (error) {
-    console.error('Error parsing Glide API response:', error);
-    throw new Error(`Failed to parse Glide API response: ${error.message}`);
-  }
+  return await response.json();
 }
 
-export async function createGlideRecord(tableId: string, recordData: any): Promise<void> {
-  const apiToken = validateGlideToken(Deno.env.get('GLIDE_API_TOKEN'));
-  const mappedData = mapToGlideColumns(recordData);
+export async function fetchGlideRecords(tableId: string) {
+  const token = validateGlideToken(Deno.env.get('GLIDE_API_TOKEN'));
 
-  console.log('Creating record in Glide:', {
-    table_id: tableId,
-    data_preview: JSON.stringify(mappedData).substring(0, 100) + '...'
+  const response = await fetch(`${GLIDE_API_BASE}/${tableId}`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
   });
 
-  const createResponse = await fetch(
-    `https://api.glideapp.io/api/tables/${tableId}/rows`,
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiToken}`,
-        'Content-Type': 'application/json; charset=utf-8',
-        ...corsHeaders
-      },
-      body: JSON.stringify([mappedData])
-    }
-  );
-
-  if (!createResponse.ok) {
-    const errorText = await createResponse.text();
-    console.error('Error creating Glide record:', {
-      status: createResponse.status,
-      statusText: createResponse.statusText,
-      error: errorText
-    });
-    throw new Error(`Failed to create Glide record: ${errorText}`);
-  }
+  return handleGlideResponse(response, 'fetch');
 }
 
-export async function updateGlideRecord(tableId: string, recordId: string, recordData: any): Promise<void> {
-  const apiToken = validateGlideToken(Deno.env.get('GLIDE_API_TOKEN'));
-  const mappedData = mapToGlideColumns(recordData);
+export async function createGlideRecord(tableId: string, data: Record<string, any>) {
+  const token = validateGlideToken(Deno.env.get('GLIDE_API_TOKEN'));
+  const schema = GlideTableSchema;
 
-  console.log('Updating record in Glide:', {
-    table_id: tableId,
-    record_id: recordId,
-    data_preview: JSON.stringify(mappedData).substring(0, 100) + '...'
+  // Map the data to Glide column names
+  const mappedData: Record<string, any> = {};
+  for (const [key, value] of Object.entries(data)) {
+    const schemaKey = key as keyof typeof schema;
+    if (schema[schemaKey]) {
+      mappedData[schema[schemaKey].name] = value;
+    }
+  }
+
+  const response = await fetch(`${GLIDE_API_BASE}/${tableId}`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      records: [mappedData]
+    }),
   });
 
-  const updateResponse = await fetch(
-    `https://api.glideapp.io/api/tables/${tableId}/rows/${recordId}`,
-    {
-      method: 'PATCH',
-      headers: {
-        'Authorization': `Bearer ${apiToken}`,
-        'Content-Type': 'application/json; charset=utf-8',
-        ...corsHeaders
-      },
-      body: JSON.stringify(mappedData)
-    }
-  );
+  return handleGlideResponse(response, 'create');
+}
 
-  if (!updateResponse.ok) {
-    const errorText = await updateResponse.text();
-    console.error('Error updating Glide record:', {
-      status: updateResponse.status,
-      statusText: updateResponse.statusText,
-      error: errorText
-    });
-    throw new Error(`Failed to update Glide record: ${errorText}`);
+export async function updateGlideRecord(tableId: string, recordId: string, data: Record<string, any>) {
+  const token = validateGlideToken(Deno.env.get('GLIDE_API_TOKEN'));
+  const schema = GlideTableSchema;
+
+  // Map the data to Glide column names
+  const mappedData: Record<string, any> = {};
+  for (const [key, value] of Object.entries(data)) {
+    const schemaKey = key as keyof typeof schema;
+    if (schema[schemaKey]) {
+      mappedData[schema[schemaKey].name] = value;
+    }
   }
+
+  const response = await fetch(`${GLIDE_API_BASE}/${tableId}/${recordId}`, {
+    method: 'PATCH',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(mappedData),
+  });
+
+  return handleGlideResponse(response, 'update');
 }
