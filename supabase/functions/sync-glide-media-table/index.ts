@@ -57,9 +57,16 @@ serve(async (req) => {
       throw new Error('No API token available');
     }
 
+    // Validate API token format
+    if (typeof apiToken !== 'string' || apiToken.trim() === '') {
+      throw new Error('Invalid API token format');
+    }
+
     console.log('Starting sync with config:', {
       table_name: config.table_name,
-      supabase_table_name: config.supabase_table_name
+      supabase_table_name: config.supabase_table_name,
+      has_token: !!apiToken,
+      token_length: apiToken.length
     });
 
     // Get all telegram_media records from Supabase
@@ -73,7 +80,7 @@ serve(async (req) => {
     const glideResponse = await fetch(`https://api.glideapp.io/api/tables/${config.table_id}/rows`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${apiToken}`,
+        'Authorization': `Bearer ${apiToken.trim()}`,
         'Content-Type': 'application/json',
       },
     });
@@ -86,7 +93,9 @@ serve(async (req) => {
         error: errorText,
         config: {
           table_id: config.table_id,
-          has_token: !!apiToken
+          has_token: !!apiToken,
+          token_length: apiToken.length,
+          auth_header: `Bearer ${apiToken.substring(0, 5)}...${apiToken.substring(apiToken.length - 5)}`
         }
       });
       throw new Error(`Glide API error: ${JSON.stringify({
