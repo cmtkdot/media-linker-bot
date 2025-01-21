@@ -59,11 +59,13 @@ export function TableLinkDialog({ config, onClose, onSuccess }: TableLinkDialogP
       if (allTablesError) throw allTablesError;
 
       // Filter out system tables and already linked tables
-      const availableTables = allTables.filter((table: string) => 
-        !linkedTables.has(table) && 
-        !table.startsWith('_') && 
-        !['schema_migrations', 'spatial_ref_sys'].includes(table)
-      );
+      const availableTables = (allTables as { table_name: string }[])
+        .map(t => t.table_name)
+        .filter(table => 
+          !linkedTables.has(table) && 
+          !table.startsWith('_') && 
+          !['schema_migrations', 'spatial_ref_sys'].includes(table)
+        );
 
       setAvailableTables(availableTables);
     } catch (error) {

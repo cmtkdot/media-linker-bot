@@ -272,6 +272,12 @@ export type Database = {
         }
         Returns: undefined
       }
+      get_all_tables: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          table_name: string
+        }[]
+      }
       get_message_file_id: {
         Args: {
           message_data: Json
