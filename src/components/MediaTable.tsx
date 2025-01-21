@@ -33,7 +33,7 @@ const MediaTable = ({ data, onEdit }: MediaTableProps) => {
 
       toast({
         title: "Media deleted",
-        description: "The media item has been successfully deleted.",
+        description: "The media item and associated data have been successfully deleted.",
       });
 
       queryClient.invalidateQueries({ queryKey: ['telegram-media'] });
@@ -41,7 +41,7 @@ const MediaTable = ({ data, onEdit }: MediaTableProps) => {
       console.error('Error deleting media:', error);
       toast({
         title: "Error",
-        description: "Failed to delete media item.",
+        description: "Failed to delete media item and associated data.",
         variant: "destructive",
       });
     }
