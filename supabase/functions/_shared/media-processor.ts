@@ -43,7 +43,7 @@ export async function updateExistingMedia(supabase: any, mediaFile: any, message
       media_group_id: message.media_group_id,
     };
 
-    // Extract product info from caption
+    // Extract all product info from messageRecord
     const productInfo = {
       caption: message.caption,
       product_name: messageRecord.product_name,
@@ -58,7 +58,7 @@ export async function updateExistingMedia(supabase: any, mediaFile: any, message
       ...productInfo
     });
 
-    // Update telegram_media record with new data
+    // Update telegram_media record with all fields
     const { error: mediaError } = await supabase
       .from('telegram_media')
       .update({
@@ -81,7 +81,7 @@ export async function updateExistingMedia(supabase: any, mediaFile: any, message
       message_id: message.message_id
     });
 
-    // Update message record with new data
+    // Update message record with all fields
     const { error: messageError } = await supabase
       .from('messages')
       .update({
@@ -104,6 +104,11 @@ export async function updateExistingMedia(supabase: any, mediaFile: any, message
         message_id: messageRecord.id
       });
       throw messageError;
+    }
+
+    // Handle media group updates if needed
+    if (message.media_group_id) {
+      await handleMediaGroup(supabase, message, messageRecord);
     }
 
     return existingMedia;
