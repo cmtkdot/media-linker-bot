@@ -13,13 +13,11 @@ export async function processMediaFile(
   console.log(`Processing ${mediaType} file:`, mediaFile.file_id);
 
   try {
-    // Check for existing media to prevent duplicates
+    // Check for existing media to prevent duplicates - using file_unique_id which is guaranteed unique by Telegram
     const { data: existingMedia } = await supabase
       .from('telegram_media')
-      .select('id, public_url')
+      .select('id, public_url, file_unique_id')
       .eq('file_unique_id', mediaFile.file_unique_id)
-      .eq('telegram_data->chat_id', message.chat.id)
-      .eq('telegram_data->message_id', message.message_id)
       .single();
 
     if (existingMedia?.public_url) {
@@ -29,18 +27,35 @@ export async function processMediaFile(
 
     const { buffer, filePath } = await getAndDownloadTelegramFile(mediaFile.file_id, botToken);
     
-    // Ensure proper file extension for photos
+    // Generate a unique filename using media type and file_unique_id
     let fileExt = filePath.split('.').pop() || '';
     if (mediaType === 'photo' && !fileExt) {
       fileExt = 'jpg';
     }
-    
+
+    // Create a unique filename pattern
     const uniqueFileName = generateSafeFileName(
-      `${mediaType}_${mediaFile.file_unique_id}_${Date.now()}`,
+      `${mediaType}_${mediaFile.file_unique_id}`,
       fileExt
     );
 
     console.log('Uploading file:', uniqueFileName);
+
+    // Check if file already exists in storage
+    const { data: existingFile } = await supabase.storage
+      .from('media')
+      .list('', {
+        search: uniqueFileName
+      });
+
+    if (existingFile && existingFile.length > 0) {
+      console.log('File already exists in storage:', uniqueFileName);
+      const { data: { publicUrl } } = await supabase.storage
+        .from('media')
+        .getPublicUrl(uniqueFileName);
+      return { public_url: publicUrl };
+    }
+
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('media')
       .upload(uniqueFileName, buffer, {
@@ -59,13 +74,14 @@ export async function processMediaFile(
       .from('media')
       .getPublicUrl(uniqueFileName);
 
+    // Prepare telegram data with proper caption handling for media groups
     const telegramData = {
       message_id: message.message_id,
       chat_id: message.chat.id,
       sender_chat: message.sender_chat,
       chat: message.chat,
       date: message.date,
-      caption: message.caption,
+      caption: message.caption || (message.media_group_id ? messageRecord.caption : null),
       media_group_id: message.media_group_id,
       file_size: mediaFile.file_size ? BigInt(mediaFile.file_size).toString() : null,
       mime_type: mediaFile.mime_type || (mediaType === 'photo' ? 'image/jpeg' : 'application/octet-stream'),
@@ -75,11 +91,21 @@ export async function processMediaFile(
       storage_path: uniqueFileName
     };
 
+    // For media groups, use the caption from the message record if available
+    const captionToUse = message.media_group_id ? messageRecord.caption : message.caption;
+    const productInfoToUse = message.media_group_id ? {
+      product_name: messageRecord.product_name,
+      product_code: messageRecord.product_code,
+      quantity: messageRecord.quantity
+    } : productInfo;
+
     console.log('Inserting media record with data:', {
       file_id: mediaFile.file_id,
       file_type: mediaType,
       public_url: publicUrl,
-      message_id: messageRecord.id
+      message_id: messageRecord.id,
+      caption: captionToUse,
+      productInfo: productInfoToUse
     });
 
     const { error: dbError } = await supabase
@@ -91,11 +117,11 @@ export async function processMediaFile(
         telegram_data: telegramData,
         message_id: messageRecord.id,
         public_url: publicUrl,
-        caption: message.caption,
-        ...(productInfo && {
-          product_name: productInfo.product_name,
-          product_code: productInfo.product_code,
-          quantity: productInfo.quantity ? BigInt(productInfo.quantity).toString() : null
+        caption: captionToUse,
+        ...(productInfoToUse && {
+          product_name: productInfoToUse.product_name,
+          product_code: productInfoToUse.product_code,
+          quantity: productInfoToUse.quantity ? BigInt(productInfoToUse.quantity).toString() : null
         })
       });
 
