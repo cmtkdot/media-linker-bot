@@ -1,6 +1,7 @@
 import { generateSafeFileName, getAndDownloadTelegramFile } from './telegram-service.ts';
 import { delay } from './retry-utils.ts';
 import { syncMediaGroupCaptions } from './caption-sync.ts';
+import { getMimeType } from './media-validators.ts';
 
 export async function processMediaFiles(
   message: any,
@@ -11,7 +12,8 @@ export async function processMediaFiles(
   console.log('Processing media files for message:', {
     message_id: message.message_id,
     media_group_id: message.media_group_id,
-    has_caption: !!message.caption
+    has_caption: !!message.caption,
+    has_analyzed_content: !!messageRecord.analyzed_content
   });
 
   try {

@@ -1,6 +1,7 @@
 import { processMessageBatch } from './message-processor.ts';
 import { processMediaFiles } from './media-processor.ts';
 import { delay } from './retry-utils.ts';
+import { analyzeCaptionWithAI } from './caption-analyzer.ts';
 
 export async function handleWebhookUpdate(update: any, supabase: any, botToken: string) {
   const message = update.message || update.channel_post;
@@ -15,15 +16,31 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
       message_id: message.message_id,
       chat_id: message.chat.id,
       media_group_id: message.media_group_id,
-      message_type: message.photo ? 'photo' : 
-                   message.video ? 'video' : 
-                   message.document ? 'document' : 
-                   message.animation ? 'animation' : 'unknown'
+      has_caption: !!message.caption
     });
 
-    // Step 1: Process message first with error handling
+    // Step 1: Analyze caption if present
+    let analyzedContent = null;
+    if (message.caption) {
+      try {
+        analyzedContent = await analyzeCaptionWithAI(
+          message.caption,
+          Deno.env.get('SUPABASE_URL') || '',
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+        );
+        console.log('Caption analysis result:', analyzedContent);
+      } catch (error) {
+        console.error('Error analyzing caption:', error);
+        // Continue processing even if caption analysis fails
+      }
+    }
+
+    // Step 2: Process message with analyzed content
     try {
-      await processMessageBatch([message], supabase);
+      await processMessageBatch([{
+        ...message,
+        analyzed_content: analyzedContent
+      }], supabase);
     } catch (error) {
       console.error('Error processing message batch:', {
         error: error.message,
@@ -36,7 +53,7 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
 
     await delay(1000);
 
-    // Step 2: Get the created message record with validation
+    // Step 3: Get the created message record with validation
     const { data: messageRecord, error: messageError } = await supabase
       .from('messages')
       .select('*')
@@ -61,7 +78,7 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
       throw new Error('Failed to create message record: Record not found after creation');
     }
 
-    // Step 3: Process media files if present with detailed error handling
+    // Step 4: Process media files if present
     const hasMedia = message.photo || message.video || message.document || message.animation;
     if (hasMedia) {
       try {
@@ -80,7 +97,7 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
       }
     }
 
-    // Step 4: Update message status with error handling
+    // Step 5: Update message status
     const { error: updateError } = await supabase
       .from('messages')
       .update({
