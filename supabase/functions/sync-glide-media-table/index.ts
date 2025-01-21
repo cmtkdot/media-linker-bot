@@ -5,15 +5,22 @@ import { GlideClient } from 'https://esm.sh/@glideapps/tables@1.0.5';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Max-Age': '86400',
 };
 
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { 
+      headers: corsHeaders,
+      status: 204
+    });
   }
 
   try {
+    console.log('Starting sync operation...');
+    
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
@@ -25,7 +32,7 @@ serve(async (req) => {
     
     // Parse request body
     const { operation, tableId } = await req.json();
-    console.log('Starting sync operation:', { operation, tableId });
+    console.log('Received sync request:', { operation, tableId });
     
     if (!operation || !tableId) {
       throw new Error('Missing required parameters: operation and tableId');
@@ -39,8 +46,14 @@ serve(async (req) => {
       .single();
 
     if (configError || !glideConfig) {
+      console.error('Failed to fetch Glide configuration:', configError);
       throw new Error(`Failed to fetch Glide configuration: ${configError?.message || 'Configuration not found'}`);
     }
+
+    console.log('Found Glide configuration:', { 
+      table_name: glideConfig.table_name,
+      supabase_table_name: glideConfig.supabase_table_name
+    });
 
     const glide = new GlideClient(glideConfig.api_token);
     const table = glide.table(glideConfig.table_id);
@@ -57,6 +70,7 @@ serve(async (req) => {
         ]);
 
         if (supabaseError) {
+          console.error('Failed to fetch Supabase rows:', supabaseError);
           throw new Error(`Failed to fetch Supabase rows: ${supabaseError.message}`);
         }
 
@@ -178,6 +192,8 @@ serve(async (req) => {
       default:
         throw new Error(`Invalid operation: ${operation}`);
     }
+
+    console.log('Sync completed successfully:', result);
 
     return new Response(
       JSON.stringify({ success: true, data: result }),
