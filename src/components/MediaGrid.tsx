@@ -36,6 +36,42 @@ const MediaGrid = () => {
     }
   });
 
+  const handleEdit = async () => {
+    if (!editItem) return;
+
+    try {
+      const { error: updateError } = await supabase
+        .from('telegram_media')
+        .update({
+          caption: editItem.caption,
+          product_name: editItem.product_name,
+          product_code: editItem.product_code,
+          quantity: editItem.quantity,
+          vendor_uid: editItem.vendor_uid,
+          purchase_date: editItem.purchase_date,
+          notes: editItem.notes
+        })
+        .eq('id', editItem.id);
+
+      if (updateError) throw updateError;
+
+      toast({
+        title: "Changes saved",
+        description: "The media item has been updated successfully.",
+      });
+
+      queryClient.invalidateQueries({ queryKey: ['telegram-media'] });
+      setEditItem(null);
+    } catch (error) {
+      console.error('Error updating media:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save changes.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleSync = async () => {
     try {
       setIsSyncing(true);
