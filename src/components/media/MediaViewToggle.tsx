@@ -15,7 +15,8 @@ const MediaViewToggle = ({ view, onViewChange, onSync, isSyncing, canSync }: Med
       variant="outline"
       size="icon"
       onClick={onSync}
-      disabled={!canSync || isSyncing}
+      disabled={isSyncing}
+      title="Sync all media groups without captions"
     >
       <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
     </Button>

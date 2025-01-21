@@ -36,16 +36,51 @@ const MediaGrid = () => {
   });
 
   const handleSync = async () => {
-    if (!editItem?.id) return;
-    
     setIsSyncing(true);
     try {
-      const { error } = await supabase
-        .rpc('sync_media_group_info_rpc', { 
-          media_id: editItem.id 
-        });
+      // Get all media groups that have at least one item without a caption
+      const { data: mediaGroups, error: groupError } = await supabase
+        .from('telegram_media')
+        .select('telegram_data->media_group_id')
+        .is('caption', null)
+        .not('telegram_data->media_group_id', 'is', null)
+        .distinct();
 
-      if (error) throw error;
+      if (groupError) throw groupError;
+
+      if (!mediaGroups?.length) {
+        toast({
+          title: "No media groups to sync",
+          description: "All media groups have captions.",
+        });
+        return;
+      }
+
+      // Sync each media group
+      for (const group of mediaGroups) {
+        const mediaGroupId = group.media_group_id;
+        if (!mediaGroupId) continue;
+
+        // Get first item from the group to use for syncing
+        const { data: firstItem } = await supabase
+          .from('telegram_media')
+          .select('id')
+          .eq('telegram_data->media_group_id', mediaGroupId)
+          .limit(1)
+          .single();
+
+        if (firstItem) {
+          const { error: syncError } = await supabase
+            .rpc('sync_media_group_info_rpc', { 
+              media_id: firstItem.id 
+            });
+
+          if (syncError) {
+            console.error('Error syncing media group:', mediaGroupId, syncError);
+            continue;
+          }
+        }
+      }
 
       await queryClient.invalidateQueries({ queryKey: ['telegram-media'] });
       
@@ -129,7 +164,7 @@ const MediaGrid = () => {
           onViewChange={setView}
           onSync={handleSync}
           isSyncing={isSyncing}
-          canSync={!!editItem}
+          canSync={true} // Always enable sync button since it now works on all media groups
         />
       </div>
 
