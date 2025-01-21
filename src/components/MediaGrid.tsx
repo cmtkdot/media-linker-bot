@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Grid, List } from "lucide-react";
+import { Grid, List, Pencil } from "lucide-react";
 import MediaTable from "./MediaTable";
 import {
   Dialog,
@@ -138,8 +138,22 @@ const MediaGrid = () => {
       {view === 'grid' ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {mediaItems.map((item) => (
-            <Card key={item.id} className="overflow-hidden group cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setEditItem(item)}>
-              <div className="aspect-square relative">
+            <Card key={item.id} className="overflow-hidden group relative">
+              <Button
+                variant="outline"
+                size="icon"
+                className="absolute top-2 left-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditItem(item);
+                }}
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+              <div 
+                className="aspect-square relative cursor-pointer" 
+                onClick={() => setEditItem(item)}
+              >
                 {item.file_type === 'video' ? (
                   <video 
                     src={item.public_url}
