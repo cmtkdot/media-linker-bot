@@ -55,9 +55,6 @@ serve(async (req) => {
         result
       });
       
-      // Clean up old failed records
-      await supabase.rpc('cleanup_successful_webhooks');
-      
       return new Response(
         JSON.stringify({ ok: true, result }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -86,7 +83,7 @@ serve(async (req) => {
         console.error('Error logging failed webhook:', logError);
       }
 
-      // Return 200 to acknowledge receipt
+      // Return 200 to acknowledge receipt even on error
       return new Response(
         JSON.stringify({ 
           ok: false, 

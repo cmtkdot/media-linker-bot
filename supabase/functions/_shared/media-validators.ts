@@ -22,25 +22,60 @@ export const getMimeType = (fileName: string, defaultType: string = 'application
     'mkv': 'video/x-matroska',
     '3gp': 'video/3gpp',
     'wmv': 'video/x-ms-wmv',
-    'ogv': 'video/ogg',
-    
-    // Documents
-    'pdf': 'application/pdf',
-    'doc': 'application/msword',
-    'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'xls': 'application/vnd.ms-excel',
-    'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'txt': 'text/plain'
+    'ogv': 'video/ogg'
   };
 
   return extension ? mimeTypes[extension] || defaultType : defaultType;
 };
 
-export const validateFileType = (fileName: string, allowedTypes: string[]): boolean => {
-  const mimeType = getMimeType(fileName);
-  return allowedTypes.includes(mimeType);
+export const validateMediaFile = async (mediaFile: any, mediaType: string) => {
+  if (!mediaFile) {
+    throw new Error('No media file provided');
+  }
+
+  if (!mediaFile.file_id || !mediaFile.file_unique_id) {
+    throw new Error('Invalid media file: missing required fields');
+  }
+
+  // Size validation (100MB limit)
+  const maxSize = 100 * 1024 * 1024; // 100MB in bytes
+  if (mediaFile.file_size && mediaFile.file_size > maxSize) {
+    throw new Error(`File size exceeds limit of ${maxSize} bytes`);
+  }
+
+  // Type-specific validation
+  switch (mediaType) {
+    case 'photo':
+      if (!mediaFile.width || !mediaFile.height) {
+        throw new Error('Invalid photo: missing dimensions');
+      }
+      break;
+    case 'video':
+      if (!mediaFile.duration) {
+        throw new Error('Invalid video: missing duration');
+      }
+      break;
+    case 'document':
+      if (!mediaFile.file_name) {
+        throw new Error('Invalid document: missing filename');
+      }
+      break;
+    case 'animation':
+      if (!mediaFile.duration || !mediaFile.width || !mediaFile.height) {
+        throw new Error('Invalid animation: missing required properties');
+      }
+      break;
+    default:
+      throw new Error(`Unsupported media type: ${mediaType}`);
+  }
+
+  return true;
 };
 
-export const validateFileSize = (size: number, maxSize: number = 50 * 1024 * 1024): boolean => {
-  return size <= maxSize;
+export const getMediaType = (message: any): string | null => {
+  if (message.photo && message.photo.length > 0) return 'photo';
+  if (message.video) return 'video';
+  if (message.document) return 'document';
+  if (message.animation) return 'animation';
+  return null;
 };

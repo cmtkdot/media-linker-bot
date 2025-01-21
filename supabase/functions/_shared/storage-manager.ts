@@ -20,9 +20,9 @@ export const ensureStorageBucket = async (supabase: any) => {
           'image/gif', 'image/tiff', 'image/bmp', 'image/heic',
           'image/heif', 'video/mp4', 'video/quicktime', 'video/webm',
           'video/x-msvideo', 'video/x-matroska', 'video/3gpp',
-          'video/x-ms-wmv', 'video/ogg', 'application/octet-stream'
+          'video/x-ms-wmv', 'video/ogg'
         ],
-        fileSizeLimit: 50 * 1024 * 1024
+        fileSizeLimit: 100 * 1024 * 1024 // 100MB limit
       });
       
       if (createError) throw createError;
@@ -60,7 +60,7 @@ export const uploadMediaToStorage = async (
       .from('media')
       .upload(fileName, buffer, {
         contentType: finalMimeType,
-        upsert: false,
+        upsert: true,
         cacheControl: '3600'
       });
 
@@ -85,10 +85,20 @@ export const uploadMediaToStorage = async (
   }
 };
 
-export const getPublicUrl = (supabase: any, filePath: string) => {
-  const { data } = supabase.storage
-    .from('media')
-    .getPublicUrl(filePath);
-  
-  return data.publicUrl;
+export const deleteMediaFromStorage = async (supabase: any, filePath: string) => {
+  try {
+    const { error } = await supabase.storage
+      .from('media')
+      .remove([filePath]);
+
+    if (error) {
+      console.error('Error deleting file from storage:', error);
+      throw error;
+    }
+
+    console.log('Successfully deleted file from storage:', filePath);
+  } catch (error) {
+    console.error('Error in deleteMediaFromStorage:', error);
+    throw error;
+  }
 };
