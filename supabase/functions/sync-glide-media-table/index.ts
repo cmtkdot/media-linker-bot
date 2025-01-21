@@ -2,8 +2,9 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import { corsHeaders } from './cors.ts';
 import { fetchGlideRecords, createGlideRecord, updateGlideRecord } from './glideApi.ts';
-import { mapGlideToSupabase, mapSupabaseToGlide } from './productMapper.ts';
-import type { SyncResult, GlideConfig } from './types.ts';
+import { mapSupabaseToGlide } from './productMapper.ts';
+import { processQueueItems } from './queueProcessor.ts';
+import type { SyncResult } from './types.ts';
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -41,18 +42,6 @@ serve(async (req) => {
       supabase_table_name: config.supabase_table_name,
     });
 
-    // Process any pending items in the sync queue first
-    const { data: queueItems, error: queueError } = await supabase
-      .from('glide_sync_queue')
-      .select('*')
-      .is('processed_at', null)
-      .eq('table_name', config.supabase_table_name)
-      .order('created_at', { ascending: true });
-
-    if (queueError) throw queueError;
-
-    console.log(`Found ${queueItems?.length || 0} pending sync items`);
-
     const result: SyncResult = {
       added: 0,
       updated: 0,
@@ -60,63 +49,8 @@ serve(async (req) => {
       errors: []
     };
 
-    // Process queue items
-    for (const item of queueItems || []) {
-      try {
-        switch (item.operation) {
-          case 'INSERT':
-          case 'UPDATE':
-            const recordData = item.new_data;
-            if (!recordData) continue;
-
-            const glideData = mapSupabaseToGlide(recordData);
-            
-            if (item.operation === 'INSERT') {
-              await createGlideRecord(config.table_id, glideData);
-              result.added++;
-            } else {
-              const glideId = recordData.telegram_media_row_id;
-              if (glideId) {
-                await updateGlideRecord(config.table_id, glideId, glideData);
-                result.updated++;
-              }
-            }
-            break;
-
-          case 'DELETE':
-            // Handle deletion if needed
-            // Note: Current implementation doesn't delete records from Glide
-            break;
-        }
-
-        // Mark queue item as processed
-        await supabase
-          .from('glide_sync_queue')
-          .update({
-            processed_at: new Date().toISOString(),
-            error: null
-          })
-          .eq('id', item.id);
-
-      } catch (error) {
-        console.error('Error processing queue item:', {
-          item_id: item.id,
-          error: error.message,
-          stack: error.stack
-        });
-
-        // Update queue item with error
-        await supabase
-          .from('glide_sync_queue')
-          .update({
-            error: error.message,
-            retry_count: (item.retry_count || 0) + 1
-          })
-          .eq('id', item.id);
-
-        result.errors.push(`Error processing ${item.id}: ${error.message}`);
-      }
-    }
+    // Process queue items first
+    await processQueueItems(supabase, config, result);
 
     // Now perform full sync with Glide
     const { data: supabaseRows, error: fetchError } = await supabase
@@ -126,7 +60,7 @@ serve(async (req) => {
     if (fetchError) throw fetchError;
 
     // Get records from Glide
-    const glideData = await fetchGlideRecords(config.table_id);
+    const glideData = await fetchGlideRecords(config.app_id, config.table_id);
     console.log('Fetched records - Supabase:', supabaseRows.length, 'Glide:', glideData.length);
 
     // Create a map of existing Glide records by telegram_media_row_id
@@ -141,7 +75,7 @@ serve(async (req) => {
         const recordData = mapSupabaseToGlide(supabaseRecord);
 
         if (!glideRecord) {
-          await createGlideRecord(config.table_id, recordData);
+          await createGlideRecord(config.app_id, config.table_id, recordData);
           result.added++;
           console.log('Created new record in Glide:', supabaseRecord.id);
         } else {
@@ -151,7 +85,7 @@ serve(async (req) => {
           );
 
           if (needsUpdate) {
-            await updateGlideRecord(config.table_id, glideRecord.id, recordData);
+            await updateGlideRecord(config.app_id, config.table_id, glideRecord.id, recordData);
             result.updated++;
             console.log('Updated record in Glide:', supabaseRecord.id);
           }
