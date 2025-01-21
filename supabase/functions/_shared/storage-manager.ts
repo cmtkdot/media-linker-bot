@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { getMimeType } from './media-validators.ts';
 
 export const ensureStorageBucket = async (supabase: any) => {
   try {
@@ -16,8 +16,11 @@ export const ensureStorageBucket = async (supabase: any) => {
       const { error: createError } = await supabase.storage.createBucket('media', {
         public: true,
         allowedMimeTypes: [
-          'image/jpeg', 'image/png', 'image/webp',
-          'video/mp4', 'video/quicktime', 'video/webm'
+          'image/jpeg', 'image/jpg', 'image/png', 'image/webp',
+          'image/gif', 'image/tiff', 'image/bmp', 'image/heic',
+          'image/heif', 'video/mp4', 'video/quicktime', 'video/webm',
+          'video/x-msvideo', 'video/x-matroska', 'video/3gpp',
+          'video/x-ms-wmv', 'video/ogg'
         ],
         fileSizeLimit: 50 * 1024 * 1024
       });
@@ -34,9 +37,11 @@ export const uploadMediaToStorage = async (
   supabase: any,
   buffer: ArrayBuffer,
   fileName: string,
-  mimeType: string
+  defaultMimeType: string = 'application/octet-stream'
 ) => {
   console.log('Uploading file:', fileName);
+  
+  const mimeType = getMimeType(fileName, defaultMimeType);
   
   const { data: uploadData, error: uploadError } = await supabase.storage
     .from('media')
@@ -61,4 +66,12 @@ export const uploadMediaToStorage = async (
   }
 
   return { uploadData, publicUrl };
+};
+
+export const getPublicUrl = (supabase: any, filePath: string) => {
+  const { data } = supabase.storage
+    .from('media')
+    .getPublicUrl(filePath);
+  
+  return data.publicUrl;
 };

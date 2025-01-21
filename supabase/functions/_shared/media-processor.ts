@@ -1,4 +1,4 @@
-import { validateMediaFile, getMediaType } from './media-validators.ts';
+import { validateMediaFile, getMediaType, getMimeType } from './media-validators.ts';
 import { ensureStorageBucket, uploadMediaToStorage } from './storage-manager.ts';
 import { updateExistingMedia, createNewMediaRecord } from './media-database.ts';
 import { getAndDownloadTelegramFile, generateSafeFileName } from './telegram-service.ts';
@@ -29,8 +29,8 @@ export async function processNewMedia(
     }
 
     const { buffer, filePath } = await getAndDownloadTelegramFile(mediaFile.file_id, botToken);
-    const fileExt = filePath.split('.').pop() || '';
-    const mimeType = mediaType === 'photo' ? 'image/jpeg' : mediaFile.mime_type || 'video/mp4';
+    const fileExt = filePath.split('.').pop()?.toLowerCase() || '';
+    const mimeType = getMimeType(filePath, mediaType === 'photo' ? 'image/jpeg' : 'video/mp4');
     
     const uniqueFileName = generateSafeFileName(
       productInfo?.product_name || 'untitled',
