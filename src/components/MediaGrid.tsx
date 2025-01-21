@@ -27,6 +27,7 @@ interface MediaItem {
   vendor_uid?: string;
   purchase_date?: string;
   created_at: string;
+  telegram_data?: any;
 }
 
 const MediaGrid = () => {
@@ -67,12 +68,31 @@ const MediaGrid = () => {
     
     setIsSyncing(true);
     try {
-      const { error } = await supabase
-        .rpc('sync_media_group_info_rpc', { 
-          media_id: editItem.id 
-        });
+      const { data: mediaGroup, error: groupError } = await supabase
+        .from('telegram_media')
+        .select('*')
+        .eq('telegram_data->>media_group_id', editItem.telegram_data?.media_group_id)
+        .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (groupError) throw groupError;
+
+      if (mediaGroup && mediaGroup.length > 0) {
+        const latestItem = mediaGroup[0];
+        const { error: updateError } = await supabase
+          .from('telegram_media')
+          .update({
+            caption: latestItem.caption,
+            product_name: latestItem.product_name,
+            product_code: latestItem.product_code,
+            quantity: latestItem.quantity,
+            vendor_uid: latestItem.vendor_uid,
+            purchase_date: latestItem.purchase_date,
+            notes: latestItem.notes
+          })
+          .eq('telegram_data->>media_group_id', editItem.telegram_data?.media_group_id);
+
+        if (updateError) throw updateError;
+      }
 
       await queryClient.invalidateQueries({ queryKey: ['telegram-media'] });
       
