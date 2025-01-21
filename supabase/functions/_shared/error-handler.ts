@@ -1,5 +1,5 @@
-import { calculateBackoffDelay, delay } from './retry-utils';
-import { MAX_RETRY_ATTEMPTS } from './constants';
+import { calculateBackoffDelay, delay } from './retry-utils.ts';
+import { MAX_RETRY_ATTEMPTS } from './constants.ts';
 
 export async function handleProcessingError(
   supabase: any,

@@ -1,5 +1,6 @@
-import { getAndDownloadTelegramFile, generateSafeFileName } from './telegram-service.ts';
+import { getMessageType, getAndDownloadTelegramFile, generateSafeFileName } from './telegram-service.ts';
 import { handleMediaGroup } from './media-group-handler.ts';
+import { processMediaFile } from './database-service.ts';
 
 export async function updateExistingMedia(supabase: any, mediaFile: any, message: any, messageRecord: any) {
   console.log('Updating existing media record for file_unique_id:', mediaFile.file_unique_id, {
