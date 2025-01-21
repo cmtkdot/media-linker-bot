@@ -19,12 +19,7 @@ serve(async (req) => {
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
     if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_WEBHOOK_SECRET || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      console.error('Missing required environment variables:', {
-        hasTelegramToken: !!TELEGRAM_BOT_TOKEN,
-        hasWebhookSecret: !!TELEGRAM_WEBHOOK_SECRET,
-        hasSupabaseUrl: !!SUPABASE_URL,
-        hasServiceKey: !!SUPABASE_SERVICE_ROLE_KEY
-      });
+      console.error('Missing required environment variables');
       throw new Error('Missing required environment variables');
     }
 
@@ -40,8 +35,7 @@ serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const update = await req.json();
     
-    // Log the incoming update with safe stringification of circular references
-    console.log('Received Telegram update:', JSON.stringify({
+    console.log('Processing Telegram update:', JSON.stringify({
       update_id: update.update_id,
       message_id: update.message?.message_id,
       chat_id: update.message?.chat?.id,
@@ -53,49 +47,82 @@ serve(async (req) => {
 
     try {
       const result = await handleWebhookUpdate(update, supabase, TELEGRAM_BOT_TOKEN);
+      
+      // Log successful processing
       console.log('Successfully processed update:', {
+        update_id: update.update_id,
         message_id: update.message?.message_id,
         chat_id: update.message?.chat?.id,
         result
       });
       
       return new Response(
-        JSON.stringify(result),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+        JSON.stringify({ ok: true, result }),
+        { 
+          headers: { 
+            ...corsHeaders, 
+            'Content-Type': 'application/json' 
+          }, 
+          status: 200 
+        }
       );
     } catch (processingError) {
+      // Log the error with detailed information
       console.error('Error processing update:', {
         error: processingError.message,
         stack: processingError.stack,
+        update_id: update.update_id,
         message_id: update.message?.message_id || 'undefined',
         chat_id: update.message?.chat?.id || 'undefined',
         retry_count: processingError.retryCount || 0
       });
-      
-      // Return a 500 response with detailed error information
+
+      // Log to failed_webhook_updates table
+      await supabase.from('failed_webhook_updates').insert({
+        message_id: update.message?.message_id,
+        chat_id: update.message?.chat?.id,
+        error_message: processingError.message,
+        error_stack: processingError.stack,
+        message_data: update,
+        status: 'failed'
+      });
+
+      // Return a 200 status to acknowledge receipt even if processing failed
+      // This prevents Telegram from retrying the same update
       return new Response(
         JSON.stringify({ 
+          ok: false, 
           error: processingError.message,
-          details: processingError.stack,
-          message_id: update.message?.message_id,
-          chat_id: update.message?.chat?.id,
-          retry_count: processingError.retryCount || 0
+          details: {
+            update_id: update.update_id,
+            message_id: update.message?.message_id,
+            chat_id: update.message?.chat?.id,
+            retry_count: processingError.retryCount || 0
+          }
         }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }, 
+          status: 200 // Return 200 even for errors to acknowledge receipt
+        }
       );
     }
   } catch (error) {
-    console.error('Fatal error processing webhook:', {
+    console.error('Fatal error in webhook handler:', {
       error: error.message,
       stack: error.stack
     });
     
+    // Return 200 to acknowledge receipt, even for fatal errors
     return new Response(
       JSON.stringify({ 
-        error: error.message,
-        details: error.stack
+        ok: false,
+        error: 'Internal server error',
+        details: error.message
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, 
+        status: 200 // Return 200 even for fatal errors to acknowledge receipt
+      }
     );
   }
 });
