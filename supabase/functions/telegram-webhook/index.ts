@@ -69,64 +69,14 @@ serve(async (req) => {
         chat_id: update.message?.chat?.id
       });
       
-      try {
-        // Get current retry count
-        const { data: existingUpdate, error: fetchError } = await supabase
-          .from('pending_webhook_updates')
-          .select('retry_count, id')
-          .eq('update_data->message->message_id', update.message?.message_id)
-          .eq('update_data->message->chat->id', update.message?.chat?.id)
-          .maybeSingle();
-
-        if (fetchError) {
-          console.error('Error fetching existing update:', fetchError);
-        }
-
-        const currentRetryCount = existingUpdate?.retry_count || 0;
-        const newStatus = currentRetryCount >= MAX_RETRY_ATTEMPTS - 1 ? 'failed' : 'pending';
-        
-        const updateData = {
-          update_data: update,
-          status: newStatus,
-          retry_count: currentRetryCount + 1,
-          error_message: processingError.message,
-          error_stack: processingError.stack,
-          last_retry_at: new Date().toISOString()
-        };
-
-        if (existingUpdate) {
-          console.log('Updating existing webhook update record:', {
-            id: existingUpdate.id,
-            new_retry_count: currentRetryCount + 1,
-            status: newStatus
-          });
-          
-          const { error: updateError } = await supabase
-            .from('pending_webhook_updates')
-            .update(updateData)
-            .eq('id', existingUpdate.id);
-
-          if (updateError) {
-            console.error('Error updating webhook update record:', updateError);
-          }
-        } else {
-          console.log('Creating new webhook update record');
-          
-          const { error: insertError } = await supabase
-            .from('pending_webhook_updates')
-            .insert(updateData);
-
-          if (insertError) {
-            console.error('Error inserting webhook update record:', insertError);
-          }
-        }
-      } catch (dbError) {
-        console.error('Error handling webhook update record:', dbError);
-      }
-
-      throw processingError;
+      return new Response(
+        JSON.stringify({ 
+          error: processingError.message,
+          details: processingError.stack
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
     }
-
   } catch (error) {
     console.error('Fatal error processing webhook:', {
       error: error.message,
@@ -136,7 +86,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         error: error.message,
-        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        details: error.stack
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
