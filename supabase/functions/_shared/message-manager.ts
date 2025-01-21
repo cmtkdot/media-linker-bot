@@ -1,5 +1,3 @@
-import { analyzeCaptionWithAI } from './caption-analyzer.ts';
-
 export async function handleMessageProcessing(
   supabase: any,
   message: any,
