@@ -1,76 +1,42 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
-import { createGlideRecord, updateGlideRecord, deleteGlideRecord } from './glideApi.ts';
-import { mapSupabaseToGlide } from './productMapper.ts';
-import type { SyncResult } from './types.ts';
+import { GlideSyncQueueItem, SyncResult } from './types.ts';
+import { GlideAPI } from './glideApi.ts';
 
-export async function processQueueItems(
-  supabase: ReturnType<typeof createClient>,
-  config: any,
-  result: SyncResult
-) {
-  console.log('Processing pending sync queue items...');
+export class QueueProcessor {
+  constructor(
+    private supabase: ReturnType<typeof createClient>,
+    private config: any,
+    private glideApi: GlideAPI
+  ) {}
 
-  const { data: queueItems, error: queueError } = await supabase
-    .from('glide_sync_queue')
-    .select('*')
-    .is('processed_at', null)
-    .eq('table_name', config.supabase_table_name)
-    .order('created_at', { ascending: true });
-
-  if (queueError) throw queueError;
-
-  console.log(`Found ${queueItems?.length || 0} pending sync items`);
-
-  for (const item of queueItems || []) {
+  async processQueueItem(item: GlideSyncQueueItem, result: SyncResult) {
     try {
       switch (item.operation) {
         case 'INSERT': {
-          const recordData = item.new_data;
-          if (!recordData) continue;
-
-          const glideData = mapSupabaseToGlide(recordData);
-          await createGlideRecord(config.app_id, config.table_id, glideData);
-          result.added++;
+          const response = await this.glideApi.addRow(item.new_data);
+          if (response.rowIDs?.[0]) {
+            await this.updateTelegramMediaRowId(item.new_data.id, response.rowIDs[0]);
+            result.added++;
+          }
           break;
         }
-
         case 'UPDATE': {
-          const recordData = item.new_data;
-          if (!recordData) continue;
-
-          const glideData = mapSupabaseToGlide(recordData);
-          const glideId = recordData.telegram_media_row_id;
-          
-          if (glideId) {
-            await updateGlideRecord(config.app_id, config.table_id, glideId, glideData);
+          if (item.new_data?.telegram_media_row_id) {
+            await this.glideApi.updateRow(item.new_data.telegram_media_row_id, item.new_data);
             result.updated++;
           }
           break;
         }
-
         case 'DELETE': {
-          const recordData = item.old_data;
-          if (!recordData?.telegram_media_row_id) continue;
-
-          await deleteGlideRecord(
-            config.app_id,
-            config.table_id,
-            recordData.telegram_media_row_id
-          );
-          result.deleted++;
+          if (item.old_data?.telegram_media_row_id) {
+            await this.glideApi.deleteRow(item.old_data.telegram_media_row_id);
+            result.deleted++;
+          }
           break;
         }
       }
 
-      // Mark queue item as processed
-      await supabase
-        .from('glide_sync_queue')
-        .update({
-          processed_at: new Date().toISOString(),
-          error: null
-        })
-        .eq('id', item.id);
-
+      await this.markItemAsProcessed(item.id);
     } catch (error) {
       console.error('Error processing queue item:', {
         item_id: item.id,
@@ -78,18 +44,51 @@ export async function processQueueItems(
         stack: error.stack
       });
 
-      // Update queue item with error
-      await supabase
-        .from('glide_sync_queue')
-        .update({
-          error: error.message,
-          retry_count: (item.retry_count || 0) + 1
-        })
-        .eq('id', item.id);
-
+      await this.updateItemError(item.id, error.message);
       result.errors.push(`Error processing ${item.id}: ${error.message}`);
     }
   }
 
-  return result;
+  private async updateTelegramMediaRowId(recordId: string, glideRowId: string) {
+    const { error } = await this.supabase
+      .from(this.config.supabase_table_name)
+      .update({ 
+        telegram_media_row_id: glideRowId,
+        last_synced_at: new Date().toISOString()
+      })
+      .eq('id', recordId);
+
+    if (error) throw error;
+
+    console.log('Updated telegram_media_row_id:', {
+      record_id: recordId,
+      glide_row_id: glideRowId
+    });
+  }
+
+  private async markItemAsProcessed(itemId: string) {
+    const { error } = await this.supabase
+      .from('glide_sync_queue')
+      .update({
+        processed_at: new Date().toISOString(),
+        error: null
+      })
+      .eq('id', itemId);
+
+    if (error) throw error;
+  }
+
+  private async updateItemError(itemId: string, errorMessage: string) {
+    const { error } = await this.supabase
+      .from('glide_sync_queue')
+      .update({
+        error: errorMessage,
+        retry_count: this.supabase.sql`retry_count + 1`
+      })
+      .eq('id', itemId);
+
+    if (error) {
+      console.error('Error updating queue item error status:', error);
+    }
+  }
 }
