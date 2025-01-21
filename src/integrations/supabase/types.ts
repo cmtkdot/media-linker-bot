@@ -270,6 +270,19 @@ export type Database = {
         }
         Returns: undefined
       }
+      sync_missing_media_records: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      validate_storage_consistency: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          file_unique_id: string
+          storage_path: string
+          public_url: string
+          issue: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
