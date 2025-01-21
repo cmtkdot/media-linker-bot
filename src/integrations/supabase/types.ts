@@ -227,6 +227,12 @@ export type Database = {
         }
         Returns: string
       }
+      sync_media_group_info_rpc: {
+        Args: {
+          media_id: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
