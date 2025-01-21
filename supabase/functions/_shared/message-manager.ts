@@ -9,7 +9,8 @@ export async function handleMessageProcessing(
   console.log('Processing message:', { 
     message_id: message.message_id, 
     chat_id: message.chat.id,
-    product_info: productInfo 
+    product_info: productInfo,
+    existing_message: existingMessage?.id
   });
 
   try {
@@ -19,6 +20,8 @@ export async function handleMessageProcessing(
       console.error('Invalid message type:', message);
       throw new Error('Invalid message type');
     }
+
+    console.log('Determined message type:', messageType);
 
     // Prepare message data with validated type
     const messageData = {
@@ -42,6 +45,13 @@ export async function handleMessageProcessing(
       })
     };
 
+    console.log('Prepared message data:', {
+      message_id: messageData.message_id,
+      chat_id: messageData.chat_id,
+      message_type: messageData.message_type,
+      has_product_info: !!productInfo
+    });
+
     let messageRecord;
     if (existingMessage) {
       console.log('Updating existing message:', {
@@ -59,24 +69,28 @@ export async function handleMessageProcessing(
           .update({
             ...messageData,
             status: existingMessage.processed_at ? existingMessage.status : 'pending',
-            retry_count: existingMessage.processed_at ? existingMessage.retry_count : 0
+            retry_count: existingMessage.processed_at ? existingMessage.retry_count : 0,
+            updated_at: new Date().toISOString()
           })
           .eq('id', existingMessage.id)
           .select()
-          .maybeSingle();
+          .single();
 
         if (updateError) {
           console.error('Error updating message:', updateError);
           throw updateError;
         }
+        
         if (!updatedMessage) {
           console.error('Failed to update message record');
           throw new Error('Failed to update message record');
         }
         
         messageRecord = updatedMessage;
+        console.log('Successfully updated message:', messageRecord.id);
       } else {
         messageRecord = existingMessage;
+        console.log('No updates needed for message:', messageRecord.id);
       }
     } else {
       console.log('Creating new message:', {
@@ -87,20 +101,26 @@ export async function handleMessageProcessing(
 
       const { data: newMessage, error: insertError } = await supabase
         .from('messages')
-        .insert(messageData)
+        .insert({
+          ...messageData,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
         .select()
-        .maybeSingle();
+        .single();
 
       if (insertError) {
         console.error('Error creating message:', insertError);
         throw insertError;
       }
+
       if (!newMessage) {
-        console.error('Failed to create message record');
+        console.error('Failed to create message record - no data returned');
         throw new Error('Failed to create message record');
       }
       
       messageRecord = newMessage;
+      console.log('Successfully created new message:', messageRecord.id);
     }
 
     return { 
@@ -109,7 +129,12 @@ export async function handleMessageProcessing(
       analyzedContent: productInfo 
     };
   } catch (error) {
-    console.error('Error in handleMessageProcessing:', error);
+    console.error('Error in handleMessageProcessing:', {
+      error: error.message,
+      stack: error.stack,
+      message_id: message?.message_id,
+      chat_id: message?.chat?.id
+    });
     throw error;
   }
 }
