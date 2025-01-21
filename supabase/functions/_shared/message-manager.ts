@@ -15,15 +15,6 @@ export async function handleMessageProcessing(
   });
 
   try {
-    // Start caption analysis early if caption exists
-    const captionAnalysisPromise = message.caption 
-      ? analyzeCaptionWithAI(
-          message.caption,
-          Deno.env.get('SUPABASE_URL') || '',
-          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
-        )
-      : Promise.resolve(null);
-
     // Prepare message data
     const messageData = {
       message_id: message.message_id,
@@ -40,46 +31,59 @@ export async function handleMessageProcessing(
       retry_count: existingMessage?.retry_count || 0
     };
 
-    // Wait for caption analysis result
-    const analyzedContent = await captionAnalysisPromise;
-    if (analyzedContent) {
+    // Add product info if available
+    if (productInfo) {
       Object.assign(messageData, {
-        product_name: analyzedContent.product_name,
-        product_code: analyzedContent.product_code,
-        quantity: analyzedContent.quantity,
-        vendor_uid: analyzedContent.vendor_uid,
-        purchase_date: analyzedContent.purchase_date,
-        notes: analyzedContent.notes,
-        analyzed_content: analyzedContent
+        product_name: productInfo.product_name,
+        product_code: productInfo.product_code,
+        quantity: productInfo.quantity,
+        vendor_uid: productInfo.vendor_uid,
+        purchase_date: productInfo.purchase_date,
+        notes: productInfo.notes,
+        analyzed_content: productInfo
       });
     }
 
     let messageRecord;
     if (existingMessage) {
+      console.log('Updating existing message:', {
+        id: existingMessage.id,
+        message_id: message.message_id
+      });
+
       const { data: updatedMessage, error: updateError } = await supabase
         .from('messages')
         .update(messageData)
         .eq('id', existingMessage.id)
         .select()
-        .single();
+        .maybeSingle();
 
       if (updateError) throw updateError;
+      if (!updatedMessage) throw new Error('Failed to update message record');
+      
       messageRecord = updatedMessage;
     } else {
+      console.log('Creating new message:', {
+        message_id: message.message_id,
+        chat_id: message.chat.id
+      });
+
       const { data: newMessage, error: insertError } = await supabase
         .from('messages')
         .insert(messageData)
         .select()
-        .single();
+        .maybeSingle();
 
       if (insertError) throw insertError;
+      if (!newMessage) throw new Error('Failed to create message record');
+      
       messageRecord = newMessage;
     }
 
     return { 
       messageRecord, 
       retryCount: messageRecord.retry_count,
-      analyzedContent 
+      analyzedContent: productInfo 
     };
   } catch (error) {
     console.error('Error in handleMessageProcessing:', error);

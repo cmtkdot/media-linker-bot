@@ -75,14 +75,11 @@ export async function handleWebhookUpdate(
       throw mediaCheck.error;
     }
 
-    const existingMessage = messageCheck.data;
-    const existingMedia = mediaCheck.data;
-
     // Step 3: Process message with analyzed content
     const { messageRecord, retryCount } = await handleMessageProcessing(
       supabase,
       message,
-      existingMessage,
+      messageCheck.data,
       productInfo
     );
 
@@ -94,7 +91,7 @@ export async function handleWebhookUpdate(
       botToken,
       productInfo,
       retryCount,
-      existingMedia
+      mediaCheck.data
     );
 
     // Step 5: Update message status on success
@@ -133,8 +130,10 @@ export async function handleWebhookUpdate(
     console.error('Error in handleWebhookUpdate:', {
       error: error.message,
       stack: error.stack,
-      message_id: message?.message_id,
-      chat_id: message?.chat?.id
+      update_id: update.update_id,
+      message_id: message?.message_id || 'undefined',
+      chat_id: message?.chat?.id || 'undefined',
+      retry_count: error.retryCount || 0
     });
 
     // Log to failed_webhook_updates table
@@ -147,8 +146,7 @@ export async function handleWebhookUpdate(
           error_message: error.message,
           error_stack: error.stack,
           message_data: message,
-          status: 'failed',
-          retry_count: error.retryCount || 0
+          status: 'failed'
         });
 
       if (logError) {
