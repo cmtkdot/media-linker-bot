@@ -1,0 +1,7 @@
+project_id = "kzfamethztziwqiocbwz"
+
+[functions.telegram-webhook]
+verify_jwt = false
+
+[functions.retry-pending-updates]
+verify_jwt = false

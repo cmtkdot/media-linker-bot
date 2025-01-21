@@ -32,58 +32,78 @@ serve(async (req) => {
     const update: TelegramUpdate = await req.json();
     console.log('Received Telegram update:', JSON.stringify(update));
 
-    const message = update.message || update.channel_post;
-    if (!message) {
-      return new Response(
-        JSON.stringify({ message: 'No message in update' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
-      );
-    }
-
-    let productInfo = null;
-    if (message.caption) {
-      productInfo = await analyzeCaption(message.caption, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-      console.log('AI-extracted product info:', productInfo);
-    }
-
-    const messageRecord = await createMessage(supabase, message, productInfo);
-    console.log('Created message record:', messageRecord);
-
-    const mediaTypes = ['photo', 'video', 'document', 'animation'] as const;
-    let mediaFile = null;
-    let mediaType = '';
-
-    for (const type of mediaTypes) {
-      if (message[type]) {
-        mediaFile = type === 'photo' 
-          ? message[type]![message[type]!.length - 1]
-          : message[type];
-        mediaType = type;
-        break;
+    try {
+      const message = update.message || update.channel_post;
+      if (!message) {
+        return new Response(
+          JSON.stringify({ message: 'No message in update' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+        );
       }
-    }
 
-    if (!mediaFile) {
+      let productInfo = null;
+      if (message.caption) {
+        productInfo = await analyzeCaption(message.caption, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+        console.log('AI-extracted product info:', productInfo);
+      }
+
+      const messageRecord = await createMessage(supabase, message, productInfo);
+      console.log('Created message record:', messageRecord);
+
+      const mediaTypes = ['photo', 'video', 'document', 'animation'] as const;
+      let mediaFile = null;
+      let mediaType = '';
+
+      for (const type of mediaTypes) {
+        if (message[type]) {
+          mediaFile = type === 'photo' 
+            ? message[type]![message[type]!.length - 1]
+            : message[type];
+          mediaType = type;
+          break;
+        }
+      }
+
+      if (!mediaFile) {
+        return new Response(
+          JSON.stringify({ message: 'Message processed (no media)' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+        );
+      }
+
+      await processMediaFile(
+        supabase,
+        mediaFile,
+        mediaType,
+        message,
+        messageRecord,
+        TELEGRAM_BOT_TOKEN,
+        productInfo
+      );
+
       return new Response(
-        JSON.stringify({ message: 'Message processed (no media)' }),
+        JSON.stringify({ message: 'Successfully processed message and media' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
       );
+
+    } catch (processingError) {
+      console.error('Error processing update:', processingError);
+      
+      // Store the failed update
+      const { error: storageError } = await supabase
+        .from('pending_webhook_updates')
+        .insert({
+          update_data: update,
+          error_message: processingError.message,
+          status: 'pending'
+        });
+
+      if (storageError) {
+        console.error('Error storing pending update:', storageError);
+      }
+
+      throw processingError;
     }
-
-    await processMediaFile(
-      supabase,
-      mediaFile,
-      mediaType,
-      message,
-      messageRecord,
-      TELEGRAM_BOT_TOKEN,
-      productInfo
-    );
-
-    return new Response(
-      JSON.stringify({ message: 'Successfully processed message and media' }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
-    );
 
   } catch (error) {
     console.error('Error processing webhook:', error);

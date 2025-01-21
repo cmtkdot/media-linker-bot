@@ -63,6 +63,39 @@ export type Database = {
         }
         Relationships: []
       }
+      pending_webhook_updates: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          id: string
+          last_retry_at: string | null
+          retry_count: number | null
+          status: string | null
+          update_data: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          last_retry_at?: string | null
+          retry_count?: number | null
+          status?: string | null
+          update_data: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          last_retry_at?: string | null
+          retry_count?: number | null
+          status?: string | null
+          update_data?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       telegram_media: {
         Row: {
           created_at: string
