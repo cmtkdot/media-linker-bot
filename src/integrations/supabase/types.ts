@@ -62,15 +62,18 @@ export type Database = {
           message_data: Json
           message_id: number
           message_type: string
+          notes: string | null
           processed_at: string | null
           processing_error: string | null
           product_code: string | null
           product_name: string | null
+          purchase_date: string | null
           quantity: number | null
           retry_count: number | null
           sender_info: Json
           status: string | null
           updated_at: string
+          vendor_uid: string | null
         }
         Insert: {
           caption?: string | null
@@ -82,15 +85,18 @@ export type Database = {
           message_data?: Json
           message_id: number
           message_type: string
+          notes?: string | null
           processed_at?: string | null
           processing_error?: string | null
           product_code?: string | null
           product_name?: string | null
+          purchase_date?: string | null
           quantity?: number | null
           retry_count?: number | null
           sender_info?: Json
           status?: string | null
           updated_at?: string
+          vendor_uid?: string | null
         }
         Update: {
           caption?: string | null
@@ -102,15 +108,18 @@ export type Database = {
           message_data?: Json
           message_id?: number
           message_type?: string
+          notes?: string | null
           processed_at?: string | null
           processing_error?: string | null
           product_code?: string | null
           product_name?: string | null
+          purchase_date?: string | null
           quantity?: number | null
           retry_count?: number | null
           sender_info?: Json
           status?: string | null
           updated_at?: string
+          vendor_uid?: string | null
         }
         Relationships: []
       }
@@ -126,6 +135,7 @@ export type Database = {
           last_synced_at: string | null
           media_metadata: Json
           message_id: string | null
+          notes: string | null
           processed: boolean | null
           processing_error: string | null
           product_code: string | null
@@ -148,6 +158,7 @@ export type Database = {
           last_synced_at?: string | null
           media_metadata?: Json
           message_id?: string | null
+          notes?: string | null
           processed?: boolean | null
           processing_error?: string | null
           product_code?: string | null
@@ -170,6 +181,7 @@ export type Database = {
           last_synced_at?: string | null
           media_metadata?: Json
           message_id?: string | null
+          notes?: string | null
           processed?: boolean | null
           processing_error?: string | null
           product_code?: string | null
@@ -212,41 +224,6 @@ export type Database = {
           message_data: Json
         }
         Returns: string
-      }
-      process_message_transaction: {
-        Args: {
-          p_message_id: number
-          p_chat_id: number
-          p_sender_info: Json
-          p_message_type: string
-          p_message_data: Json
-          p_caption: string
-          p_media_group_id: string
-          p_product_name: string
-          p_product_code: string
-          p_quantity: number
-          p_status: string
-        }
-        Returns: {
-          id: string
-          message_id: number
-          chat_id: number
-          sender_info: Json
-          message_type: string
-          message_data: Json
-          caption: string
-          media_group_id: string
-          product_name: string
-          product_code: string
-          quantity: number
-          status: string
-          retry_count: number
-          last_retry_at: string
-          processing_error: string
-          processed_at: string
-          created_at: string
-          updated_at: string
-        }[]
       }
     }
     Enums: {
