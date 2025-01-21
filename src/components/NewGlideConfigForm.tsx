@@ -15,12 +15,15 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 
+// Define the schema to match the required database fields
 const formSchema = z.object({
   app_id: z.string().min(1, "App ID is required"),
   table_id: z.string().min(1, "Table ID is required"),
   table_name: z.string().min(1, "Table name is required"),
   api_token: z.string().min(1, "API token is required"),
 });
+
+type FormValues = z.infer<typeof formSchema>;
 
 interface NewGlideConfigFormProps {
   onSuccess: () => void;
@@ -29,11 +32,11 @@ interface NewGlideConfigFormProps {
 export function NewGlideConfigForm({ onSuccess }: NewGlideConfigFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
-  const form = useForm<z.infer<typeof formSchema>>({
+  const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
   });
 
-  const onSubmit = async (values: z.infer<typeof formSchema>) => {
+  const onSubmit = async (values: FormValues) => {
     setIsSubmitting(true);
     try {
       const { error } = await supabase
