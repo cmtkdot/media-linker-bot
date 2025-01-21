@@ -119,12 +119,12 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
         )}
       </div>
       <div className="p-4 bg-white border-t">
-        <p className="text-center text-base font-medium mb-2">
+        <p className="text-center text-base font-medium mb-1">
           {item.caption || 'No caption'}
         </p>
-        <div className="flex justify-between items-end text-xs text-gray-600 px-1">
-          <span>{item.purchase_date ? new Date(item.purchase_date).toLocaleDateString() : '-'}</span>
-          <span className="capitalize">{item.file_type}</span>
+        <div className="flex justify-between items-end text-xs text-gray-600 px-0.5 mt-1">
+          <span className="pl-0.5">{item.purchase_date ? new Date(item.purchase_date).toLocaleDateString() : '-'}</span>
+          <span className="capitalize pr-0.5">{item.file_type}</span>
         </div>
       </div>
       <div className="p-2 text-sm space-y-1 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-full group-hover:translate-y-0 bg-white absolute bottom-0 left-0 right-0">
