@@ -1,14 +1,16 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
-import { mapSupabaseToGlide, mapGlideToSupabase } from './productMapper.ts';
-import type { GlideConfig, SyncResult } from './types.ts';
+import { GlideTableSchema, SyncResult } from './types.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const GLIDE_API_BASE = 'https://api.glideapp.io/api/function';
+
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -32,11 +34,12 @@ serve(async (req) => {
       .from('glide_config')
       .select('*')
       .eq('id', tableId)
-      .single();
+      .maybeSingle();
 
     if (configError) throw configError;
     if (!config) throw new Error('Configuration not found');
     if (!config.supabase_table_name) throw new Error('No Supabase table linked');
+    if (!config.api_token) throw new Error('Glide API token not configured');
 
     console.log('Starting sync with config:', {
       table_name: config.table_name,
@@ -50,7 +53,7 @@ serve(async (req) => {
       errors: []
     };
 
-    // Process queue items first
+    // Process queue items
     const { data: queueItems, error: queueError } = await supabase
       .from('glide_sync_queue')
       .select('*')
@@ -64,7 +67,33 @@ serve(async (req) => {
 
     for (const item of queueItems || []) {
       try {
-        const response = await fetch('https://api.glideapp.io/api/function/mutateTables', {
+        const schema = GlideTableSchema;
+        let columnValues: Record<string, any> = {};
+
+        // Map data according to operation type
+        if (item.operation !== 'DELETE') {
+          const data = item.operation === 'UPDATE' ? item.new_data : item.old_data;
+          
+          // Map the data to Glide column names
+          columnValues = {
+            [schema.id.name]: data.id,
+            [schema.fileType.name]: data.file_type,
+            [schema.publicUrl.name]: data.public_url,
+            [schema.productName.name]: data.product_name,
+            [schema.productCode.name]: data.product_code,
+            [schema.quantity.name]: data.quantity,
+            [schema.lastSyncedAt.name]: new Date().toISOString(),
+            [schema.caption.name]: data.caption,
+            [schema.vendorUid.name]: data.vendor_uid,
+            [schema.purchaseDate.name]: data.purchase_date,
+            [schema.notes.name]: data.notes,
+            [schema.analyzedContent.name]: JSON.stringify(data.analyzed_content),
+            [schema.purchaseOrderUid.name]: data.purchase_order_uid,
+            [schema.defaultPublicUrl.name]: data.default_public_url
+          };
+        }
+
+        const response = await fetch(`${GLIDE_API_BASE}/mutateTables`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${config.api_token}`,
@@ -77,11 +106,7 @@ serve(async (req) => {
                      item.operation === 'UPDATE' ? 'set-columns-in-row' : 
                      'add-row-to-table',
               tableName: config.table_id,
-              ...(item.operation !== 'DELETE' && {
-                columnValues: mapSupabaseToGlide(
-                  item.operation === 'UPDATE' ? item.new_data : item.old_data
-                )
-              }),
+              ...(item.operation !== 'DELETE' && { columnValues }),
               ...(item.operation !== 'INSERT' && { 
                 rowID: item.old_data?.telegram_media_row_id || item.new_data?.telegram_media_row_id 
               })
@@ -90,7 +115,8 @@ serve(async (req) => {
         });
 
         if (!response.ok) {
-          throw new Error(`Glide API error: ${response.status} ${response.statusText}`);
+          const errorText = await response.text();
+          throw new Error(`Glide API error: ${response.status} ${errorText}`);
         }
 
         const responseData = await response.json();
@@ -101,7 +127,17 @@ serve(async (req) => {
             .from(config.supabase_table_name)
             .update({ 
               telegram_media_row_id: responseData.rowIDs[0],
-              glide_data: item.new_data
+              glide_data: columnValues,
+              last_synced_at: new Date().toISOString()
+            })
+            .eq('id', item.new_data.id);
+        } else if (item.operation === 'UPDATE') {
+          // Store the updated Glide data for comparison
+          await supabase
+            .from(config.supabase_table_name)
+            .update({ 
+              glide_data: columnValues,
+              last_synced_at: new Date().toISOString()
             })
             .eq('id', item.new_data.id);
         }
@@ -123,7 +159,8 @@ serve(async (req) => {
       } catch (error) {
         console.error('Error processing queue item:', {
           item_id: item.id,
-          error: error.message
+          error: error.message,
+          stack: error.stack
         });
 
         result.errors.push(`Error processing ${item.id}: ${error.message}`);
@@ -136,6 +173,48 @@ serve(async (req) => {
             retry_count: (item.retry_count || 0) + 1
           })
           .eq('id', item.id);
+      }
+    }
+
+    // Verify data consistency
+    const { data: mediaRecords, error: mediaError } = await supabase
+      .from(config.supabase_table_name)
+      .select('*')
+      .not('telegram_media_row_id', 'is', null);
+
+    if (!mediaError && mediaRecords) {
+      for (const record of mediaRecords) {
+        const currentData = {
+          id: record.id,
+          file_type: record.file_type,
+          public_url: record.public_url,
+          product_name: record.product_name,
+          product_code: record.product_code,
+          quantity: record.quantity,
+          caption: record.caption,
+          vendor_uid: record.vendor_uid,
+          purchase_date: record.purchase_date,
+          notes: record.notes,
+          analyzed_content: record.analyzed_content,
+          purchase_order_uid: record.purchase_order_uid,
+          default_public_url: record.default_public_url
+        };
+
+        // Compare with stored Glide data
+        if (record.glide_data && JSON.stringify(currentData) !== JSON.stringify(record.glide_data)) {
+          console.log('Data mismatch detected for record:', record.id);
+          
+          // Queue an update
+          await supabase
+            .from('glide_sync_queue')
+            .insert({
+              table_name: config.supabase_table_name,
+              record_id: record.id,
+              operation: 'UPDATE',
+              new_data: currentData,
+              old_data: record.glide_data
+            });
+        }
       }
     }
 
