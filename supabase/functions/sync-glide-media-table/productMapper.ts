@@ -1,6 +1,6 @@
-import { GlideTableSchema } from './types.ts';
+import { GlideTableSchema, TelegramMedia } from './types.ts';
 
-export function mapSupabaseToGlide(supabaseRow: any): Record<string, any> {
+export function mapSupabaseToGlide(supabaseRow: TelegramMedia): Record<string, any> {
   const schema = GlideTableSchema;
   const mappedData: Record<string, any> = {};
 
@@ -11,7 +11,7 @@ export function mapSupabaseToGlide(supabaseRow: any): Record<string, any> {
   mappedData[schema.productName.name] = supabaseRow.product_name;
   mappedData[schema.productCode.name] = supabaseRow.product_code;
   mappedData[schema.quantity.name] = supabaseRow.quantity;
-  mappedData[schema.lastSyncedAt.name] = supabaseRow.last_synced_at;
+  mappedData[schema.lastSyncedAt.name] = new Date().toISOString();
   mappedData[schema.caption.name] = supabaseRow.caption;
   mappedData[schema.vendorUid.name] = supabaseRow.vendor_uid;
   mappedData[schema.purchaseDate.name] = supabaseRow.purchase_date;
@@ -23,21 +23,22 @@ export function mapSupabaseToGlide(supabaseRow: any): Record<string, any> {
   return mappedData;
 }
 
-export function mapGlideToSupabase(glideData: any): Record<string, any> {
+export function mapGlideToSupabase(glideData: Record<string, any>): Partial<TelegramMedia> {
+  const schema = GlideTableSchema;
+  
   return {
-    id: glideData[GlideTableSchema.id.name],
-    file_type: glideData[GlideTableSchema.fileType.name],
-    public_url: glideData[GlideTableSchema.publicUrl.name],
-    product_name: glideData[GlideTableSchema.productName.name],
-    product_code: glideData[GlideTableSchema.productCode.name],
-    quantity: glideData[GlideTableSchema.quantity.name],
-    last_synced_at: glideData[GlideTableSchema.lastSyncedAt.name],
-    caption: glideData[GlideTableSchema.caption.name],
-    vendor_uid: glideData[GlideTableSchema.vendorUid.name],
-    purchase_date: glideData[GlideTableSchema.purchaseDate.name],
-    notes: glideData[GlideTableSchema.notes.name],
-    analyzed_content: JSON.parse(glideData[GlideTableSchema.analyzedContent.name] || '{}'),
-    purchase_order_uid: glideData[GlideTableSchema.purchaseOrderUid.name],
-    default_public_url: glideData[GlideTableSchema.defaultPublicUrl.name]
+    id: glideData[schema.id.name],
+    file_type: glideData[schema.fileType.name],
+    public_url: glideData[schema.publicUrl.name],
+    product_name: glideData[schema.productName.name],
+    product_code: glideData[schema.productCode.name],
+    quantity: glideData[schema.quantity.name],
+    caption: glideData[schema.caption.name],
+    vendor_uid: glideData[schema.vendorUid.name],
+    purchase_date: glideData[schema.purchaseDate.name],
+    notes: glideData[schema.notes.name],
+    analyzed_content: JSON.parse(glideData[schema.analyzedContent.name] || '{}'),
+    purchase_order_uid: glideData[schema.purchaseOrderUid.name],
+    default_public_url: glideData[schema.defaultPublicUrl.name]
   };
 }
