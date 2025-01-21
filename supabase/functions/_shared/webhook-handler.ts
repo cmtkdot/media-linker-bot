@@ -3,12 +3,10 @@ import { TelegramUpdate } from './telegram-types.ts';
 import { analyzeCaption } from './telegram-service.ts';
 import { createMessage } from './database-service.ts';
 import { processMediaFile } from './media-processor.ts';
-
-const MAX_RETRY_ATTEMPTS = 3;
-const INITIAL_RETRY_DELAY = 1000; // 1 second
+import { MAX_RETRY_ATTEMPTS, INITIAL_RETRY_DELAY, MAX_BACKOFF_DELAY } from './constants.ts';
 
 function calculateBackoffDelay(retryCount: number): number {
-  return Math.min(INITIAL_RETRY_DELAY * Math.pow(2, retryCount), 10000); // Max 10 seconds
+  return Math.min(INITIAL_RETRY_DELAY * Math.pow(2, retryCount), MAX_BACKOFF_DELAY);
 }
 
 async function delay(ms: number): Promise<void> {
@@ -69,7 +67,7 @@ export async function handleWebhookUpdate(
       for (const type of mediaTypes) {
         if (message[type]) {
           mediaFile = type === 'photo' 
-            ? message[type]![message[type]!.length - 1]
+            ? message[type]![message[type]!.length - 1] // Get the highest quality photo
             : message[type];
           mediaType = type;
           break;
@@ -89,6 +87,20 @@ export async function handleWebhookUpdate(
         botToken,
         productInfo
       );
+
+      // If this is part of a media group, update all related media with the same caption
+      if (message.media_group_id) {
+        console.log('Processing media group:', message.media_group_id);
+        await supabase
+          .from('telegram_media')
+          .update({ 
+            caption: message.caption,
+            product_name: productInfo?.product_name,
+            product_code: productInfo?.product_code,
+            quantity: productInfo?.quantity
+          })
+          .eq('telegram_data->media_group_id', message.media_group_id);
+      }
 
       // Update status to success in pending_webhook_updates
       await supabase

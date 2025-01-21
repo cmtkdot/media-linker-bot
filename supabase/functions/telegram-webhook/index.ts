@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from "../_shared/cors.ts";
 import { handleWebhookUpdate } from "../_shared/webhook-handler.ts";
+import { MAX_RETRY_ATTEMPTS } from "../_shared/constants.ts";
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -32,22 +33,10 @@ serve(async (req) => {
 
     try {
       const result = await handleWebhookUpdate(update, supabase, TELEGRAM_BOT_TOKEN);
-
-      // Update status to success after successful processing
-      await supabase
-        .from('pending_webhook_updates')
-        .update({ 
-          status: 'success',
-          updated_at: new Date().toISOString()
-        })
-        .eq('update_data->message->message_id', update.message?.message_id)
-        .eq('update_data->message->chat->id', update.message?.chat.id);
-
       return new Response(
         JSON.stringify(result),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
       );
-
     } catch (processingError) {
       console.error('Error processing update:', processingError);
       
