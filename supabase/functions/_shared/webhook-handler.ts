@@ -51,7 +51,7 @@ export async function handleWebhookUpdate(
       }
     }
 
-    // Step 2: Process message first to ensure we have a message record
+    // Step 2: Process message first and wait for completion
     const messageResult = await handleMessageProcessing(
       supabase,
       message,
@@ -67,7 +67,10 @@ export async function handleWebhookUpdate(
     messageRecord = messageResult.messageRecord;
     console.log('Message record created/updated:', messageRecord?.id);
 
-    // Step 3: If this is part of a media group, sync the group info first
+    // Step 3: Wait for message record to be fully committed
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Step 4: If this is part of a media group, sync the group info first
     if (message.media_group_id) {
       console.log('Syncing media group:', message.media_group_id);
       
@@ -90,9 +93,12 @@ export async function handleWebhookUpdate(
       if (groupUpdateError) {
         console.error('Error updating media group:', groupUpdateError);
       }
+
+      // Wait for group sync to complete
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
 
-    // Step 4: Process media with gathered data
+    // Step 5: Process media with gathered data
     if (messageRecord) {
       try {
         mediaResult = await processMedia(
@@ -104,7 +110,7 @@ export async function handleWebhookUpdate(
           0
         );
 
-        // Step 5: Update message with final status
+        // Step 6: Update message with final status
         const { error: messageUpdateError } = await supabase
           .from('messages')
           .update({
@@ -125,13 +131,16 @@ export async function handleWebhookUpdate(
         if (messageUpdateError) {
           console.error('Error updating message status:', messageUpdateError);
         }
+
+        // Step 7: Final wait to ensure all triggers have completed
+        await new Promise(resolve => setTimeout(resolve, 500));
       } catch (error) {
         console.error('Error processing media:', error);
         throw error;
       }
     }
 
-    // Step 6: Clean up old failed records
+    // Step 8: Clean up old failed records
     try {
       await cleanupFailedRecords(supabase);
     } catch (error) {
