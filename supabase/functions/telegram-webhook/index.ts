@@ -18,13 +18,11 @@ serve(async (req) => {
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
     if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_WEBHOOK_SECRET || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      console.error('Missing required environment variables');
       throw new Error('Missing required environment variables');
     }
 
     const webhookSecret = req.headers.get('X-Telegram-Bot-Api-Secret-Token');
     if (webhookSecret !== TELEGRAM_WEBHOOK_SECRET) {
-      console.error('Invalid webhook secret received');
       return new Response(
         JSON.stringify({ error: 'Invalid webhook secret' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
@@ -34,38 +32,8 @@ serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const update = await req.json();
     
-    console.log('[Processing Start] Telegram update:', {
-      update_id: update.update_id,
-      message_id: update.message?.message_id,
-      chat_id: update.message?.chat?.id,
-      media_group_id: update.message?.media_group_id,
-      message_type: update.message?.photo ? 'photo' : 
-                   update.message?.video ? 'video' : 
-                   update.message?.document ? 'document' : 
-                   update.message?.animation ? 'animation' : 'unknown'
-    });
-
-    // Add delay before processing to ensure all media group items are received
-    if (update.message?.media_group_id) {
-      console.log('[Media Group Detected] Waiting for group completion...', {
-        media_group_id: update.message.media_group_id
-      });
-      await new Promise(resolve => setTimeout(resolve, 2000));
-    }
-
     const result = await handleWebhookUpdate(update, supabase, TELEGRAM_BOT_TOKEN);
     
-    console.log('[Processing Complete]', {
-      update_id: update.update_id,
-      message_id: update.message?.message_id,
-      chat_id: update.message?.chat?.id,
-      media_group_id: update.message?.media_group_id,
-      result
-    });
-    
-    // Add delay after processing to ensure triggers complete
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
     return new Response(
       JSON.stringify({ ok: true, result }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
