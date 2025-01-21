@@ -50,15 +50,32 @@ export function getMessageType(message: any): string {
   return 'text';
 }
 
-export function generateSafeFileName(baseName: string, extension: string): string {
-  const safeName = baseName
+export function generateSafeFileName(productName: string, productCode: string, mediaType: string, extension: string): string {
+  // Clean and format the product name
+  const safeProductName = productName
+    .toLowerCase()
+    .replace(/[^\x00-\x7F]/g, '') // Remove non-ASCII characters
+    .replace(/\s+/g, '_') // Replace spaces with underscores
+    .replace(/[^a-z0-9_]/g, ''); // Remove any other special characters
+
+  // Clean the product code
+  const safeProductCode = productCode
+    .toLowerCase()
     .replace(/[^\x00-\x7F]/g, '')
     .replace(/\s+/g, '_')
-    .toLowerCase();
-  
+    .replace(/[^a-z0-9_]/g, '');
+
+  // Clean the media type
+  const safeMediaType = mediaType.toLowerCase();
+
+  // Clean the extension
   const safeExtension = extension.toLowerCase().replace(/[^a-z0-9]/g, '');
-  
-  return `${safeName}.${safeExtension}`;
+
+  // Combine all parts with underscores
+  const fileName = `${safeProductName}_${safeProductCode}_${safeMediaType}`;
+
+  // Add the extension
+  return `${fileName}.${safeExtension}`;
 }
 
 export async function analyzeCaption(caption: string, supabaseUrl: string, supabaseKey: string) {

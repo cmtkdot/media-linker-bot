@@ -24,8 +24,11 @@ export async function processNewMedia(
     const fileExt = filePath.split('.').pop() || '';
     const mimeType = mediaType === 'photo' ? 'image/jpeg' : mediaFile.mime_type || 'video/mp4';
     
+    // Generate filename using product information
     const uniqueFileName = generateSafeFileName(
-      `${mediaType}_${mediaFile.file_unique_id}_${Date.now()}`,
+      productInfo?.product_name || 'untitled',
+      productInfo?.product_code || 'no_code',
+      mediaType,
       fileExt
     );
 
