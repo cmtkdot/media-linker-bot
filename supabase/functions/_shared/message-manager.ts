@@ -1,6 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { analyzeCaptionWithAI } from './caption-analyzer.ts';
-import { processMedia } from './media-handler.ts';
 
 export async function handleMessageProcessing(
   supabase: any,
@@ -8,10 +6,10 @@ export async function handleMessageProcessing(
   existingMessage: any,
   productInfo: any = null
 ) {
-  console.log('Processing message:', {
-    message_id: message.message_id,
+  console.log('Processing message:', { 
+    message_id: message.message_id, 
     chat_id: message.chat.id,
-    existing: !!existingMessage
+    product_info: productInfo 
   });
 
   try {
@@ -51,17 +49,31 @@ export async function handleMessageProcessing(
         message_id: message.message_id
       });
 
-      const { data: updatedMessage, error: updateError } = await supabase
-        .from('messages')
-        .update(messageData)
-        .eq('id', existingMessage.id)
-        .select()
-        .maybeSingle();
+      // Check if there are actual updates to apply
+      const hasUpdates = Object.keys(messageData).some(key => 
+        JSON.stringify(messageData[key]) !== JSON.stringify(existingMessage[key])
+      );
 
-      if (updateError) throw updateError;
-      if (!updatedMessage) throw new Error('Failed to update message record');
-      
-      messageRecord = updatedMessage;
+      if (hasUpdates || !existingMessage.processed_at) {
+        const { data: updatedMessage, error: updateError } = await supabase
+          .from('messages')
+          .update({
+            ...messageData,
+            // Reset processing status if no previous successful processing
+            status: existingMessage.processed_at ? existingMessage.status : 'pending',
+            retry_count: existingMessage.processed_at ? existingMessage.retry_count : 0
+          })
+          .eq('id', existingMessage.id)
+          .select()
+          .maybeSingle();
+
+        if (updateError) throw updateError;
+        if (!updatedMessage) throw new Error('Failed to update message record');
+        
+        messageRecord = updatedMessage;
+      } else {
+        messageRecord = existingMessage;
+      }
     } else {
       console.log('Creating new message:', {
         message_id: message.message_id,

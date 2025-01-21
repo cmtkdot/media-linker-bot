@@ -40,32 +40,29 @@ export async function processMedia(
 
       let result;
       if (existingMedia) {
-        console.log('Updating existing media:', {
+        console.log('Checking existing media:', {
           media_id: existingMedia.id,
           file_unique_id: mediaFile.file_unique_id
         });
         
-        const { error: mediaUpdateError } = await supabase
-          .from('telegram_media')
-          .update({
-            caption: message.caption,
-            product_name: productInfo?.product_name,
-            product_code: productInfo?.product_code,
-            quantity: productInfo?.quantity,
-            vendor_uid: productInfo?.vendor_uid,
-            purchase_date: productInfo?.purchase_date,
-            notes: productInfo?.notes,
-            analyzed_content: productInfo,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingMedia.id);
+        // Check if media needs reprocessing
+        const needsReprocessing = !existingMedia.processed || 
+                                !existingMedia.public_url || 
+                                existingMedia.processing_error;
 
-        if (mediaUpdateError) {
-          console.error('Error updating existing media:', mediaUpdateError);
-          throw mediaUpdateError;
+        if (needsReprocessing) {
+          result = await processMediaFile(
+            supabase,
+            mediaFile,
+            mediaType,
+            message,
+            messageRecord,
+            botToken,
+            productInfo
+          );
+        } else {
+          result = existingMedia;
         }
-
-        result = existingMedia;
       } else {
         console.log('Processing new media file:', {
           file_id: mediaFile.file_id,
