@@ -20,6 +20,7 @@ import { useToast } from "@/components/ui/use-toast";
 interface MediaItem {
   id: string;
   public_url: string;
+  default_public_url: string;
   file_type: string;
   caption?: string;
   product_code?: string;
@@ -87,6 +88,21 @@ const MediaGrid = () => {
         variant: "destructive",
       });
     }
+  };
+
+  const checkImageExists = async (url: string): Promise<boolean> => {
+    try {
+      const response = await fetch(url, { method: 'HEAD' });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  };
+
+  const getMediaUrl = async (item: MediaItem) => {
+    if (!item.public_url) return item.default_public_url;
+    const exists = await checkImageExists(item.public_url);
+    return exists ? item.public_url : item.default_public_url;
   };
 
   if (isLoading) {
@@ -158,15 +174,27 @@ const MediaGrid = () => {
               >
                 {item.file_type === 'video' ? (
                   <video 
-                    src={item.public_url}
+                    src={item.public_url || item.default_public_url}
                     className="object-cover w-full h-full"
                     controls
+                    onError={(e) => {
+                      const video = e.target as HTMLVideoElement;
+                      if (video.src !== item.default_public_url) {
+                        video.src = item.default_public_url;
+                      }
+                    }}
                   />
                 ) : (
                   <img
-                    src={item.public_url || "/placeholder.svg"}
+                    src={item.public_url || item.default_public_url}
                     alt={item.caption || "Media item"}
                     className="object-cover w-full h-full"
+                    onError={(e) => {
+                      const img = e.target as HTMLImageElement;
+                      if (img.src !== item.default_public_url) {
+                        img.src = item.default_public_url;
+                      }
+                    }}
                   />
                 )}
                 <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity p-4">

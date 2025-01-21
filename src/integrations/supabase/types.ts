@@ -134,6 +134,7 @@ export type Database = {
           analyzed_content: Json | null
           caption: string | null
           created_at: string
+          default_public_url: string | null
           file_id: string
           file_type: string
           file_unique_id: string
@@ -159,6 +160,7 @@ export type Database = {
           analyzed_content?: Json | null
           caption?: string | null
           created_at?: string
+          default_public_url?: string | null
           file_id: string
           file_type: string
           file_unique_id: string
@@ -184,6 +186,7 @@ export type Database = {
           analyzed_content?: Json | null
           caption?: string | null
           created_at?: string
+          default_public_url?: string | null
           file_id?: string
           file_type?: string
           file_unique_id?: string
