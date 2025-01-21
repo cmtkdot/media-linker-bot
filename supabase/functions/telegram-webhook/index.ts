@@ -48,7 +48,6 @@ serve(async (req) => {
     try {
       const result = await handleWebhookUpdate(update, supabase, TELEGRAM_BOT_TOKEN);
       
-      // Log successful processing
       console.log('Successfully processed update:', {
         update_id: update.update_id,
         message_id: update.message?.message_id,
@@ -56,18 +55,14 @@ serve(async (req) => {
         result
       });
       
+      // Clean up old failed records
+      await supabase.rpc('cleanup_successful_webhooks');
+      
       return new Response(
         JSON.stringify({ ok: true, result }),
-        { 
-          headers: { 
-            ...corsHeaders, 
-            'Content-Type': 'application/json' 
-          }, 
-          status: 200 
-        }
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     } catch (processingError) {
-      // Log the error with detailed information
       console.error('Error processing update:', {
         error: processingError.message,
         stack: processingError.stack,
@@ -78,7 +73,7 @@ serve(async (req) => {
       });
 
       // Log to failed_webhook_updates table
-      await supabase.from('failed_webhook_updates').insert({
+      const { error: logError } = await supabase.from('failed_webhook_updates').insert({
         message_id: update.message?.message_id,
         chat_id: update.message?.chat?.id,
         error_message: processingError.message,
@@ -87,8 +82,11 @@ serve(async (req) => {
         status: 'failed'
       });
 
-      // Return a 200 status to acknowledge receipt even if processing failed
-      // This prevents Telegram from retrying the same update
+      if (logError) {
+        console.error('Error logging failed webhook:', logError);
+      }
+
+      // Return 200 to acknowledge receipt
       return new Response(
         JSON.stringify({ 
           ok: false, 
@@ -100,10 +98,7 @@ serve(async (req) => {
             retry_count: processingError.retryCount || 0
           }
         }),
-        { 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }, 
-          status: 200 // Return 200 even for errors to acknowledge receipt
-        }
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
   } catch (error) {
@@ -112,17 +107,13 @@ serve(async (req) => {
       stack: error.stack
     });
     
-    // Return 200 to acknowledge receipt, even for fatal errors
     return new Response(
       JSON.stringify({ 
         ok: false,
         error: 'Internal server error',
         details: error.message
       }),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, 
-        status: 200 // Return 200 even for fatal errors to acknowledge receipt
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });

@@ -2,6 +2,48 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getMessageType, getAndDownloadTelegramFile, generateSafeFileName } from './telegram-service.ts';
 
 export async function createMessage(supabase: any, message: any, productInfo: any = null) {
+  // First check for existing message
+  const { data: existingMessage, error: checkError } = await supabase
+    .from('messages')
+    .select('*')
+    .eq('message_id', message.message_id)
+    .eq('chat_id', message.chat.id)
+    .maybeSingle();
+
+  if (checkError) {
+    console.error('Error checking for existing message:', checkError);
+    throw checkError;
+  }
+
+  // If message exists, update it
+  if (existingMessage) {
+    const { data: updatedMessage, error: updateError } = await supabase
+      .from('messages')
+      .update({
+        sender_info: message.from || message.sender_chat || {},
+        message_type: getMessageType(message),
+        message_data: message,
+        caption: message.caption,
+        media_group_id: message.media_group_id,
+        ...(productInfo && {
+          product_name: productInfo.product_name,
+          product_code: productInfo.product_code,
+          quantity: productInfo.quantity,
+          vendor_uid: productInfo.vendor_uid,
+          purchase_date: productInfo.purchase_date,
+          notes: productInfo.notes
+        }),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', existingMessage.id)
+      .select()
+      .maybeSingle();
+
+    if (updateError) throw updateError;
+    return updatedMessage;
+  }
+
+  // If no existing message, create new one
   const { data: messageData, error: messageError } = await supabase
     .from('messages')
     .insert({
@@ -17,11 +59,14 @@ export async function createMessage(supabase: any, message: any, productInfo: an
       ...(productInfo && {
         product_name: productInfo.product_name,
         product_code: productInfo.product_code,
-        quantity: productInfo.quantity
+        quantity: productInfo.quantity,
+        vendor_uid: productInfo.vendor_uid,
+        purchase_date: productInfo.purchase_date,
+        notes: productInfo.notes
       })
     })
     .select()
-    .single();
+    .maybeSingle();
 
   if (messageError) throw messageError;
   return messageData;
