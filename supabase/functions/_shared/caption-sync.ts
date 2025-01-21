@@ -4,7 +4,7 @@ export async function syncMediaGroupCaptions(mediaGroupId: string, supabase: any
     return null;
   }
 
-  console.log('Syncing captions for media group:', mediaGroupId);
+  console.log('Syncing captions and data for media group:', mediaGroupId);
 
   try {
     // Get all messages in the group
@@ -32,7 +32,8 @@ export async function syncMediaGroupCaptions(mediaGroupId: string, supabase: any
       msg.analyzed_content ||
       msg.vendor_uid ||
       msg.purchase_date ||
-      msg.notes
+      msg.notes ||
+      msg.quantity
     );
 
     if (!latestMessageWithInfo) {
@@ -43,7 +44,8 @@ export async function syncMediaGroupCaptions(mediaGroupId: string, supabase: any
     console.log('Found latest message with info:', {
       message_id: latestMessageWithInfo.message_id,
       has_caption: !!latestMessageWithInfo.caption,
-      has_product_info: !!latestMessageWithInfo.product_name
+      has_product_info: !!latestMessageWithInfo.product_name,
+      has_analyzed_content: !!latestMessageWithInfo.analyzed_content
     });
 
     // Update all messages in the group with the latest info
@@ -62,8 +64,28 @@ export async function syncMediaGroupCaptions(mediaGroupId: string, supabase: any
       .eq('media_group_id', mediaGroupId);
 
     if (updateError) {
-      console.error('Error syncing captions:', updateError);
+      console.error('Error syncing messages:', updateError);
       throw updateError;
+    }
+
+    // Also update telegram_media records
+    const { error: mediaUpdateError } = await supabase
+      .from('telegram_media')
+      .update({
+        caption: latestMessageWithInfo.caption,
+        product_name: latestMessageWithInfo.product_name,
+        product_code: latestMessageWithInfo.product_code,
+        quantity: latestMessageWithInfo.quantity,
+        vendor_uid: latestMessageWithInfo.vendor_uid,
+        purchase_date: latestMessageWithInfo.purchase_date,
+        notes: latestMessageWithInfo.notes,
+        analyzed_content: latestMessageWithInfo.analyzed_content
+      })
+      .eq('telegram_data->>media_group_id', mediaGroupId);
+
+    if (mediaUpdateError) {
+      console.error('Error syncing telegram_media:', mediaUpdateError);
+      throw mediaUpdateError;
     }
 
     console.log('Successfully synced media group:', mediaGroupId);

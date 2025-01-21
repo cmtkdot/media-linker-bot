@@ -20,7 +20,7 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
       has_caption: !!message.caption
     });
 
-    // Step 1: If this is part of a media group, check for existing captions
+    // Step 1: If this is part of a media group, check for existing data
     let existingGroupData = null;
     if (message.media_group_id) {
       const { data: existingMedia } = await supabase
@@ -56,11 +56,19 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
     }
 
     // Step 3: Process message with analyzed content
+    const messageData = {
+      ...message,
+      analyzed_content: analyzedContent,
+      product_name: analyzedContent?.product_name || existingGroupData?.product_name,
+      product_code: analyzedContent?.product_code || existingGroupData?.product_code,
+      quantity: analyzedContent?.quantity || existingGroupData?.quantity,
+      vendor_uid: analyzedContent?.vendor_uid || existingGroupData?.vendor_uid,
+      purchase_date: analyzedContent?.purchase_date || existingGroupData?.purchase_date,
+      notes: analyzedContent?.notes || existingGroupData?.notes
+    };
+
     try {
-      await processMessageBatch([{
-        ...message,
-        analyzed_content: analyzedContent
-      }], supabase);
+      await processMessageBatch([messageData], supabase);
     } catch (error) {
       console.error('Error processing message batch:', {
         error: error.message,
@@ -102,7 +110,7 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
     const hasMedia = message.photo || message.video || message.document || message.animation;
     if (hasMedia) {
       try {
-        await processMediaFiles(message, messageRecord, supabase, botToken);
+        await processMediaFiles(messageData, messageRecord, supabase, botToken);
       } catch (error) {
         console.error('Error processing media files:', {
           error: error.message,
@@ -119,21 +127,28 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
 
     // Step 6: If this message has a caption and is part of a media group,
     // update other media in the group
-    if (message.caption && message.media_group_id) {
+    if ((message.caption || analyzedContent) && message.media_group_id) {
       try {
         await syncMediaGroupCaptions(message.media_group_id, supabase);
-        console.log('Successfully synced media group captions');
+        console.log('Successfully synced media group captions and data');
       } catch (error) {
         console.error('Error syncing media group captions:', error);
       }
     }
 
-    // Step 7: Update message status
+    // Step 7: Update message status and ensure all fields are synced
     const { error: updateError } = await supabase
       .from('messages')
       .update({
         status: 'success',
-        processed_at: new Date().toISOString()
+        processed_at: new Date().toISOString(),
+        analyzed_content: analyzedContent,
+        product_name: messageData.product_name,
+        product_code: messageData.product_code,
+        quantity: messageData.quantity,
+        vendor_uid: messageData.vendor_uid,
+        purchase_date: messageData.purchase_date,
+        notes: messageData.notes
       })
       .eq('id', messageRecord.id);
 
@@ -149,7 +164,8 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
       update_id: update.update_id,
       message_id: message.message_id,
       chat_id: message.chat.id,
-      record_id: messageRecord.id
+      record_id: messageRecord.id,
+      analyzed_content: !!analyzedContent
     });
 
     return {
