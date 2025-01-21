@@ -50,29 +50,39 @@ export function getMessageType(message: any): string {
   return 'text';
 }
 
-export function generateSafeFileName(productName: string, productCode: string, mediaType: string, extension: string): string {
-  // Clean and format the product name
-  const safeProductName = productName
+export function generateSafeFileName(productName: string = 'untitled', productCode: string = 'no_code', mediaType: string, extension: string): string {
+  console.log('Generating safe filename with:', { productName, productCode, mediaType, extension });
+  
+  // Ensure all inputs are strings and have default values
+  const safeName = (productName || 'untitled')
     .toLowerCase()
     .replace(/[^\x00-\x7F]/g, '') // Remove non-ASCII characters
     .replace(/\s+/g, '_') // Replace spaces with underscores
     .replace(/[^a-z0-9_]/g, ''); // Remove any other special characters
 
-  // Clean the product code
-  const safeProductCode = productCode
+  const safeCode = (productCode || 'no_code')
     .toLowerCase()
     .replace(/[^\x00-\x7F]/g, '')
     .replace(/\s+/g, '_')
     .replace(/[^a-z0-9_]/g, '');
 
   // Clean the media type
-  const safeMediaType = mediaType.toLowerCase();
+  const safeMediaType = (mediaType || 'unknown')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
 
   // Clean the extension
-  const safeExtension = extension.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const safeExtension = (extension || 'bin')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+
+  // Add timestamp to ensure uniqueness
+  const timestamp = Date.now();
 
   // Combine all parts with underscores
-  const fileName = `${safeProductName}_${safeProductCode}_${safeMediaType}`;
+  const fileName = `${safeName}_${safeCode}_${safeMediaType}_${timestamp}`;
+
+  console.log('Generated filename:', `${fileName}.${safeExtension}`);
 
   // Add the extension
   return `${fileName}.${safeExtension}`;
