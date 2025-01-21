@@ -49,9 +49,12 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
     e.stopPropagation();
     if (video.paused) {
       video.play();
+      video.loop = true;  // Enable looping when playing
       setIsPlaying(true);
     } else {
       video.pause();
+      video.loop = false; // Disable looping when stopped
+      video.currentTime = 0;
       setIsPlaying(false);
     }
   };
