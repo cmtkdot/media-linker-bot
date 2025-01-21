@@ -1,6 +1,5 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -60,15 +59,17 @@ serve(async (req) => {
             6. notes: Any text in parentheses () should be captured as notes
                - Multiple parentheses should be combined with spaces
 
-            Return a JSON object with:
-            - product_name: string or null
-            - product_code: string or null
-            - quantity: number or null (ONLY the main quantity, not numbers in notes)
-            - vendor_uid: string or null
-            - purchase_date: string or null (in YYYY-MM-DD format)
-            - notes: string or null (text from ALL parentheses)
-            - raw_caption: the original caption
-            - analyzed_at: current timestamp in ISO format`
+            Return ONLY a valid JSON object with these exact fields:
+            {
+              "product_name": string or null,
+              "product_code": string or null,
+              "quantity": number or null,
+              "vendor_uid": string or null,
+              "purchase_date": string or null,
+              "notes": string or null,
+              "raw_caption": string,
+              "analyzed_at": string (current ISO timestamp)
+            }`
           },
           {
             role: 'user',
@@ -92,96 +93,102 @@ serve(async (req) => {
       throw new Error('Invalid response from OpenAI');
     }
 
-    const result = JSON.parse(data.choices[0].message.content);
-    console.log('Parsed result:', result);
+    try {
+      const result = JSON.parse(data.choices[0].message.content.trim());
+      console.log('Parsed result:', result);
 
-    if (isAnalysisOnly) {
+      if (isAnalysisOnly) {
+        return new Response(
+          JSON.stringify(result),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const supabaseUrl = Deno.env.get('SUPABASE_URL');
+      const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+      
+      if (!supabaseUrl || !supabaseServiceKey) {
+        throw new Error('Missing Supabase configuration');
+      }
+      
+      const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+      // Update telegram_media table with analyzed content
+      if (messageId) {
+        const { error: updateError } = await supabase
+          .from('telegram_media')
+          .update({
+            analyzed_content: result,
+            product_name: result.product_name,
+            product_code: result.product_code,
+            quantity: result.quantity,
+            vendor_uid: result.vendor_uid,
+            purchase_date: result.purchase_date,
+            notes: result.notes,
+            caption: caption
+          })
+          .eq('id', messageId);
+
+        if (updateError) {
+          console.error('Error updating telegram_media:', updateError);
+          throw updateError;
+        }
+      }
+
+      // If this is part of a media group, update all related media
+      if (mediaGroupId) {
+        const { error: groupUpdateError } = await supabase
+          .from('telegram_media')
+          .update({
+            analyzed_content: result,
+            product_name: result.product_name,
+            product_code: result.product_code,
+            quantity: result.quantity,
+            vendor_uid: result.vendor_uid,
+            purchase_date: result.purchase_date,
+            notes: result.notes,
+            caption: caption
+          })
+          .eq('telegram_data->>media_group_id', mediaGroupId);
+
+        if (groupUpdateError) {
+          console.error('Error updating media group:', groupUpdateError);
+          throw groupUpdateError;
+        }
+      }
+
+      // Also update the messages table to maintain consistency
+      if (telegramData?.message_id && telegramData?.chat?.id) {
+        const { error: messageUpdateError } = await supabase
+          .from('messages')
+          .update({
+            analyzed_content: result,
+            product_name: result.product_name,
+            product_code: result.product_code,
+            quantity: result.quantity,
+            vendor_uid: result.vendor_uid,
+            purchase_date: result.purchase_date,
+            notes: result.notes,
+            caption: caption
+          })
+          .eq('message_id', telegramData.message_id)
+          .eq('chat_id', telegramData.chat.id);
+
+        if (messageUpdateError) {
+          console.error('Error updating message:', messageUpdateError);
+          throw messageUpdateError;
+        }
+      }
+
       return new Response(
         JSON.stringify(result),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    } catch (parseError) {
+      console.error('Error parsing OpenAI response:', parseError);
+      console.error('Raw response content:', data.choices[0].message.content);
+      throw new Error(`Failed to parse OpenAI response: ${parseError.message}`);
     }
-
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    
-    if (!supabaseUrl || !supabaseServiceKey) {
-      throw new Error('Missing Supabase configuration');
-    }
-    
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    // Update telegram_media table with analyzed content
-    if (messageId) {
-      const { error: updateError } = await supabase
-        .from('telegram_media')
-        .update({
-          analyzed_content: result,
-          product_name: result.product_name,
-          product_code: result.product_code,
-          quantity: result.quantity,
-          vendor_uid: result.vendor_uid,
-          purchase_date: result.purchase_date,
-          notes: result.notes,
-          caption: caption
-        })
-        .eq('id', messageId);
-
-      if (updateError) {
-        console.error('Error updating telegram_media:', updateError);
-        throw updateError;
-      }
-    }
-
-    // If this is part of a media group, update all related media
-    if (mediaGroupId) {
-      const { error: groupUpdateError } = await supabase
-        .from('telegram_media')
-        .update({
-          analyzed_content: result,
-          product_name: result.product_name,
-          product_code: result.product_code,
-          quantity: result.quantity,
-          vendor_uid: result.vendor_uid,
-          purchase_date: result.purchase_date,
-          notes: result.notes,
-          caption: caption
-        })
-        .eq('telegram_data->>media_group_id', mediaGroupId);
-
-      if (groupUpdateError) {
-        console.error('Error updating media group:', groupUpdateError);
-        throw groupUpdateError;
-      }
-    }
-
-    // Also update the messages table to maintain consistency
-    if (telegramData?.message_id && telegramData?.chat?.id) {
-      const { error: messageUpdateError } = await supabase
-        .from('messages')
-        .update({
-          analyzed_content: result,
-          product_name: result.product_name,
-          product_code: result.product_code,
-          quantity: result.quantity,
-          vendor_uid: result.vendor_uid,
-          purchase_date: result.purchase_date,
-          notes: result.notes,
-          caption: caption
-        })
-        .eq('message_id', telegramData.message_id)
-        .eq('chat_id', telegramData.chat.id);
-
-      if (messageUpdateError) {
-        console.error('Error updating message:', messageUpdateError);
-        throw messageUpdateError;
-      }
-    }
-
-    return new Response(
-      JSON.stringify(result),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
   } catch (error) {
     console.error('Error in analyze-caption function:', error);
     return new Response(
