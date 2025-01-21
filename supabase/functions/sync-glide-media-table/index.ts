@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
-import { Table } from 'https://esm.sh/@glideapps/tables@1.0.5/dist/index.js';
+import { Table } from 'https://esm.sh/@glideapps/tables@1.0.5';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
