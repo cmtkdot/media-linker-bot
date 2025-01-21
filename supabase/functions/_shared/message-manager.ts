@@ -1,86 +1,88 @@
-import { createMessage } from './database-service.ts';
-
-export async function updateExistingMessage(supabase: any, message: any, messageId: string, productInfo: any) {
-  console.log('Updating existing message with new product info:', {
-    id: messageId,
-    product_info: productInfo
-  });
-
-  const { error: updateError } = await supabase
-    .from('messages')
-    .update({
-      caption: message.caption,
-      product_name: productInfo?.product_name,
-      product_code: productInfo?.product_code,
-      quantity: productInfo?.quantity,
-      vendor_uid: productInfo?.vendor_uid,
-      purchase_date: productInfo?.purchase_date,
-      notes: productInfo?.notes,
-      analyzed_content: productInfo,
-      updated_at: new Date().toISOString()
-    })
-    .eq('id', messageId);
-
-  if (updateError) throw updateError;
-
-  if (message.media_group_id) {
-    await updateMediaGroup(supabase, message, productInfo);
-  }
-}
-
-export async function updateMediaGroup(supabase: any, message: any, productInfo: any) {
-  const { error: mediaGroupUpdateError } = await supabase
-    .from('telegram_media')
-    .update({
-      caption: message.caption,
-      product_name: productInfo?.product_name,
-      product_code: productInfo?.product_code,
-      quantity: productInfo?.quantity,
-      vendor_uid: productInfo?.vendor_uid,
-      purchase_date: productInfo?.purchase_date,
-      notes: productInfo?.notes,
-      analyzed_content: productInfo,
-      updated_at: new Date().toISOString()
-    })
-    .eq('telegram_data->media_group_id', message.media_group_id);
-
-  if (mediaGroupUpdateError) {
-    console.error('Error updating media group:', mediaGroupUpdateError);
-  }
-}
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { analyzeCaptionWithAI } from './caption-analyzer.ts';
+import { processMedia } from './media-handler.ts';
 
 export async function handleMessageProcessing(
-  supabase: any, 
-  message: any, 
-  existingMessage: any, 
-  productInfo: any
+  supabase: any,
+  message: any,
+  existingMessage: any,
+  productInfo: any = null
 ) {
-  let messageRecord = existingMessage;
-  let retryCount = existingMessage?.retry_count || 0;
+  console.log('Processing message:', {
+    message_id: message.message_id,
+    chat_id: message.chat.id,
+    existing: !!existingMessage
+  });
 
-  if (existingMessage && productInfo) {
-    try {
-      await updateExistingMessage(supabase, message, existingMessage.id, productInfo);
-      messageRecord = existingMessage;
-    } catch (error) {
-      console.error('Error updating existing message:', error);
-      throw error;
-    }
-  } else if (!existingMessage) {
-    try {
-      messageRecord = await createMessage(supabase, message, productInfo);
-      console.log('Created new message record:', {
-        id: messageRecord.id,
-        message_id: message.message_id
+  try {
+    // Start caption analysis early if caption exists
+    const captionAnalysisPromise = message.caption 
+      ? analyzeCaptionWithAI(
+          message.caption,
+          Deno.env.get('SUPABASE_URL') || '',
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+        )
+      : Promise.resolve(null);
+
+    // Prepare message data
+    const messageData = {
+      message_id: message.message_id,
+      chat_id: message.chat.id,
+      sender_info: message.from || message.sender_chat || {},
+      message_type: message.photo ? 'photo' : 
+                   message.video ? 'video' : 
+                   message.document ? 'document' : 
+                   message.animation ? 'animation' : 'unknown',
+      message_data: message,
+      caption: message.caption,
+      media_group_id: message.media_group_id,
+      status: 'pending',
+      retry_count: existingMessage?.retry_count || 0
+    };
+
+    // Wait for caption analysis result
+    const analyzedContent = await captionAnalysisPromise;
+    if (analyzedContent) {
+      Object.assign(messageData, {
+        product_name: analyzedContent.product_name,
+        product_code: analyzedContent.product_code,
+        quantity: analyzedContent.quantity,
+        vendor_uid: analyzedContent.vendor_uid,
+        purchase_date: analyzedContent.purchase_date,
+        notes: analyzedContent.notes,
+        analyzed_content: analyzedContent
       });
-    } catch (error) {
-      console.error('Error creating message:', {
-        error: error.message,
-        message_id: message.message_id
-      });
-      throw error;
     }
+
+    let messageRecord;
+    if (existingMessage) {
+      const { data: updatedMessage, error: updateError } = await supabase
+        .from('messages')
+        .update(messageData)
+        .eq('id', existingMessage.id)
+        .select()
+        .single();
+
+      if (updateError) throw updateError;
+      messageRecord = updatedMessage;
+    } else {
+      const { data: newMessage, error: insertError } = await supabase
+        .from('messages')
+        .insert(messageData)
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+      messageRecord = newMessage;
+    }
+
+    return { 
+      messageRecord, 
+      retryCount: messageRecord.retry_count,
+      analyzedContent 
+    };
+  } catch (error) {
+    console.error('Error in handleMessageProcessing:', error);
+    throw error;
   }
-
-  return { messageRecord, retryCount };
 }

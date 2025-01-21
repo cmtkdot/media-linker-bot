@@ -18,11 +18,12 @@ serve(async (req) => {
       throw new Error('OpenAI API key is not configured');
     }
 
-    const { caption, messageId, mediaGroupId } = await req.json();
+    const { caption, messageId, mediaGroupId, telegramData } = await req.json();
     
-    if (!messageId && !mediaGroupId) {
-      throw new Error('Either messageId or mediaGroupId is required for updates');
-    }
+    console.log('Analyzing data:', { messageId, mediaGroupId, caption });
+
+    // Allow processing without IDs if we're just analyzing caption
+    const isAnalysisOnly = !messageId && !mediaGroupId;
     
     if (!caption) {
       console.log('No caption provided, returning null result');
@@ -84,7 +85,15 @@ serve(async (req) => {
     const result = JSON.parse(data.choices[0].message.content);
     console.log('Parsed result:', result);
 
-    // Initialize Supabase client
+    // If this is just analysis, return the result without updating DB
+    if (isAnalysisOnly) {
+      return new Response(
+        JSON.stringify(result),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Initialize Supabase client for DB updates
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     

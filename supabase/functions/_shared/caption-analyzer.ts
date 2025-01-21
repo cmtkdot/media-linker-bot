@@ -10,7 +10,11 @@ export async function analyzeCaptionWithAI(caption: string, supabaseUrl: string,
   try {
     const supabase = createClient(supabaseUrl, supabaseKey);
     const { data, error } = await supabase.functions.invoke('analyze-caption', {
-      body: { caption },
+      body: { 
+        caption,
+        // Don't pass IDs when just analyzing
+        isAnalysisOnly: true
+      },
     });
 
     if (error) {
