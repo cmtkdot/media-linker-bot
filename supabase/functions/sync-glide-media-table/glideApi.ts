@@ -6,15 +6,34 @@ interface GlideRecord {
   [key: string]: any;
 }
 
-export async function fetchGlideRecords(tableId: string): Promise<GlideRecord[]> {
-  const apiToken = Deno.env.get('GLIDE_API_TOKEN')?.trim();
-  if (!apiToken) {
+function validateGlideToken(token: string | undefined): string {
+  if (!token) {
     throw new Error('GLIDE_API_TOKEN is not set in Edge Function secrets');
   }
+  
+  const cleanToken = token.trim();
+  if (!cleanToken) {
+    throw new Error('GLIDE_API_TOKEN cannot be empty');
+  }
+
+  // Basic format validation (should be a reasonable length string)
+  if (cleanToken.length < 20) {
+    throw new Error('GLIDE_API_TOKEN appears to be invalid (too short)');
+  }
+
+  return cleanToken;
+}
+
+export async function fetchGlideRecords(tableId: string): Promise<GlideRecord[]> {
+  const apiToken = validateGlideToken(Deno.env.get('GLIDE_API_TOKEN'));
 
   console.log('Making request to Glide API with token:', {
     token_length: apiToken.length,
-    token_preview: `${apiToken.substring(0, 5)}...${apiToken.substring(apiToken.length - 5)}`
+    token_preview: `${apiToken.substring(0, 5)}...${apiToken.substring(apiToken.length - 5)}`,
+    headers: {
+      'Authorization': `Bearer ${apiToken.substring(0, 5)}...${apiToken.substring(apiToken.length - 5)}`,
+      'Content-Type': 'application/json; charset=utf-8'
+    }
   });
 
   const glideResponse = await fetch(
@@ -47,11 +66,11 @@ export async function fetchGlideRecords(tableId: string): Promise<GlideRecord[]>
     
     let errorMessage = 'Glide API error';
     if (glideResponse.status === 401) {
-      errorMessage = 'Invalid or expired Glide API token. Please check your Edge Function secrets.';
+      errorMessage = 'Invalid or expired Glide API token. Please check your Edge Function secrets and ensure the token is valid.';
     } else if (glideResponse.status === 403) {
-      errorMessage = 'Access forbidden. Please verify your Glide API permissions.';
+      errorMessage = 'Access forbidden. Please verify your Glide API permissions and token scope.';
     } else if (glideResponse.status === 404) {
-      errorMessage = 'Glide table not found. Please verify your table ID.';
+      errorMessage = 'Glide table not found. Please verify your table ID and API access.';
     }
     
     throw new Error(`${errorMessage}: ${JSON.stringify(errorDetails, null, 2)}`);
@@ -67,10 +86,7 @@ export async function fetchGlideRecords(tableId: string): Promise<GlideRecord[]>
 }
 
 export async function createGlideRecord(tableId: string, recordData: any): Promise<void> {
-  const apiToken = Deno.env.get('GLIDE_API_TOKEN')?.trim();
-  if (!apiToken) {
-    throw new Error('GLIDE_API_TOKEN is not set in Edge Function secrets');
-  }
+  const apiToken = validateGlideToken(Deno.env.get('GLIDE_API_TOKEN'));
 
   console.log('Creating record in Glide:', {
     table_id: tableId,
@@ -91,6 +107,11 @@ export async function createGlideRecord(tableId: string, recordData: any): Promi
 
   if (!createResponse.ok) {
     const errorText = await createResponse.text();
+    console.error('Error creating Glide record:', {
+      status: createResponse.status,
+      statusText: createResponse.statusText,
+      error: errorText
+    });
     throw new Error(`Failed to create Glide record: ${errorText}`);
   }
 
@@ -98,10 +119,7 @@ export async function createGlideRecord(tableId: string, recordData: any): Promi
 }
 
 export async function updateGlideRecord(tableId: string, recordId: string, recordData: any): Promise<void> {
-  const apiToken = Deno.env.get('GLIDE_API_TOKEN')?.trim();
-  if (!apiToken) {
-    throw new Error('GLIDE_API_TOKEN is not set in Edge Function secrets');
-  }
+  const apiToken = validateGlideToken(Deno.env.get('GLIDE_API_TOKEN'));
 
   console.log('Updating record in Glide:', {
     table_id: tableId,
@@ -123,6 +141,11 @@ export async function updateGlideRecord(tableId: string, recordId: string, recor
 
   if (!updateResponse.ok) {
     const errorText = await updateResponse.text();
+    console.error('Error updating Glide record:', {
+      status: updateResponse.status,
+      statusText: updateResponse.statusText,
+      error: errorText
+    });
     throw new Error(`Failed to update Glide record: ${errorText}`);
   }
 
