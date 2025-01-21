@@ -8,6 +8,7 @@ import MediaGridView from "./media/MediaGridView";
 import MediaTable from "./MediaTable";
 import MediaEditDialog from "./media/MediaEditDialog";
 import { MediaItem } from "./media/types";
+import { PostgrestFilterBuilder } from "@supabase/supabase-js";
 
 const MediaGrid = () => {
   const [view, setView] = useState<'grid' | 'table'>('grid');
@@ -39,14 +40,18 @@ const MediaGrid = () => {
     setIsSyncing(true);
     try {
       // Get all media groups that have at least one item without a caption
-      const { data: mediaGroups, error: groupError } = await supabase
+      const { data: mediaGroups } = await supabase
         .from('telegram_media')
         .select('telegram_data->media_group_id')
         .is('caption', null)
         .not('telegram_data->media_group_id', 'is', null)
-        .distinct();
-
-      if (groupError) throw groupError;
+        .then(result => ({
+          ...result,
+          data: result.data?.filter((item, index, self) => 
+            item.media_group_id && 
+            self.findIndex(t => t.media_group_id === item.media_group_id) === index
+          )
+        }));
 
       if (!mediaGroups?.length) {
         toast({
