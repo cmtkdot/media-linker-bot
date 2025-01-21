@@ -37,22 +37,29 @@ const MediaGrid = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: mediaItems, isLoading, error } = useQuery({
+  const { data: mediaItems = [], isLoading, error } = useQuery({
     queryKey: ['telegram-media', search],
     queryFn: async () => {
       let query = supabase
         .from('telegram_media')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .select('*');
 
       if (search) {
         query = query.or(`caption.ilike.%${search}%,product_name.ilike.%${search}%,product_code.ilike.%${search}%,vendor_uid.ilike.%${search}%`);
       }
 
+      query = query.order('created_at', { ascending: false });
+
       const { data, error } = await query;
-      if (error) throw error;
-      return data as MediaItem[];
-    }
+      
+      if (error) {
+        console.error('Error fetching media:', error);
+        throw error;
+      }
+      
+      return (data || []) as MediaItem[];
+    },
+    retry: 3
   });
 
   const handleSync = async () => {
@@ -109,6 +116,7 @@ const MediaGrid = () => {
       });
 
       setEditItem(null);
+      queryClient.invalidateQueries({ queryKey: ['telegram-media'] });
     } catch (error) {
       console.error('Error updating media:', error);
       toast({
