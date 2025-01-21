@@ -14,6 +14,8 @@ import { Input } from "@/components/ui/input";
 import { Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 
+type ValidTableName = "messages" | "failed_webhook_updates" | "glide_config" | "glide_sync_queue" | "telegram_media" | "duplicate_messages";
+
 interface GlideConfig {
   id: string;
   table_name: string;
@@ -32,12 +34,19 @@ export function GlideDataGrid({ configs }: GlideDataGridProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  const isValidTable = (tableName: string): tableName is ValidTableName => {
+    const validTables: ValidTableName[] = ["messages", "failed_webhook_updates", "glide_config", "glide_sync_queue", "telegram_media", "duplicate_messages"];
+    return validTables.includes(tableName as ValidTableName);
+  };
+
   const { data: tableData, isLoading } = useQuery({
     queryKey: ['table-data', selectedConfig],
     enabled: !!selectedConfig,
     queryFn: async () => {
       const config = configs.find(c => c.id === selectedConfig);
-      if (!config?.supabase_table_name) return [];
+      if (!config?.supabase_table_name || !isValidTable(config.supabase_table_name)) {
+        throw new Error("Invalid table name");
+      }
       
       const { data, error } = await supabase
         .from(config.supabase_table_name)
@@ -52,7 +61,7 @@ export function GlideDataGrid({ configs }: GlideDataGridProps) {
     if (!selectedConfig) return;
 
     const config = configs.find(c => c.id === selectedConfig);
-    if (!config?.supabase_table_name) return;
+    if (!config?.supabase_table_name || !isValidTable(config.supabase_table_name)) return;
 
     const channel = supabase.channel('table-changes')
       .on(
@@ -82,7 +91,7 @@ export function GlideDataGrid({ configs }: GlideDataGridProps) {
     if (!editData || !selectedConfig) return;
 
     const config = configs.find(c => c.id === selectedConfig);
-    if (!config?.supabase_table_name) return;
+    if (!config?.supabase_table_name || !isValidTable(config.supabase_table_name)) return;
 
     try {
       const { error } = await supabase
@@ -113,7 +122,7 @@ export function GlideDataGrid({ configs }: GlideDataGridProps) {
     if (!selectedConfig) return;
 
     const config = configs.find(c => c.id === selectedConfig);
-    if (!config?.supabase_table_name) return;
+    if (!config?.supabase_table_name || !isValidTable(config.supabase_table_name)) return;
 
     try {
       const { error } = await supabase
@@ -141,12 +150,12 @@ export function GlideDataGrid({ configs }: GlideDataGridProps) {
     if (!selectedConfig) return;
 
     const config = configs.find(c => c.id === selectedConfig);
-    if (!config?.supabase_table_name) return;
+    if (!config?.supabase_table_name || !isValidTable(config.supabase_table_name)) return;
 
     try {
       const { error } = await supabase
         .from(config.supabase_table_name)
-        .insert([{}]);
+        .insert([{ created_at: new Date().toISOString() }]);
 
       if (error) throw error;
 
