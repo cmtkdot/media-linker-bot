@@ -58,6 +58,7 @@ export type Database = {
           app_id: string
           created_at: string
           id: string
+          supabase_table_name: string
           table_id: string
           table_name: string
           updated_at: string
@@ -68,6 +69,7 @@ export type Database = {
           app_id: string
           created_at?: string
           id?: string
+          supabase_table_name?: string
           table_id: string
           table_name: string
           updated_at?: string
@@ -78,6 +80,7 @@ export type Database = {
           app_id?: string
           created_at?: string
           id?: string
+          supabase_table_name?: string
           table_id?: string
           table_name?: string
           updated_at?: string

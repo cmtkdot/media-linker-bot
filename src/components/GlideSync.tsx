@@ -21,6 +21,7 @@ interface GlideConfig {
   created_at: string;
   updated_at: string;
   active: boolean;
+  supabase_table_name: string;
 }
 
 const GlideSync = () => {
@@ -142,6 +143,9 @@ const GlideSync = () => {
                     <h3 className="font-medium">{config.table_name}</h3>
                     <p className="text-sm text-muted-foreground">
                       Table ID: {config.table_id}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Syncs with: {config.supabase_table_name}
                     </p>
                   </div>
                   <div className="flex items-center gap-4">
