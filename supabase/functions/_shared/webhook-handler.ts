@@ -14,7 +14,10 @@ async function delay(ms: number): Promise<void> {
 }
 
 async function updateExistingMedia(supabase: any, mediaFile: any, message: any, messageRecord: any) {
-  console.log('Updating existing media record for file_unique_id:', mediaFile.file_unique_id);
+  console.log('Updating existing media record for file_unique_id:', mediaFile.file_unique_id, {
+    message_id: message.message_id,
+    chat_id: message.chat.id
+  });
   
   try {
     // Get existing media record
@@ -25,11 +28,17 @@ async function updateExistingMedia(supabase: any, mediaFile: any, message: any, 
       .maybeSingle();
 
     if (mediaFetchError) {
-      console.error('Error fetching existing media:', mediaFetchError);
+      console.error('Error fetching existing media:', {
+        error: mediaFetchError,
+        file_unique_id: mediaFile.file_unique_id
+      });
       throw mediaFetchError;
     }
 
     if (!existingMedia) {
+      console.error('Existing media record not found:', {
+        file_unique_id: mediaFile.file_unique_id
+      });
       throw new Error('Existing media record not found');
     }
 
@@ -45,6 +54,11 @@ async function updateExistingMedia(supabase: any, mediaFile: any, message: any, 
       media_group_id: message.media_group_id,
     };
 
+    console.log('Updating telegram_media record:', {
+      id: existingMedia.id,
+      message_id: message.message_id
+    });
+
     // Update telegram_media record
     const { error: mediaError } = await supabase
       .from('telegram_media')
@@ -56,9 +70,17 @@ async function updateExistingMedia(supabase: any, mediaFile: any, message: any, 
       .eq('id', existingMedia.id);
 
     if (mediaError) {
-      console.error('Error updating telegram_media:', mediaError);
+      console.error('Error updating telegram_media:', {
+        error: mediaError,
+        media_id: existingMedia.id
+      });
       throw mediaError;
     }
+
+    console.log('Updating message record:', {
+      id: messageRecord.id,
+      message_id: message.message_id
+    });
 
     // Update message record
     const { error: messageError } = await supabase
@@ -72,13 +94,20 @@ async function updateExistingMedia(supabase: any, mediaFile: any, message: any, 
       .eq('id', messageRecord.id);
 
     if (messageError) {
-      console.error('Error updating message:', messageError);
+      console.error('Error updating message:', {
+        error: messageError,
+        message_id: messageRecord.id
+      });
       throw messageError;
     }
 
     return existingMedia;
   } catch (error) {
-    console.error('Error in updateExistingMedia:', error);
+    console.error('Error in updateExistingMedia:', {
+      error: error.message,
+      stack: error.stack,
+      file_unique_id: mediaFile.file_unique_id
+    });
     throw error;
   }
 }
@@ -100,6 +129,15 @@ export async function handleWebhookUpdate(
     return { message: 'Not a media message, skipping' };
   }
 
+  console.log('Processing media message:', {
+    message_id: message.message_id,
+    chat_id: message.chat.id,
+    media_type: message.photo ? 'photo' : 
+                message.video ? 'video' : 
+                message.document ? 'document' : 
+                message.animation ? 'animation' : 'unknown'
+  });
+
   try {
     // Check for existing message
     const { data: existingMessage, error: fetchError } = await supabase
@@ -110,7 +148,11 @@ export async function handleWebhookUpdate(
       .maybeSingle();
 
     if (fetchError) {
-      console.error('Error checking for existing message:', fetchError);
+      console.error('Error checking for existing message:', {
+        error: fetchError,
+        message_id: message.message_id,
+        chat_id: message.chat.id
+      });
       throw fetchError;
     }
 
@@ -130,15 +172,26 @@ export async function handleWebhookUpdate(
           );
         }
         messageRecord = await createMessage(supabase, message, productInfo);
-        console.log('Created new message record:', messageRecord);
+        console.log('Created new message record:', {
+          id: messageRecord.id,
+          message_id: message.message_id
+        });
       } catch (error) {
-        console.error('Error creating message:', error);
+        console.error('Error creating message:', {
+          error: error.message,
+          message_id: message.message_id
+        });
         throw error;
       }
     }
 
     // Update existing message status to processing
     if (existingMessage) {
+      console.log('Updating existing message status:', {
+        id: existingMessage.id,
+        retry_count: retryCount
+      });
+
       const { data: updatedMessage, error: updateError } = await supabase
         .from('messages')
         .update({
@@ -151,7 +204,10 @@ export async function handleWebhookUpdate(
         .single();
 
       if (updateError) {
-        console.error('Error updating message status:', updateError);
+        console.error('Error updating message status:', {
+          error: updateError,
+          message_id: existingMessage.id
+        });
         throw updateError;
       }
       messageRecord = updatedMessage;
@@ -177,6 +233,12 @@ export async function handleWebhookUpdate(
           throw new Error('No media file found in message');
         }
 
+        console.log('Processing media file:', {
+          file_id: mediaFile.file_id,
+          type: mediaType,
+          retry_count: retryCount
+        });
+
         // Check for existing media with same file_unique_id
         const { data: existingMedia, error: mediaCheckError } = await supabase
           .from('telegram_media')
@@ -185,16 +247,25 @@ export async function handleWebhookUpdate(
           .maybeSingle();
 
         if (mediaCheckError) {
-          console.error('Error checking for existing media:', mediaCheckError);
+          console.error('Error checking for existing media:', {
+            error: mediaCheckError,
+            file_unique_id: mediaFile.file_unique_id
+          });
           throw mediaCheckError;
         }
 
         let result;
         if (existingMedia) {
-          console.log('Found existing media, updating records without re-upload');
+          console.log('Found existing media, updating records without re-upload:', {
+            media_id: existingMedia.id,
+            file_unique_id: mediaFile.file_unique_id
+          });
           result = await updateExistingMedia(supabase, mediaFile, message, messageRecord);
         } else {
-          console.log('Processing new media file');
+          console.log('Processing new media file:', {
+            file_id: mediaFile.file_id,
+            type: mediaType
+          });
           result = await processMediaFile(
             supabase,
             mediaFile,
@@ -207,7 +278,7 @@ export async function handleWebhookUpdate(
         }
 
         // Update message status to success
-        await supabase
+        const { error: statusError } = await supabase
           .from('messages')
           .update({
             status: 'success',
@@ -216,10 +287,18 @@ export async function handleWebhookUpdate(
           })
           .eq('id', messageRecord.id);
 
+        if (statusError) {
+          console.error('Error updating message status:', {
+            error: statusError,
+            message_id: messageRecord.id
+          });
+          throw statusError;
+        }
+
         // Handle media group updates
         if (message.media_group_id) {
           console.log('Processing media group:', message.media_group_id);
-          await supabase
+          const { error: groupError } = await supabase
             .from('telegram_media')
             .update({ 
               caption: message.caption,
@@ -228,7 +307,20 @@ export async function handleWebhookUpdate(
               quantity: messageRecord.quantity
             })
             .eq('telegram_data->media_group_id', message.media_group_id);
+
+          if (groupError) {
+            console.error('Error updating media group:', {
+              error: groupError,
+              media_group_id: message.media_group_id
+            });
+            throw groupError;
+          }
         }
+
+        console.log('Successfully processed message:', {
+          message_id: messageRecord.id,
+          media_type: mediaType
+        });
 
         return { 
           message: 'Media processed successfully', 
@@ -237,7 +329,13 @@ export async function handleWebhookUpdate(
         };
 
       } catch (error) {
-        console.error(`Attempt ${retryCount + 1} failed:`, error);
+        console.error(`Attempt ${retryCount + 1} failed:`, {
+          error: error.message,
+          stack: error.stack,
+          message_id: messageRecord.id,
+          retry_count: retryCount
+        });
+        
         retryCount++;
 
         // Update message with retry information
@@ -253,20 +351,29 @@ export async function handleWebhookUpdate(
           .eq('id', messageRecord.id);
 
         if (updateError) {
-          console.error('Error updating retry information:', updateError);
+          console.error('Error updating retry information:', {
+            error: updateError,
+            message_id: messageRecord.id
+          });
           throw updateError;
         }
 
         if (error.message?.includes('Too Many Requests') || error.code === 429) {
           const backoffDelay = calculateBackoffDelay(retryCount);
-          console.log(`Rate limited. Waiting ${backoffDelay}ms before retry...`);
+          console.log(`Rate limited. Waiting ${backoffDelay}ms before retry...`, {
+            retry_count: retryCount,
+            delay: backoffDelay
+          });
           await delay(backoffDelay);
         } else if (retryCount < MAX_RETRY_ATTEMPTS) {
           await delay(1000); // Small delay for non-rate-limit errors
         }
 
         if (retryCount >= MAX_RETRY_ATTEMPTS) {
-          console.error('Max retry attempts reached. Giving up.');
+          console.error('Max retry attempts reached. Giving up.', {
+            message_id: messageRecord.id,
+            total_attempts: MAX_RETRY_ATTEMPTS
+          });
           throw new Error(`Failed after ${MAX_RETRY_ATTEMPTS} attempts. Last error: ${error.message}`);
         }
       }
@@ -274,7 +381,12 @@ export async function handleWebhookUpdate(
 
     throw new Error(`Processing failed after ${MAX_RETRY_ATTEMPTS} attempts`);
   } catch (error) {
-    console.error('Error in handleWebhookUpdate:', error);
+    console.error('Error in handleWebhookUpdate:', {
+      error: error.message,
+      stack: error.stack,
+      message_id: message?.message_id,
+      chat_id: message?.chat?.id
+    });
     throw error;
   }
 }
