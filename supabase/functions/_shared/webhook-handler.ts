@@ -4,6 +4,7 @@ import { handleMessageProcessing } from './message-manager.ts';
 import { processMedia } from './media-handler.ts';
 import { cleanupFailedRecords } from './cleanup-manager.ts';
 import { handleProcessingError } from './error-handler.ts';
+import { delay } from './retry-utils.ts';
 
 export async function handleWebhookUpdate(
   update: TelegramUpdate,
@@ -40,12 +41,15 @@ export async function handleWebhookUpdate(
     // Step 1: Analyze caption if present
     if (message.caption) {
       try {
+        console.log('Starting caption analysis...');
         productInfo = await analyzeCaptionWithAI(
           message.caption,
           Deno.env.get('SUPABASE_URL') || '',
           Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
         );
-        console.log('Caption analysis result:', productInfo);
+        console.log('Caption analysis completed:', productInfo);
+        // Add small delay after caption analysis
+        await delay(500);
       } catch (error) {
         console.error('Caption analysis error:', error);
       }
@@ -53,6 +57,7 @@ export async function handleWebhookUpdate(
 
     // Step 2: Process message first to ensure we have a message record
     try {
+      console.log('Creating/updating message record...');
       const messageResult = await handleMessageProcessing(
         supabase,
         message,
@@ -63,23 +68,24 @@ export async function handleWebhookUpdate(
       if (messageResult.success) {
         messageRecord = messageResult.messageRecord;
         console.log('Message record created/updated:', messageRecord?.id);
+        // Add delay after message creation
+        await delay(1000);
       } else {
-        // If it's a duplicate message error, log it and continue with media processing
         if (messageResult.error?.includes('duplicate')) {
-          console.log('Duplicate message detected, continuing with media processing');
+          console.log('Duplicate message detected, retrieving existing record...');
           
-          // Get the existing message record
           const { data: existingMessage } = await supabase
             .from('messages')
             .select('*')
             .eq('message_id', message.message_id)
             .eq('chat_id', message.chat.id)
-            .single();
+            .maybeSingle();
           
           if (existingMessage) {
             messageRecord = existingMessage;
+            console.log('Retrieved existing message record:', messageRecord.id);
           } else {
-            // Log the duplicate in failed webhook updates
+            console.log('Logging duplicate message in failed_webhook_updates...');
             await supabase.from('failed_webhook_updates').insert({
               message_id: message.message_id,
               chat_id: message.chat.id,
@@ -107,6 +113,10 @@ export async function handleWebhookUpdate(
     // Step 3: Process media with gathered data
     if (messageRecord) {
       try {
+        console.log('Starting media processing...');
+        // Add delay before media processing
+        await delay(1000);
+        
         mediaResult = await processMedia(
           supabase,
           message,
@@ -116,9 +126,13 @@ export async function handleWebhookUpdate(
           0
         );
 
-        // Step 4: If this is part of a media group, ensure all media is properly linked
+        console.log('Media processing completed:', mediaResult);
+
+        // Step 4: Handle media group synchronization
         if (message.media_group_id) {
-          console.log('Syncing media group:', message.media_group_id);
+          console.log('Handling media group synchronization...');
+          // Add delay before group sync
+          await delay(1500);
           
           const { error: groupUpdateError } = await supabase
             .from('telegram_media')
@@ -139,10 +153,15 @@ export async function handleWebhookUpdate(
 
           if (groupUpdateError) {
             console.error('Error updating media group:', groupUpdateError);
+          } else {
+            console.log('Media group sync completed');
           }
         }
 
-        // Step 5: Update message with final status
+        // Step 5: Final message status update
+        console.log('Updating final message status...');
+        await delay(500);
+        
         const { error: messageUpdateError } = await supabase
           .from('messages')
           .update({
@@ -162,6 +181,8 @@ export async function handleWebhookUpdate(
 
         if (messageUpdateError) {
           console.error('Error updating message status:', messageUpdateError);
+        } else {
+          console.log('Message status updated successfully');
         }
       } catch (error) {
         console.error('Error processing media:', error);
