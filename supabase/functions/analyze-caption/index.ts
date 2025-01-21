@@ -16,7 +16,7 @@ serve(async (req) => {
       throw new Error('Missing required environment variables')
     }
 
-    const { caption, mediaGroupId } = await req.json()
+    const { caption, mediaGroupId, messageId, telegramMediaId } = await req.json()
     
     if (!caption) {
       return new Response(
@@ -42,8 +42,9 @@ serve(async (req) => {
 
             1. product_name: Product name from caption
             2. product_code: Code after # (without the #)
-            3. quantity: Number after "x" (if present), ignore anything in () which should be added to notes or if there a space or anything after the quantity that should be in notes too. example Candy Paint #FISH011425 x 3 (20 behind) should be quantity of 3              4. vendor_uid: Letters before numbers in the code
-            5. purchase_date: Convert 6 digits from code (mmDDyy) to MM/DD/YYYY
+            3. quantity: Number after "x" (if present), ignore anything in () which should be added to notes or if there a space or anything after the quantity that should be in notes too. example Candy Paint #FISH011425 x 3 (20 behind) should be quantity of 3              
+            4. vendor_uid: Letters before numbers in the code
+            5. purchase_date: Convert 6 digits from code (mmDDyy) to YYYY-MM-DD
             6. notes: Any text in parentheses or text that is not part of the product name, product code, purchase date, vendor uid, or quantity
 
             Date format in code:
@@ -56,8 +57,11 @@ serve(async (req) => {
             - product_code: string or null
             - quantity: number or null 
             - vendor_uid: string or null
-            - purchase_date: string or null
+            - purchase_date: string or null (in YYYY-MM-DD format)
             - notes: string or null 
+            - raw_caption: the original caption
+            - analyzed_at: current timestamp in ISO format
+            - confidence_score: number between 0 and 1 indicating how confident you are in the analysis
 
             Example caption: "Runtz Q #Q112124 x 1 (50 behind)"
             Example response: {
@@ -65,8 +69,11 @@ serve(async (req) => {
               "product_code": "Q112124",
               "quantity": 1,
               "vendor_uid": "Q",
-              "purchase_date": "11/21/2024",
-              "notes": "50 behind"
+              "purchase_date": "2024-11-21",
+              "notes": "50 behind",
+              "raw_caption": "Runtz Q #Q112124 x 1 (50 behind)",
+              "analyzed_at": "2024-01-21T08:13:21.830Z",
+              "confidence_score": 0.95
             }
 
             If any part cannot be extracted, set it to null.`
@@ -89,39 +96,55 @@ serve(async (req) => {
     // Initialize Supabase client
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
-    // Convert MM/DD/YYYY to YYYY-MM-DD for database storage
-    let dbPurchaseDate = null
-    if (result.purchase_date) {
-      const [month, day, year] = result.purchase_date.split('/')
-      dbPurchaseDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
-    }
-
-    // Update all media items in the same group
-    if (mediaGroupId) {
-      console.log('Updating media group:', mediaGroupId, 'with data:', {
-        caption,
-        ...result,
-        purchase_date: dbPurchaseDate
-      })
-
-      const { error: updateError } = await supabase
-        .from('telegram_media')
+    // Update the messages table if messageId is provided
+    if (messageId) {
+      const { error: messageError } = await supabase
+        .from('messages')
         .update({
           caption: caption,
           product_name: result.product_name,
           product_code: result.product_code,
           quantity: result.quantity,
           vendor_uid: result.vendor_uid,
-          purchase_date: dbPurchaseDate
+          purchase_date: result.purchase_date,
+          notes: result.notes,
+          analyzed_content: result
         })
-        .eq('telegram_data->media_group_id', mediaGroupId)
+        .eq('id', messageId)
 
-      if (updateError) {
-        console.error('Error updating media group:', updateError)
-        throw updateError
+      if (messageError) {
+        console.error('Error updating message:', messageError)
       }
+    }
 
-      console.log('Successfully updated all media in group:', mediaGroupId)
+    // Update telegram_media table
+    const mediaQuery = supabase
+      .from('telegram_media')
+      .update({
+        caption: caption,
+        product_name: result.product_name,
+        product_code: result.product_code,
+        quantity: result.quantity,
+        vendor_uid: result.vendor_uid,
+        purchase_date: result.purchase_date,
+        notes: result.notes,
+        analyzed_content: result
+      })
+
+    // If we have a specific media ID, update just that record
+    if (telegramMediaId) {
+      mediaQuery.eq('id', telegramMediaId)
+    } 
+    // If we have a media group ID, update all media in the group
+    else if (mediaGroupId) {
+      mediaQuery.eq('telegram_data->media_group_id', mediaGroupId)
+    }
+
+    const { error: mediaError } = await mediaQuery
+
+    if (mediaError) {
+      console.error('Error updating media:', mediaError)
+      throw mediaError
     }
 
     return new Response(

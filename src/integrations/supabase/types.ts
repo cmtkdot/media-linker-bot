@@ -53,6 +53,7 @@ export type Database = {
       }
       messages: {
         Row: {
+          analyzed_content: Json | null
           caption: string | null
           chat_id: number
           created_at: string
@@ -76,6 +77,7 @@ export type Database = {
           vendor_uid: string | null
         }
         Insert: {
+          analyzed_content?: Json | null
           caption?: string | null
           chat_id: number
           created_at?: string
@@ -99,6 +101,7 @@ export type Database = {
           vendor_uid?: string | null
         }
         Update: {
+          analyzed_content?: Json | null
           caption?: string | null
           chat_id?: number
           created_at?: string
@@ -125,6 +128,7 @@ export type Database = {
       }
       telegram_media: {
         Row: {
+          analyzed_content: Json | null
           caption: string | null
           created_at: string
           file_id: string
@@ -148,6 +152,7 @@ export type Database = {
           vendor_uid: string | null
         }
         Insert: {
+          analyzed_content?: Json | null
           caption?: string | null
           created_at?: string
           file_id: string
@@ -171,6 +176,7 @@ export type Database = {
           vendor_uid?: string | null
         }
         Update: {
+          analyzed_content?: Json | null
           caption?: string | null
           created_at?: string
           file_id?: string
