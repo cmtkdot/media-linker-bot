@@ -105,6 +105,17 @@ const MediaGrid = () => {
     return exists ? item.public_url : item.default_public_url;
   };
 
+  const handleVideoHover = (videoElement: HTMLVideoElement) => {
+    videoElement.play().catch(error => {
+      console.log("Autoplay prevented:", error);
+    });
+  };
+
+  const handleVideoLeave = (videoElement: HTMLVideoElement) => {
+    videoElement.pause();
+    videoElement.currentTime = 0;
+  };
+
   if (isLoading) {
     return <div className="text-center p-4">Loading media...</div>;
   }
@@ -176,7 +187,10 @@ const MediaGrid = () => {
                   <video 
                     src={item.public_url || item.default_public_url}
                     className="object-cover w-full h-full"
-                    controls
+                    muted
+                    playsInline
+                    onMouseEnter={(e) => handleVideoHover(e.target as HTMLVideoElement)}
+                    onMouseLeave={(e) => handleVideoLeave(e.target as HTMLVideoElement)}
                     onError={(e) => {
                       const video = e.target as HTMLVideoElement;
                       if (video.src !== item.default_public_url) {
