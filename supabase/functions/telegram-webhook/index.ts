@@ -57,38 +57,69 @@ serve(async (req) => {
         .maybeSingle();
 
       if (messageRecord) {
-        // Check if telegram_media record exists
-        const { data: existingMedia } = await supabase
-          .from('telegram_media')
-          .select('id')
-          .eq('message_id', messageRecord.id)
-          .maybeSingle();
+        let fileId, fileUniqueId, fileType;
+        if (message.photo) {
+          const photo = message.photo[message.photo.length - 1];
+          fileId = photo.file_id;
+          fileUniqueId = photo.file_unique_id;
+          fileType = 'photo';
+        } else if (message.video) {
+          fileId = message.video.file_id;
+          fileUniqueId = message.video.file_unique_id;
+          fileType = 'video';
+        } else if (message.document) {
+          fileId = message.document.file_id;
+          fileUniqueId = message.document.file_unique_id;
+          fileType = 'document';
+        } else if (message.animation) {
+          fileId = message.animation.file_id;
+          fileUniqueId = message.animation.file_unique_id;
+          fileType = 'animation';
+        }
 
-        if (!existingMedia && (message.photo || message.video || message.document || message.animation)) {
-          console.log('Creating missing telegram_media record for message:', messageRecord.id);
-          
-          let fileId, fileUniqueId, fileType;
-          if (message.photo) {
-            const photo = message.photo[message.photo.length - 1]; // Get highest resolution
-            fileId = photo.file_id;
-            fileUniqueId = photo.file_unique_id;
-            fileType = 'photo';
-          } else if (message.video) {
-            fileId = message.video.file_id;
-            fileUniqueId = message.video.file_unique_id;
-            fileType = 'video';
-          } else if (message.document) {
-            fileId = message.document.file_id;
-            fileUniqueId = message.document.file_unique_id;
-            fileType = 'document';
-          } else if (message.animation) {
-            fileId = message.animation.file_id;
-            fileUniqueId = message.animation.file_unique_id;
-            fileType = 'animation';
-          }
+        if (fileId && fileUniqueId) {
+          // Check if media record exists using file_unique_id
+          const { data: existingMedia } = await supabase
+            .from('telegram_media')
+            .select('*')
+            .eq('file_unique_id', fileUniqueId)
+            .maybeSingle();
 
-          if (fileId && fileUniqueId) {
-            const { error: mediaError } = await supabase
+          if (existingMedia) {
+            console.log('Updating existing telegram_media record:', existingMedia.id);
+            
+            const { error: updateError } = await supabase
+              .from('telegram_media')
+              .update({
+                file_id: fileId,
+                message_id: messageRecord.id,
+                caption: messageRecord.caption,
+                product_name: messageRecord.product_name,
+                product_code: messageRecord.product_code,
+                quantity: messageRecord.quantity,
+                vendor_uid: messageRecord.vendor_uid,
+                purchase_date: messageRecord.purchase_date,
+                notes: messageRecord.notes,
+                analyzed_content: messageRecord.analyzed_content,
+                telegram_data: {
+                  message_id: message.message_id,
+                  chat_id: message.chat.id,
+                  media_group_id: message.media_group_id,
+                  date: message.date,
+                  caption: message.caption
+                }
+              })
+              .eq('id', existingMedia.id);
+
+            if (updateError) {
+              console.error('Error updating telegram_media record:', updateError);
+            } else {
+              console.log('Successfully updated telegram_media record:', existingMedia.id);
+            }
+          } else {
+            console.log('Creating new telegram_media record for message:', messageRecord.id);
+            
+            const { error: insertError } = await supabase
               .from('telegram_media')
               .insert({
                 file_id: fileId,
@@ -112,8 +143,8 @@ serve(async (req) => {
                 }
               });
 
-            if (mediaError) {
-              console.error('Error creating telegram_media record:', mediaError);
+            if (insertError) {
+              console.error('Error creating telegram_media record:', insertError);
             } else {
               console.log('Successfully created telegram_media record for message:', messageRecord.id);
             }
