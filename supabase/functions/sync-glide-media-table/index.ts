@@ -57,6 +57,7 @@ serve(async (req) => {
       supabase_table_name: glideConfig.supabase_table_name
     });
 
+    // Initialize Glide table with the configuration
     const table = new Table(glideConfig.api_token, glideConfig.table_id);
 
     let result;
@@ -67,7 +68,7 @@ serve(async (req) => {
         // Get all rows from both systems
         const [glideRows, { data: supabaseRows, error: supabaseError }] = await Promise.all([
           table.rows(),
-          supabase.from('telegram_media').select('*')
+          supabase.from(glideConfig.supabase_table_name).select('*')
         ]);
 
         if (supabaseError) {
@@ -110,8 +111,17 @@ serve(async (req) => {
                 purchase_date: supabaseRow.purchase_date,
                 notes: supabaseRow.notes,
                 telegram_data: JSON.stringify(supabaseRow.telegram_data),
+                glide_data: JSON.stringify(supabaseRow.glide_data),
+                media_metadata: JSON.stringify(supabaseRow.media_metadata),
+                processed: supabaseRow.processed,
+                processing_error: supabaseRow.processing_error,
+                last_synced_at: supabaseRow.last_synced_at,
                 created_at: supabaseRow.created_at,
-                updated_at: supabaseRow.updated_at
+                updated_at: supabaseRow.updated_at,
+                message_id: supabaseRow.message_id,
+                analyzed_content: JSON.stringify(supabaseRow.analyzed_content),
+                purchase_order_uid: supabaseRow.purchase_order_uid,
+                default_public_url: supabaseRow.default_public_url
               });
               syncResult.added++;
             } else {
@@ -131,7 +141,15 @@ serve(async (req) => {
                   purchase_date: supabaseRow.purchase_date,
                   notes: supabaseRow.notes,
                   telegram_data: JSON.stringify(supabaseRow.telegram_data),
-                  updated_at: supabaseRow.updated_at
+                  glide_data: JSON.stringify(supabaseRow.glide_data),
+                  media_metadata: JSON.stringify(supabaseRow.media_metadata),
+                  processed: supabaseRow.processed,
+                  processing_error: supabaseRow.processing_error,
+                  last_synced_at: supabaseRow.last_synced_at,
+                  updated_at: supabaseRow.updated_at,
+                  analyzed_content: JSON.stringify(supabaseRow.analyzed_content),
+                  purchase_order_uid: supabaseRow.purchase_order_uid,
+                  default_public_url: supabaseRow.default_public_url
                 });
                 syncResult.updated++;
               }
@@ -152,7 +170,7 @@ serve(async (req) => {
 
               if (glideUpdatedAt > supabaseUpdatedAt) {
                 const { error: updateError } = await supabase
-                  .from('telegram_media')
+                  .from(glideConfig.supabase_table_name)
                   .update({
                     caption: glideRow.get('caption'),
                     product_name: glideRow.get('product_name'),
@@ -161,13 +179,14 @@ serve(async (req) => {
                     vendor_uid: glideRow.get('vendor_uid'),
                     purchase_date: glideRow.get('purchase_date'),
                     notes: glideRow.get('notes'),
-                    updated_at: glideRow.get('updated_at')
+                    updated_at: glideRow.get('updated_at'),
+                    analyzed_content: JSON.parse(glideRow.get('analyzed_content') as string || '{}'),
+                    purchase_order_uid: glideRow.get('purchase_order_uid'),
+                    default_public_url: glideRow.get('default_public_url')
                   })
                   .eq('id', id);
 
-                if (updateError) {
-                  throw updateError;
-                }
+                if (updateError) throw updateError;
                 syncResult.updated++;
               }
             }
