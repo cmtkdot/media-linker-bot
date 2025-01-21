@@ -73,30 +73,30 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
 
   return (
     <Card className="overflow-hidden group relative hover:shadow-lg transition-all duration-300" onClick={() => onPreview(item)}>
-      <div className="absolute inset-0 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-        <Button
-          variant="outline"
-          size="icon"
-          className="bg-white/80 hover:bg-white"
-          onClick={(e) => {
-            e.stopPropagation();
-            onEdit(item);
-          }}
-        >
-          <Pencil className="h-4 w-4" />
-        </Button>
-        {item.file_type === 'video' && (
+      <div className="aspect-square relative">
+        <div className="absolute inset-0 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
           <Button
             variant="outline"
             size="icon"
             className="bg-white/80 hover:bg-white"
-            onClick={(e) => handlePlayClick(e, e.currentTarget.parentElement?.parentElement?.querySelector('video') as HTMLVideoElement)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit(item);
+            }}
           >
-            {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+            <Pencil className="h-4 w-4" />
           </Button>
-        )}
-      </div>
-      <div className="aspect-square relative">
+          {item.file_type === 'video' && (
+            <Button
+              variant="outline"
+              size="icon"
+              className="bg-white/80 hover:bg-white"
+              onClick={(e) => handlePlayClick(e, e.currentTarget.parentElement?.parentElement?.querySelector('video') as HTMLVideoElement)}
+            >
+              {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+            </Button>
+          )}
+        </div>
         {item.file_type === 'video' ? (
           <div className="relative h-full">
             <video 
@@ -117,17 +117,15 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
             onError={(e) => handleImageError(e.target as HTMLImageElement, item.default_public_url)}
           />
         )}
-        {/* Non-hover overlay with caption and metadata */}
-        <div className="absolute inset-0 flex flex-col justify-between p-4 group-hover:opacity-0 transition-opacity bg-black/40 text-white">
-          <div className="flex-1 flex items-center justify-center">
-            <p className="text-center font-medium text-lg">
-              {item.caption || 'No caption'}
-            </p>
-          </div>
-          <div className="flex justify-between items-end text-sm">
-            <span>{item.purchase_date ? new Date(item.purchase_date).toLocaleDateString() : '-'}</span>
-            <span className="capitalize">{item.file_type}</span>
-          </div>
+      </div>
+      {/* Non-hover info container */}
+      <div className="p-4 bg-white border-t">
+        <p className="text-center font-medium text-lg mb-4">
+          {item.caption || 'No caption'}
+        </p>
+        <div className="flex justify-between items-center text-sm text-gray-600">
+          <span>{item.purchase_date ? new Date(item.purchase_date).toLocaleDateString() : '-'}</span>
+          <span className="capitalize">{item.file_type}</span>
         </div>
       </div>
       <div className="p-2 text-sm space-y-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/95 absolute bottom-0 left-0 right-0">
