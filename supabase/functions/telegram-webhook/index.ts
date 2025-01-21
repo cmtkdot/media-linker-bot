@@ -47,9 +47,47 @@ interface TelegramUpdate {
       file_size?: number;
     };
     media_group_id?: string;
-    forward_from?: any;
-    forward_from_chat?: any;
-    forward_date?: number;
+  };
+  channel_post?: {
+    message_id: number;
+    sender_chat: any;
+    chat: any;
+    date: number;
+    text?: string;
+    caption?: string;
+    photo?: Array<{
+      file_id: string;
+      file_unique_id: string;
+      width: number;
+      height: number;
+      file_size?: number;
+    }>;
+    video?: {
+      file_id: string;
+      file_unique_id: string;
+      width: number;
+      height: number;
+      duration: number;
+      mime_type?: string;
+      file_size?: number;
+    };
+    document?: {
+      file_id: string;
+      file_unique_id: string;
+      file_name?: string;
+      mime_type?: string;
+      file_size?: number;
+    };
+    animation?: {
+      file_id: string;
+      file_unique_id: string;
+      width: number;
+      height: number;
+      duration: number;
+      mime_type?: string;
+      file_size?: number;
+    };
+    media_group_id?: string;
   };
 }
 
@@ -68,8 +106,58 @@ async function downloadTelegramFile(filePath: string, botToken: string) {
   return response;
 }
 
+async function syncMediaGroupCaption(
+  supabase: any,
+  mediaGroupId: string,
+  caption: string | undefined,
+  telegramData: any
+) {
+  if (!mediaGroupId || !caption) return;
+
+  // Extract product information from caption
+  const productInfo = {
+    product_name: undefined as string | undefined,
+    product_code: undefined as string | undefined,
+    quantity: undefined as number | undefined,
+  };
+
+  if (caption) {
+    const parts = caption.split('#');
+    if (parts.length > 1) {
+      productInfo.product_name = parts[0].trim();
+      const codeParts = parts[1].split('x').map(part => part.trim());
+      if (codeParts.length > 0) {
+        productInfo.product_code = codeParts[0];
+        if (codeParts.length > 1) {
+          const quantity = parseFloat(codeParts[1]);
+          if (!isNaN(quantity)) {
+            productInfo.quantity = quantity;
+          }
+        }
+      }
+    }
+  }
+
+  // Update all media in the same group
+  const { error } = await supabase
+    .from('telegram_media')
+    .update({
+      product_name: productInfo.product_name,
+      product_code: productInfo.product_code,
+      quantity: productInfo.quantity,
+      telegram_data: {
+        ...telegramData,
+        caption,
+      },
+    })
+    .eq('telegram_data->>media_group_id', mediaGroupId);
+
+  if (error) {
+    console.error('Error syncing media group caption:', error);
+  }
+}
+
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -99,7 +187,9 @@ serve(async (req) => {
     const update: TelegramUpdate = await req.json();
     console.log('Received Telegram update:', JSON.stringify(update));
 
-    if (!update.message) {
+    // Handle both regular messages and channel posts
+    const message = update.message || update.channel_post;
+    if (!message) {
       return new Response(
         JSON.stringify({ message: 'No message in update' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
@@ -112,10 +202,10 @@ serve(async (req) => {
     let mediaType = '';
 
     for (const type of mediaTypes) {
-      if (update.message[type]) {
+      if (message[type]) {
         mediaFile = type === 'photo' 
-          ? update.message[type]![update.message[type]!.length - 1] // Get the largest photo
-          : update.message[type];
+          ? message[type]![message[type]!.length - 1] // Get the largest photo
+          : message[type];
         mediaType = type;
         break;
       }
@@ -134,14 +224,17 @@ serve(async (req) => {
       throw new Error('Could not get file info from Telegram');
     }
 
+    // Generate unique filename based on file type and unique ID
+    const fileExt = fileInfo.file_path.split('.').pop();
+    const uniqueFileName = `${mediaType}_${mediaFile.file_unique_id}_${Date.now()}.${fileExt}`;
+
     // Download file from Telegram
     const fileResponse = await downloadTelegramFile(fileInfo.file_path, TELEGRAM_BOT_TOKEN);
-    const fileName = `${mediaFile.file_unique_id}.${fileInfo.file_path.split('.').pop()}`;
 
     // Upload to Supabase Storage
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('media')
-      .upload(fileName, fileResponse.body, {
+      .upload(uniqueFileName, fileResponse.body, {
         contentType: mediaFile.mime_type || 'application/octet-stream',
         upsert: false
       });
@@ -152,21 +245,18 @@ serve(async (req) => {
 
     // Prepare telegram_data
     const telegramData = {
-      message_id: update.message.message_id,
-      from: update.message.from,
-      chat: update.message.chat,
-      date: update.message.date,
-      caption: update.message.caption,
-      media_group_id: update.message.media_group_id,
-      forward_from: update.message.forward_from,
-      forward_from_chat: update.message.forward_from_chat,
-      forward_date: update.message.forward_date,
+      message_id: message.message_id,
+      sender_chat: message.sender_chat,
+      chat: message.chat,
+      date: message.date,
+      caption: message.caption,
+      media_group_id: message.media_group_id,
       file_size: mediaFile.file_size,
       mime_type: mediaFile.mime_type,
       width: mediaFile.width,
       height: mediaFile.height,
       duration: 'duration' in mediaFile ? mediaFile.duration : null,
-      storage_path: fileName
+      storage_path: uniqueFileName
     };
 
     // Insert into telegram_media table
@@ -177,10 +267,21 @@ serve(async (req) => {
         file_unique_id: mediaFile.file_unique_id,
         file_type: mediaType,
         telegram_data: telegramData,
+        public_url: `https://kzfamethztziwqiocbwz.supabase.co/storage/v1/object/public/media/${uniqueFileName}`,
       });
 
     if (dbError) {
       throw new Error(`Failed to insert into database: ${dbError.message}`);
+    }
+
+    // Sync caption for media group if applicable
+    if (message.media_group_id && message.caption) {
+      await syncMediaGroupCaption(
+        supabase,
+        message.media_group_id,
+        message.caption,
+        telegramData
+      );
     }
 
     return new Response(
