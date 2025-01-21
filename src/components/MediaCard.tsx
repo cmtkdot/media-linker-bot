@@ -69,7 +69,7 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
   };
 
   return (
-    <Card className="overflow-hidden group relative hover:shadow-lg transition-all duration-300">
+    <Card className="overflow-hidden group relative hover:shadow-lg transition-all duration-300" onClick={() => onPreview(item)}>
       <div className="absolute inset-0 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
         <Button
           variant="outline"
@@ -93,10 +93,7 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
           </Button>
         )}
       </div>
-      <div 
-        className="aspect-square relative cursor-pointer" 
-        onClick={() => onPreview(item)}
-      >
+      <div className="aspect-square relative">
         {item.file_type === 'video' ? (
           <div className="relative h-full">
             <video 
