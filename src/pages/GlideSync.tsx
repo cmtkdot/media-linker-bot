@@ -2,8 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
 import { GlideSyncHeader } from "@/components/GlideSyncHeader";
-import { Button } from "@/components/ui/button";
-import { Link } from "react-router-dom";
+import { ConnectedGlideTables } from "@/components/ConnectedGlideTables";
 
 interface GlideConfig {
   id: string;
@@ -18,7 +17,7 @@ interface GlideConfig {
 }
 
 const GlideSync = () => {
-  const { data: configs, isLoading } = useQuery({
+  const { data: configs, isLoading, refetch } = useQuery({
     queryKey: ['glide-configs'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -41,13 +40,8 @@ const GlideSync = () => {
 
   return (
     <div className="container mx-auto py-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Glide Sync Settings</h1>
-        <Button variant="outline" asChild>
-          <Link to="/glide-connections">Manage Connections</Link>
-        </Button>
-      </div>
       <GlideSyncHeader configs={configs || []} isLoading={isLoading} />
+      <ConnectedGlideTables configs={configs || []} onRefresh={refetch} />
     </div>
   );
 };

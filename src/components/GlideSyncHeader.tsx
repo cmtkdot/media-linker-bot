@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { Link } from "react-router-dom";
 import {
   Select,
   SelectContent,
@@ -75,7 +76,12 @@ export function GlideSyncHeader({ configs, isLoading }: GlideSyncHeaderProps) {
 
   return (
     <div className="flex items-center justify-between">
-      <h1 className="text-2xl font-semibold">Glide Sync Settings</h1>
+      <div className="flex items-center gap-4">
+        <h1 className="text-2xl font-semibold">Glide Sync Settings</h1>
+        <Button variant="outline" asChild>
+          <Link to="/glide-connections">Manage Connections</Link>
+        </Button>
+      </div>
       <div className="flex items-center gap-4">
         <Select value={selectedTableId} onValueChange={setSelectedTableId}>
           <SelectTrigger className="w-[200px]">
