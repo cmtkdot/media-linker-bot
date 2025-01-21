@@ -38,7 +38,10 @@ export async function handleWebhookUpdate(
   let mediaResult = null;
 
   try {
-    // Step 1: Analyze caption if present
+    // Step 1: Initial delay to ensure database is ready
+    await delay(500);
+
+    // Step 2: Analyze caption if present
     if (message.caption) {
       try {
         console.log('Starting caption analysis...');
@@ -48,14 +51,13 @@ export async function handleWebhookUpdate(
           Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
         );
         console.log('Caption analysis completed:', productInfo);
-        // Add small delay after caption analysis
-        await delay(500);
+        await delay(1000); // Delay after caption analysis
       } catch (error) {
         console.error('Caption analysis error:', error);
       }
     }
 
-    // Step 2: Process message first to ensure we have a message record
+    // Step 3: Create/update message record
     try {
       console.log('Creating/updating message record...');
       const messageResult = await handleMessageProcessing(
@@ -68,8 +70,7 @@ export async function handleWebhookUpdate(
       if (messageResult.success) {
         messageRecord = messageResult.messageRecord;
         console.log('Message record created/updated:', messageRecord?.id);
-        // Add delay after message creation
-        await delay(1000);
+        await delay(1500); // Longer delay after message creation
       } else {
         if (messageResult.error?.includes('duplicate')) {
           console.log('Duplicate message detected, retrieving existing record...');
@@ -84,6 +85,7 @@ export async function handleWebhookUpdate(
           if (existingMessage) {
             messageRecord = existingMessage;
             console.log('Retrieved existing message record:', messageRecord.id);
+            await delay(1000); // Delay after retrieving existing message
           } else {
             console.log('Logging duplicate message in failed_webhook_updates...');
             await supabase.from('failed_webhook_updates').insert({
@@ -110,12 +112,11 @@ export async function handleWebhookUpdate(
       throw error;
     }
 
-    // Step 3: Process media with gathered data
+    // Step 4: Process media with gathered data
     if (messageRecord) {
       try {
         console.log('Starting media processing...');
-        // Add delay before media processing
-        await delay(1000);
+        await delay(2000); // Significant delay before media processing
         
         mediaResult = await processMedia(
           supabase,
@@ -127,12 +128,12 @@ export async function handleWebhookUpdate(
         );
 
         console.log('Media processing completed:', mediaResult);
+        await delay(1500); // Delay after media processing
 
-        // Step 4: Handle media group synchronization
+        // Step 5: Handle media group synchronization
         if (message.media_group_id) {
           console.log('Handling media group synchronization...');
-          // Add delay before group sync
-          await delay(1500);
+          await delay(2000); // Longer delay before group sync
           
           const { error: groupUpdateError } = await supabase
             .from('telegram_media')
@@ -155,12 +156,13 @@ export async function handleWebhookUpdate(
             console.error('Error updating media group:', groupUpdateError);
           } else {
             console.log('Media group sync completed');
+            await delay(1000); // Delay after group sync
           }
         }
 
-        // Step 5: Final message status update
+        // Step 6: Final message status update
         console.log('Updating final message status...');
-        await delay(500);
+        await delay(1000); // Delay before final status update
         
         const { error: messageUpdateError } = await supabase
           .from('messages')
@@ -190,7 +192,7 @@ export async function handleWebhookUpdate(
       }
     }
 
-    // Step 6: Clean up old failed records
+    // Step 7: Clean up old failed records
     try {
       await cleanupFailedRecords(supabase);
     } catch (error) {
