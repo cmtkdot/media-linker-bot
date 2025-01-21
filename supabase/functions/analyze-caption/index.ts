@@ -1,31 +1,35 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { corsHeaders } from "../_shared/cors.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY')
-    const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-
-    if (!OPENAI_API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      throw new Error('Missing required environment variables')
+    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+    if (!OPENAI_API_KEY) {
+      console.error('Missing OPENAI_API_KEY');
+      throw new Error('OpenAI API key is not configured');
     }
 
-    const { caption, mediaGroupId, messageId, telegramMediaId } = await req.json()
+    const { caption, mediaGroupId, messageId, telegramMediaId } = await req.json();
     
     if (!caption) {
+      console.log('No caption provided, returning null result');
       return new Response(
-        JSON.stringify({ error: 'Caption is required' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-      )
+        JSON.stringify(null),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    console.log('Analyzing caption:', caption)
+    console.log('Analyzing caption:', caption);
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -34,7 +38,7 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4',
+        model: 'gpt-4o-mini',
         messages: [
           {
             role: 'system',
@@ -65,84 +69,46 @@ serve(async (req) => {
         ],
         temperature: 0.1
       }),
-    })
+    });
 
-    const data = await response.json()
-    console.log('AI Analysis result:', data)
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error('OpenAI API error:', errorData);
+      throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    console.log('OpenAI API response:', data);
     
     if (!data.choices?.[0]?.message?.content) {
-      throw new Error('Invalid response from OpenAI')
+      console.error('Invalid response from OpenAI:', data);
+      throw new Error('Invalid response from OpenAI');
     }
 
-    const result = JSON.parse(data.choices[0].message.content)
-    console.log('Parsed result:', result)
-
-    // Initialize Supabase client
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-
-    // Update the messages table if messageId is provided
-    if (messageId) {
-      const { error: messageError } = await supabase
-        .from('messages')
-        .update({
-          caption: caption,
-          product_name: result.product_name,
-          product_code: result.product_code,
-          quantity: result.quantity,
-          vendor_uid: result.vendor_uid,
-          purchase_date: result.purchase_date,
-          notes: result.notes,
-          analyzed_content: result
-        })
-        .eq('id', messageId)
-
-      if (messageError) {
-        console.error('Error updating message:', messageError)
-        throw messageError
-      }
-    }
-
-    // Update telegram_media table based on provided identifiers
-    let mediaQuery = supabase
-      .from('telegram_media')
-      .update({
-        caption: caption,
-        product_name: result.product_name,
-        product_code: result.product_code,
-        quantity: result.quantity,
-        vendor_uid: result.vendor_uid,
-        purchase_date: result.purchase_date,
-        notes: result.notes,
-        analyzed_content: result
-      })
-
-    // If we have a specific media ID, update just that record
-    if (telegramMediaId) {
-      mediaQuery = mediaQuery.eq('id', telegramMediaId)
-    } 
-    // If we have a media group ID, update all media in the group
-    else if (mediaGroupId) {
-      mediaQuery = mediaQuery.eq('telegram_data->media_group_id', mediaGroupId)
-    } else {
-      throw new Error('Either telegramMediaId or mediaGroupId is required for updates')
-    }
-
-    const { error: mediaError } = await mediaQuery
-
-    if (mediaError) {
-      console.error('Error updating media:', mediaError)
-      throw mediaError
+    let result;
+    try {
+      result = JSON.parse(data.choices[0].message.content);
+      console.log('Parsed result:', result);
+    } catch (parseError) {
+      console.error('Error parsing OpenAI response:', parseError);
+      throw new Error('Failed to parse OpenAI response');
     }
 
     return new Response(
       JSON.stringify(result),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    );
   } catch (error) {
-    console.error('Error analyzing caption:', error)
+    console.error('Error in analyze-caption function:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-    )
+      JSON.stringify({ 
+        error: error.message,
+        details: error.stack
+      }),
+      { 
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    );
   }
-})
+});
