@@ -14,7 +14,8 @@ import { Input } from "@/components/ui/input";
 import { Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 
-type ValidTableName = "messages" | "failed_webhook_updates" | "glide_config" | "glide_sync_queue" | "telegram_media" | "duplicate_messages";
+// Only include actual tables, not views
+type ValidTableName = "messages" | "failed_webhook_updates" | "glide_config" | "glide_sync_queue" | "telegram_media";
 
 interface GlideConfig {
   id: string;
@@ -35,8 +36,56 @@ export function GlideDataGrid({ configs }: GlideDataGridProps) {
   const queryClient = useQueryClient();
 
   const isValidTable = (tableName: string): tableName is ValidTableName => {
-    const validTables: ValidTableName[] = ["messages", "failed_webhook_updates", "glide_config", "glide_sync_queue", "telegram_media", "duplicate_messages"];
+    const validTables: ValidTableName[] = ["messages", "failed_webhook_updates", "glide_config", "glide_sync_queue", "telegram_media"];
     return validTables.includes(tableName as ValidTableName);
+  };
+
+  const getDefaultInsertData = (tableName: ValidTableName) => {
+    const base = { created_at: new Date().toISOString() };
+    
+    switch (tableName) {
+      case "telegram_media":
+        return {
+          ...base,
+          file_id: "",
+          file_type: "photo",
+          file_unique_id: "",
+          telegram_data: {},
+          glide_data: {},
+          media_metadata: {}
+        };
+      case "messages":
+        return {
+          ...base,
+          message_id: 0,
+          chat_id: 0,
+          sender_info: {},
+          message_type: "text",
+          message_data: {}
+        };
+      case "failed_webhook_updates":
+        return {
+          ...base,
+          error_message: "New record"
+        };
+      case "glide_config":
+        return {
+          ...base,
+          app_id: "",
+          table_id: "",
+          table_name: "",
+          api_token: ""
+        };
+      case "glide_sync_queue":
+        return {
+          ...base,
+          table_name: "",
+          record_id: "",
+          operation: "INSERT"
+        };
+      default:
+        return base;
+    }
   };
 
   const { data: tableData, isLoading } = useQuery({
@@ -153,9 +202,10 @@ export function GlideDataGrid({ configs }: GlideDataGridProps) {
     if (!config?.supabase_table_name || !isValidTable(config.supabase_table_name)) return;
 
     try {
+      const defaultData = getDefaultInsertData(config.supabase_table_name);
       const { error } = await supabase
         .from(config.supabase_table_name)
-        .insert([{ created_at: new Date().toISOString() }]);
+        .insert([defaultData]);
 
       if (error) throw error;
 
