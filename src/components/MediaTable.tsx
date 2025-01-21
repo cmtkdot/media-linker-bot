@@ -103,6 +103,7 @@ const MediaTable = ({ data, onEdit }: MediaTableProps) => {
             <TableHead>Vendor UID</TableHead>
             <TableHead>Purchase Date</TableHead>
             <TableHead>Quantity</TableHead>
+            <TableHead>Notes</TableHead>
             <TableHead>Type</TableHead>
             <TableHead>Actions</TableHead>
           </TableRow>
@@ -130,6 +131,7 @@ const MediaTable = ({ data, onEdit }: MediaTableProps) => {
               <TableCell>{item.vendor_uid || '-'}</TableCell>
               <TableCell>{formatDate(item.purchase_date)}</TableCell>
               <TableCell>{item.quantity || '-'}</TableCell>
+              <TableCell>{item.notes || '-'}</TableCell>
               <TableCell className="capitalize">{item.file_type}</TableCell>
               <TableCell>
                 <div className="flex space-x-2">

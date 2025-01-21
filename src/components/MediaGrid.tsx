@@ -26,6 +26,7 @@ interface MediaItem {
   quantity?: number;
   vendor_uid?: string;
   purchase_date?: string;
+  notes?: string;
   created_at: string;
   telegram_data?: any;
   message_id?: string;
@@ -128,7 +129,8 @@ const MediaGrid = () => {
           product_code: editItem.product_code,
           quantity: editItem.quantity,
           vendor_uid: editItem.vendor_uid,
-          purchase_date: editItem.purchase_date
+          purchase_date: editItem.purchase_date,
+          notes: editItem.notes
         })
         .eq('id', editItem.id);
 
@@ -233,13 +235,14 @@ const MediaGrid = () => {
                   />
                 )}
                 <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity p-4">
-                  <div className="text-white">
+                  <div className="text-white space-y-1">
                     {item.caption && <p className="font-medium mb-2">{item.caption}</p>}
                     {item.product_name && <p className="text-sm">{item.product_name}</p>}
                     {item.product_code && <p className="text-sm">Code: #{item.product_code}</p>}
                     {item.vendor_uid && <p className="text-sm">Vendor: {item.vendor_uid}</p>}
                     {item.purchase_date && <p className="text-sm">Purchased: {formatDate(item.purchase_date)}</p>}
                     {item.quantity && <p className="text-sm">Quantity: {item.quantity}</p>}
+                    {item.notes && <p className="text-sm">Notes: {item.notes}</p>}
                   </div>
                 </div>
               </div>
@@ -300,7 +303,7 @@ const MediaGrid = () => {
               <Input
                 id="purchase_date"
                 type="date"
-                value={formatDate(editItem?.purchase_date || null) || ''}
+                value={editItem?.purchase_date || ''}
                 onChange={(e) => setEditItem(prev => prev ? {...prev, purchase_date: e.target.value} : null)}
               />
             </div>
@@ -311,6 +314,14 @@ const MediaGrid = () => {
                 type="number"
                 value={editItem?.quantity || ''}
                 onChange={(e) => setEditItem(prev => prev ? {...prev, quantity: Number(e.target.value)} : null)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="notes">Notes</Label>
+              <Input
+                id="notes"
+                value={editItem?.notes || ''}
+                onChange={(e) => setEditItem(prev => prev ? {...prev, notes: e.target.value} : null)}
               />
             </div>
           </div>
