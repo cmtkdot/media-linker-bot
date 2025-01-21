@@ -61,7 +61,7 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
   };
 
   return (
-    <Card className="overflow-hidden group relative">
+    <Card className="overflow-hidden group relative hover:shadow-lg transition-all duration-300">
       <Button
         variant="outline"
         size="icon"
@@ -106,27 +106,23 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
           />
         )}
       </div>
-      <div className="p-2 text-sm space-y-1">
-        <p className="font-medium truncate">{item.product_name || 'Untitled'}</p>
-        <p className="text-muted-foreground capitalize">{item.file_type}</p>
-        {item.telegram_data?.chat?.type && (
-          <p className="text-muted-foreground">Type: {item.telegram_data.chat.type}</p>
-        )}
-        {item.telegram_data?.chat?.title && (
-          <p className="text-muted-foreground">Channel: {item.telegram_data.chat.title}</p>
-        )}
-        {item.quantity && (
-          <p className="text-muted-foreground">Quantity: {item.quantity}</p>
-        )}
-        {item.vendor_uid && (
-          <p className="text-muted-foreground">Vendor: {item.vendor_uid}</p>
-        )}
-        {item.purchase_date && (
-          <p className="text-muted-foreground">Purchase Date: {new Date(item.purchase_date).toLocaleDateString()}</p>
-        )}
-        {item.notes && (
-          <p className="text-muted-foreground">Notes: {item.notes}</p>
-        )}
+      <div className="p-2 text-sm space-y-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/95 absolute bottom-0 left-0 right-0">
+        <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+          <div>
+            <p className="font-medium truncate">{item.product_name || 'Untitled'}</p>
+            <p className="text-muted-foreground">Code: {item.product_code || '-'}</p>
+            <p className="text-muted-foreground">Quantity: {item.quantity || '-'}</p>
+            <p className="text-muted-foreground">Vendor: {item.vendor_uid || '-'}</p>
+          </div>
+          <div>
+            <p className="text-muted-foreground">Type: {item.telegram_data?.chat?.type || '-'}</p>
+            <p className="text-muted-foreground">Channel: {item.telegram_data?.chat?.title || '-'}</p>
+            <p className="text-muted-foreground">Date: {item.purchase_date ? new Date(item.purchase_date).toLocaleDateString() : '-'}</p>
+            {item.notes && (
+              <p className="text-muted-foreground">Notes: {item.notes}</p>
+            )}
+          </div>
+        </div>
       </div>
     </Card>
   );
