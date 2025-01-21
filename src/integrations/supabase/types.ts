@@ -228,6 +228,7 @@ export type Database = {
           purchase_order_uid: string | null
           quantity: number | null
           telegram_data: Json
+          telegram_media_row_id: string | null
           updated_at: string
           vendor_uid: string | null
         }
@@ -254,6 +255,7 @@ export type Database = {
           purchase_order_uid?: string | null
           quantity?: number | null
           telegram_data?: Json
+          telegram_media_row_id?: string | null
           updated_at?: string
           vendor_uid?: string | null
         }
@@ -280,6 +282,7 @@ export type Database = {
           purchase_order_uid?: string | null
           quantity?: number | null
           telegram_data?: Json
+          telegram_media_row_id?: string | null
           updated_at?: string
           vendor_uid?: string | null
         }
