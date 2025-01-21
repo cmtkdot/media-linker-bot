@@ -51,22 +51,24 @@ serve(async (req) => {
     if (!config) throw new Error('Configuration not found');
     if (!config.supabase_table_name) throw new Error('No Supabase table linked');
 
-    // Get API token from config or environment
-    const apiToken = config.api_token || Deno.env.get('GLIDE_API_TOKEN');
+    // Get API token from config
+    const apiToken = config.api_token;
     if (!apiToken) {
-      throw new Error('No API token available');
+      throw new Error('No API token found in configuration');
     }
 
-    // Validate API token format
-    if (typeof apiToken !== 'string' || apiToken.trim() === '') {
-      throw new Error('Invalid API token format');
+    // Validate API token format and clean it
+    const cleanToken = apiToken.trim();
+    if (!cleanToken) {
+      throw new Error('Invalid API token format: token is empty');
     }
 
     console.log('Starting sync with config:', {
       table_name: config.table_name,
       supabase_table_name: config.supabase_table_name,
-      has_token: !!apiToken,
-      token_length: apiToken.length
+      has_token: true,
+      token_length: cleanToken.length,
+      token_preview: `${cleanToken.substring(0, 5)}...${cleanToken.substring(cleanToken.length - 5)}`
     });
 
     // Get all telegram_media records from Supabase
@@ -76,33 +78,42 @@ serve(async (req) => {
 
     if (fetchError) throw fetchError;
 
-    // Make request to Glide API with the token
+    // Make request to Glide API with proper authorization
     const glideResponse = await fetch(`https://api.glideapp.io/api/tables/${config.table_id}/rows`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${apiToken.trim()}`,
+        'Authorization': `Bearer ${cleanToken}`,
         'Content-Type': 'application/json',
       },
     });
 
     if (!glideResponse.ok) {
       const errorText = await glideResponse.text();
-      console.error('Glide API error:', {
+      const errorDetails = {
         status: glideResponse.status,
         statusText: glideResponse.statusText,
         error: errorText,
         config: {
           table_id: config.table_id,
-          has_token: !!apiToken,
-          token_length: apiToken.length,
-          auth_header: `Bearer ${apiToken.substring(0, 5)}...${apiToken.substring(apiToken.length - 5)}`
+          has_token: true,
+          token_length: cleanToken.length,
+          auth_header_preview: `Bearer ${cleanToken.substring(0, 5)}...${cleanToken.substring(cleanToken.length - 5)}`
         }
-      });
-      throw new Error(`Glide API error: ${JSON.stringify({
-        status: glideResponse.status,
-        statusText: glideResponse.statusText,
-        error: errorText
-      }, null, 2)}`);
+      };
+      
+      console.error('Glide API error:', errorDetails);
+      
+      // Provide more specific error messages based on status code
+      let errorMessage = 'Glide API error';
+      if (glideResponse.status === 401) {
+        errorMessage = 'Invalid or expired Glide API token. Please check your configuration.';
+      } else if (glideResponse.status === 403) {
+        errorMessage = 'Access forbidden. Please verify your Glide API permissions.';
+      } else if (glideResponse.status === 404) {
+        errorMessage = 'Glide table not found. Please verify your table ID.';
+      }
+      
+      throw new Error(`${errorMessage}: ${JSON.stringify(errorDetails, null, 2)}`);
     }
 
     const glideData = await glideResponse.json() as GlideRecord[];
