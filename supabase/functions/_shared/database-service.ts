@@ -14,11 +14,12 @@ export async function createMessage(supabase: any, message: any, productInfo: an
       media_group_id: message.media_group_id,
       status: 'pending',
       retry_count: 0,
-      ...(productInfo && {
-        product_name: productInfo.product_name,
-        product_code: productInfo.product_code,
-        quantity: productInfo.quantity
-      })
+      vendor_uid: message.vendor_uid || productInfo?.vendor_uid,
+      purchase_date: message.purchase_date || productInfo?.purchase_date,
+      notes: message.notes || productInfo?.notes,
+      product_name: message.product_name || productInfo?.product_name,
+      product_code: message.product_code || productInfo?.product_code,
+      quantity: message.quantity || productInfo?.quantity
     })
     .select()
     .single();

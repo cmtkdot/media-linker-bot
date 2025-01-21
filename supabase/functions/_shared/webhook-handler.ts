@@ -72,7 +72,18 @@ export async function handleWebhookUpdate(
     // If message doesn't exist, create it with product info
     if (!existingMessage) {
       try {
-        messageRecord = await createMessage(supabase, message, productInfo);
+        // Include vendor_uid, purchase_date, and notes in the message creation
+        const messageData = {
+          ...message,
+          vendor_uid: productInfo?.vendor_uid,
+          purchase_date: productInfo?.purchase_date,
+          notes: productInfo?.notes,
+          product_name: productInfo?.product_name,
+          product_code: productInfo?.product_code,
+          quantity: productInfo?.quantity
+        };
+        
+        messageRecord = await createMessage(supabase, messageData, productInfo);
         console.log('Created new message record:', {
           id: messageRecord.id,
           message_id: message.message_id,
@@ -80,7 +91,6 @@ export async function handleWebhookUpdate(
         });
       } catch (error) {
         if (error.message === 'Duplicate file_id found in message_data') {
-          // For duplicate file_id, we'll update existing records instead
           console.log('Duplicate media detected, will update existing records');
           await supabase.from('failed_webhook_updates').insert({
             message_id: message.message_id,
@@ -162,13 +172,19 @@ export async function handleWebhookUpdate(
           );
         }
 
-        // Update message status to success
+        // Update message status to success and include product info
         const { error: statusError } = await supabase
           .from('messages')
           .update({
             status: 'success',
             processed_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
+            vendor_uid: productInfo?.vendor_uid,
+            purchase_date: productInfo?.purchase_date,
+            notes: productInfo?.notes,
+            product_name: productInfo?.product_name,
+            product_code: productInfo?.product_code,
+            quantity: productInfo?.quantity
           })
           .eq('id', messageRecord.id);
 
