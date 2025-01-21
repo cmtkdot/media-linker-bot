@@ -33,6 +33,22 @@ export async function handleWebhookUpdate(
   });
 
   try {
+    // Always analyze caption if present, regardless of whether message exists
+    let productInfo = null;
+    if (message.caption) {
+      console.log('Analyzing caption:', message.caption);
+      try {
+        productInfo = await analyzeCaption(
+          message.caption,
+          Deno.env.get('SUPABASE_URL') || '',
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+        );
+        console.log('Product info from AI analysis:', productInfo);
+      } catch (error) {
+        console.error('Error analyzing caption:', error);
+      }
+    }
+
     // Check for existing message
     const { data: existingMessage, error: fetchError } = await supabase
       .from('messages')
@@ -65,25 +81,55 @@ export async function handleWebhookUpdate(
 
     let messageRecord = existingMessage;
     let retryCount = existingMessage?.retry_count || 0;
-    let productInfo = null;
 
-    // Always analyze caption regardless if message exists or not
-    if (message.caption) {
-      console.log('Analyzing caption:', message.caption);
+    // If message exists and we have new product info, update it
+    if (existingMessage && productInfo) {
       try {
-        productInfo = await analyzeCaption(
-          message.caption,
-          Deno.env.get('SUPABASE_URL') || '',
-          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
-        );
-        console.log('Product info from AI analysis:', productInfo);
-      } catch (error) {
-        console.error('Error analyzing caption:', error);
-      }
-    }
+        const { error: updateError } = await supabase
+          .from('messages')
+          .update({
+            caption: message.caption,
+            product_name: productInfo.product_name,
+            product_code: productInfo.product_code,
+            quantity: productInfo.quantity,
+            vendor_uid: productInfo.vendor_uid,
+            purchase_date: productInfo.purchase_date,
+            notes: productInfo.notes,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingMessage.id);
 
-    // Create new message record if it doesn't exist
-    if (!existingMessage) {
+        if (updateError) throw updateError;
+        console.log('Updated existing message with new product info:', {
+          id: existingMessage.id,
+          product_info: productInfo
+        });
+
+        // Also update any related media records
+        if (message.media_group_id) {
+          const { error: mediaGroupUpdateError } = await supabase
+            .from('telegram_media')
+            .update({
+              caption: message.caption,
+              product_name: productInfo.product_name,
+              product_code: productInfo.product_code,
+              quantity: productInfo.quantity,
+              vendor_uid: productInfo.vendor_uid,
+              purchase_date: productInfo.purchase_date,
+              notes: productInfo.notes,
+              updated_at: new Date().toISOString()
+            })
+            .eq('telegram_data->media_group_id', message.media_group_id);
+
+          if (mediaGroupUpdateError) {
+            console.error('Error updating media group:', mediaGroupUpdateError);
+          }
+        }
+      } catch (error) {
+        console.error('Error updating existing message:', error);
+      }
+    } else if (!existingMessage) {
+      // Create new message record if it doesn't exist
       try {
         messageRecord = await createMessage(supabase, message, productInfo);
         console.log('Created new message record:', {
@@ -110,33 +156,9 @@ export async function handleWebhookUpdate(
           details: error.message
         };
       }
-    } else if (productInfo) {
-      // Update existing message with new product info
-      try {
-        const { error: updateError } = await supabase
-          .from('messages')
-          .update({
-            caption: message.caption,
-            product_name: productInfo.product_name,
-            product_code: productInfo.product_code,
-            quantity: productInfo.quantity,
-            vendor_uid: productInfo.vendor_uid,
-            purchase_date: productInfo.purchase_date,
-            notes: productInfo.notes,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingMessage.id);
-
-        if (updateError) throw updateError;
-        console.log('Updated existing message with new product info:', {
-          id: existingMessage.id,
-          product_info: productInfo
-        });
-      } catch (error) {
-        console.error('Error updating existing message:', error);
-      }
     }
 
+    // Process media with retries
     while (retryCount < MAX_RETRY_ATTEMPTS) {
       try {
         const mediaTypes = ['photo', 'video', 'document', 'animation'] as const;
@@ -176,7 +198,7 @@ export async function handleWebhookUpdate(
 
         let result;
         if (existingMedia) {
-          console.log('Found existing media, updating records without re-upload:', {
+          console.log('Found existing media, updating records:', {
             media_id: existingMedia.id,
             file_unique_id: mediaFile.file_unique_id
           });
@@ -251,20 +273,6 @@ export async function handleWebhookUpdate(
 
       } catch (error) {
         retryCount++;
-        if (error.message === 'Duplicate file_id found in message_data') {
-          await supabase.from('failed_webhook_updates').insert({
-            message_id: message.message_id,
-            chat_id: message.chat.id,
-            error_message: error.message,
-            error_stack: error.stack,
-            message_data: message,
-            status: 'duplicate'
-          });
-          return {
-            error: 'Duplicate media file',
-            details: error.message
-          };
-        }
         await handleProcessingError(supabase, error, messageRecord, retryCount);
       }
     }
