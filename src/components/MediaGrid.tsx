@@ -48,19 +48,35 @@ const MediaGrid = () => {
   const { data: mediaItems, isLoading, error } = useQuery({
     queryKey: ['telegram-media', search],
     queryFn: async () => {
-      let query = supabase
-        .from('telegram_media')
-        .select('*')
-        .order('created_at', { ascending: false });
+      try {
+        let query = supabase
+          .from('telegram_media')
+          .select('*')
+          .order('created_at', { ascending: false });
 
-      if (search) {
-        query = query.or(`caption.ilike.%${search}%,product_name.ilike.%${search}%,product_code.ilike.%${search}%,vendor_uid.ilike.%${search}%`);
+        if (search) {
+          query = query.or(`caption.ilike.%${search}%,product_name.ilike.%${search}%,product_code.ilike.%${search}%,vendor_uid.ilike.%${search}%`);
+        }
+
+        const { data, error: queryError } = await query;
+        
+        if (queryError) {
+          console.error('Supabase query error:', queryError);
+          throw queryError;
+        }
+        
+        if (!data) {
+          console.warn('No data returned from Supabase');
+          return [];
+        }
+
+        return data as MediaItem[];
+      } catch (err) {
+        console.error('Error fetching media:', err);
+        throw err;
       }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      return data as MediaItem[];
-    }
+    },
+    retry: 1
   });
 
   const handleEdit = async () => {
@@ -112,7 +128,7 @@ const MediaGrid = () => {
   }
 
   if (error) {
-    return <div className="text-center text-red-500 p-4">Error loading media</div>;
+    return <div className="text-center text-red-500 p-4">Error loading media: {error.message}</div>;
   }
 
   if (!mediaItems?.length) {
