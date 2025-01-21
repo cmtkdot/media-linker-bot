@@ -51,23 +51,29 @@ export async function createMessage(supabase: any, message: any, productInfo: an
         .update(messageData)
         .eq('id', existingMessage.id)
         .select()
-        .maybeSingle();
+        .single();
 
       if (updateError) {
         console.error('Error updating message:', updateError);
         throw updateError;
       }
 
+      if (!updatedMessage) {
+        console.error('No data returned after update');
+        throw new Error('Message update failed - no data returned');
+      }
+
+      console.log('Successfully updated message:', updatedMessage.id);
       return updatedMessage;
     }
 
     // If no existing message, create new one
-    console.log('Creating new message');
+    console.log('Creating new message with data:', messageData);
     const { data: newMessage, error: insertError } = await supabase
       .from('messages')
       .insert(messageData)
       .select()
-      .maybeSingle();
+      .single();
 
     if (insertError) {
       console.error('Error inserting message:', insertError);
@@ -75,6 +81,7 @@ export async function createMessage(supabase: any, message: any, productInfo: an
     }
 
     if (!newMessage) {
+      console.error('No data returned after insert');
       throw new Error('Message creation failed - no data returned');
     }
 
