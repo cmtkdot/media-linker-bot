@@ -85,36 +85,46 @@ serve(async (req) => {
             .eq('file_unique_id', fileUniqueId)
             .maybeSingle();
 
-          if (existingMedia) {
-            console.log('Updating existing telegram_media record:', existingMedia.id);
-            
-            const { error: updateError } = await supabase
-              .from('telegram_media')
-              .update({
-                file_id: fileId,
-                message_id: messageRecord.id,
-                caption: messageRecord.caption,
-                product_name: messageRecord.product_name,
-                product_code: messageRecord.product_code,
-                quantity: messageRecord.quantity,
-                vendor_uid: messageRecord.vendor_uid,
-                purchase_date: messageRecord.purchase_date,
-                notes: messageRecord.notes,
-                analyzed_content: messageRecord.analyzed_content,
-                telegram_data: {
-                  message_id: message.message_id,
-                  chat_id: message.chat.id,
-                  media_group_id: message.media_group_id,
-                  date: message.date,
-                  caption: message.caption
-                }
-              })
-              .eq('id', existingMedia.id);
+          const messageCreatedAt = new Date(messageRecord.created_at);
 
-            if (updateError) {
-              console.error('Error updating telegram_media record:', updateError);
+          if (existingMedia) {
+            const mediaCreatedAt = new Date(existingMedia.created_at);
+            
+            // Only update if message is newer than existing media record
+            if (messageCreatedAt > mediaCreatedAt) {
+              console.log('Updating existing telegram_media record:', existingMedia.id);
+              
+              const { error: updateError } = await supabase
+                .from('telegram_media')
+                .update({
+                  file_id: fileId,
+                  message_id: messageRecord.id,
+                  caption: messageRecord.caption,
+                  product_name: messageRecord.product_name,
+                  product_code: messageRecord.product_code,
+                  quantity: messageRecord.quantity,
+                  vendor_uid: messageRecord.vendor_uid,
+                  purchase_date: messageRecord.purchase_date,
+                  notes: messageRecord.notes,
+                  analyzed_content: messageRecord.analyzed_content,
+                  telegram_data: {
+                    message_id: message.message_id,
+                    chat_id: message.chat.id,
+                    media_group_id: message.media_group_id,
+                    date: message.date,
+                    caption: message.caption
+                  },
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', existingMedia.id);
+
+              if (updateError) {
+                console.error('Error updating telegram_media record:', updateError);
+              } else {
+                console.log('Successfully updated telegram_media record:', existingMedia.id);
+              }
             } else {
-              console.log('Successfully updated telegram_media record:', existingMedia.id);
+              console.log('Skipping update as message is older than existing media record');
             }
           } else {
             console.log('Creating new telegram_media record for message:', messageRecord.id);
@@ -140,7 +150,9 @@ serve(async (req) => {
                   media_group_id: message.media_group_id,
                   date: message.date,
                   caption: message.caption
-                }
+                },
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
               });
 
             if (insertError) {
