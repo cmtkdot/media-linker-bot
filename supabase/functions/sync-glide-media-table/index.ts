@@ -8,8 +8,7 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  console.log('Received sync request:', req.method);
-
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -24,14 +23,16 @@ serve(async (req) => {
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    
+    // Parse request body
     const { operation, tableId } = await req.json();
+    console.log('Starting sync operation:', { operation, tableId });
     
     if (!operation || !tableId) {
       throw new Error('Missing required parameters: operation and tableId');
     }
 
-    console.log('Starting sync operation:', { operation, tableId });
-
+    // Get Glide configuration
     const { data: glideConfig, error: configError } = await supabase
       .from('glide_config')
       .select('*')
