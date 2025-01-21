@@ -8,7 +8,8 @@ export async function processMedia(
   messageRecord: any,
   botToken: string,
   productInfo: any,
-  retryCount: number
+  retryCount: number,
+  existingMedia: any = null
 ) {
   while (retryCount < MAX_RETRY_ATTEMPTS) {
     try {
@@ -33,28 +34,17 @@ export async function processMedia(
       console.log('Processing media file:', {
         file_id: mediaFile.file_id,
         type: mediaType,
-        retry_count: retryCount
+        retry_count: retryCount,
+        existing: !!existingMedia
       });
-
-      // Check for existing media
-      const { data: existingMedia, error: mediaCheckError } = await supabase
-        .from('telegram_media')
-        .select('*')
-        .eq('file_unique_id', mediaFile.file_unique_id)
-        .maybeSingle();
-
-      if (mediaCheckError) {
-        throw mediaCheckError;
-      }
 
       let result;
       if (existingMedia) {
-        console.log('Found existing media, updating records:', {
+        console.log('Updating existing media:', {
           media_id: existingMedia.id,
           file_unique_id: mediaFile.file_unique_id
         });
-
-        // Update existing media with new product info
+        
         const { error: mediaUpdateError } = await supabase
           .from('telegram_media')
           .update({

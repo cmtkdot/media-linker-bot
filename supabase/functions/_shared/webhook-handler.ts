@@ -22,7 +22,7 @@ export async function handleWebhookUpdate(
     return { message: 'Not a media message, skipping' };
   }
 
-  console.log('Processing media message:', {
+  console.log('Processing message:', {
     message_id: message.message_id,
     chat_id: message.chat.id,
     media_type: message.photo ? 'photo' : 
@@ -32,7 +32,7 @@ export async function handleWebhookUpdate(
   });
 
   try {
-    // First, analyze caption if present
+    // Step 1: Analyze caption first if present
     let productInfo = null;
     if (message.caption) {
       try {
@@ -44,28 +44,41 @@ export async function handleWebhookUpdate(
         console.log('Caption analysis result:', productInfo);
       } catch (error) {
         console.error('Error analyzing caption:', error);
-        // Continue processing even if caption analysis fails
       }
     }
 
-    // Check for existing message
-    const { data: existingMessage, error: fetchError } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('chat_id', message.chat.id)
-      .eq('message_id', message.message_id)
-      .maybeSingle();
+    // Step 2: Check for existing message and media in parallel
+    const [messageCheck, mediaCheck] = await Promise.all([
+      supabase
+        .from('messages')
+        .select('*')
+        .eq('chat_id', message.chat.id)
+        .eq('message_id', message.message_id)
+        .maybeSingle(),
+      supabase
+        .from('telegram_media')
+        .select('*')
+        .eq('file_unique_id', message.photo?.[0]?.file_unique_id || 
+                             message.video?.file_unique_id || 
+                             message.document?.file_unique_id || 
+                             message.animation?.file_unique_id)
+        .maybeSingle()
+    ]);
 
-    if (fetchError) {
-      console.error('Error checking for existing message:', {
-        error: fetchError,
-        message_id: message.message_id,
-        chat_id: message.chat.id
-      });
-      throw fetchError;
+    if (messageCheck.error) {
+      console.error('Error checking for existing message:', messageCheck.error);
+      throw messageCheck.error;
     }
 
-    // Process message and get updated record
+    if (mediaCheck.error) {
+      console.error('Error checking for existing media:', mediaCheck.error);
+      throw mediaCheck.error;
+    }
+
+    const existingMessage = messageCheck.data;
+    const existingMedia = mediaCheck.data;
+
+    // Step 3: Process message with analyzed content
     const { messageRecord, retryCount } = await handleMessageProcessing(
       supabase,
       message,
@@ -73,17 +86,18 @@ export async function handleWebhookUpdate(
       productInfo
     );
 
-    // Process media within transaction
+    // Step 4: Process media with all gathered data
     const result = await processMedia(
       supabase,
       message,
       messageRecord,
       botToken,
       productInfo,
-      retryCount
+      retryCount,
+      existingMedia
     );
 
-    // Update message status on success
+    // Step 5: Update message status on success
     const { error: statusError } = await supabase
       .from('messages')
       .update({
@@ -99,7 +113,7 @@ export async function handleWebhookUpdate(
       throw statusError;
     }
 
-    // Clean up old failed records
+    // Step 6: Clean up old failed records
     await cleanupFailedRecords(supabase);
 
     console.log('Successfully processed update:', {
