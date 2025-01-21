@@ -26,7 +26,10 @@ export async function createMessage(
       .eq('chat_id', message.chat.id)
       .maybeSingle();
 
-    if (existingError) throw existingError;
+    if (existingError) {
+      console.error('[Message] Error checking existing:', existingError);
+      throw existingError;
+    }
 
     const messageData = {
       message_id: message.message_id,
@@ -57,9 +60,16 @@ export async function createMessage(
         returning: 'representation'
       })
       .select()
-      .maybeSingle();
+      .single();
 
-    if (upsertError) throw upsertError;
+    if (upsertError) {
+      console.error('[Message] Upsert error:', upsertError);
+      throw upsertError;
+    }
+
+    if (!messageRecord) {
+      throw new Error('No message record returned after upsert');
+    }
 
     // If part of a media group, sync information
     if (message.media_group_id && (message.caption || productInfo)) {

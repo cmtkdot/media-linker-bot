@@ -44,33 +44,52 @@ export async function handleWebhookUpdate(
         console.log('[Caption Analysis] Complete:', productInfo);
       } catch (error) {
         console.error('[Caption Analysis] Error:', error);
+        // Continue processing even if caption analysis fails
       }
     }
 
     // Create or update message record
-    const messageRecord = await createMessage(supabase, message, productInfo);
-    console.log('[Message] Created/Updated:', messageRecord.id);
+    let messageRecord;
+    try {
+      messageRecord = await createMessage(supabase, message, productInfo);
+      if (!messageRecord || !messageRecord.id) {
+        throw new Error('Failed to create message record');
+      }
+      console.log('[Message] Created/Updated:', messageRecord.id);
+    } catch (error) {
+      console.error('[Message Creation Error]:', error);
+      throw error;
+    }
 
-    // Process media
-    const mediaResult = await processMedia(
-      supabase,
-      message,
-      messageRecord,
-      botToken,
-      productInfo
-    );
+    // Process media only if we have a valid message record
+    if (messageRecord && messageRecord.id) {
+      try {
+        const mediaResult = await processMedia(
+          supabase,
+          message,
+          messageRecord,
+          botToken,
+          productInfo
+        );
 
-    console.log('[Webhook] Complete:', {
-      update_id: update.update_id,
-      message_id: message.message_id,
-      media_result: mediaResult?.id
-    });
+        console.log('[Webhook] Complete:', {
+          update_id: update.update_id,
+          message_id: message.message_id,
+          media_result: mediaResult?.id
+        });
 
-    return { 
-      success: true,
-      messageId: messageRecord.id,
-      mediaResult
-    };
+        return { 
+          success: true,
+          messageId: messageRecord.id,
+          mediaResult
+        };
+      } catch (mediaError) {
+        console.error('[Media Processing Error]:', mediaError);
+        throw mediaError;
+      }
+    } else {
+      throw new Error('Invalid message record');
+    }
 
   } catch (error) {
     console.error('[Webhook] Error:', {
