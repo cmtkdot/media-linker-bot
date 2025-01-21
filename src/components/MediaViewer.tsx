@@ -2,6 +2,8 @@ import React from "react";
 import {
   Dialog,
   DialogContent,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ExternalLink } from "lucide-react";
@@ -20,7 +22,6 @@ interface MediaViewerProps {
     quantity?: number;
     vendor_uid?: string;
     purchase_date?: string;
-    telegram_data?: any;
   } | null;
 }
 
@@ -28,16 +29,13 @@ const MediaViewer = ({ open, onOpenChange, media }: MediaViewerProps) => {
   if (!media) return null;
 
   const mediaUrl = media.public_url || media.default_public_url;
-  const telegramData = media.telegram_data || {};
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-6xl p-4">
-        {media.caption && (
-          <div className="text-center mb-6">
-            <p className="text-xl font-medium">{media.caption}</p>
-          </div>
-        )}
+        <DialogHeader className="w-full">
+          <DialogTitle className="text-center">{media.product_name || "Media Preview"}</DialogTitle>
+        </DialogHeader>
         <div className="flex flex-col lg:flex-row gap-4">
           {/* Media Column */}
           <div className="flex-[1.5]">
@@ -77,20 +75,9 @@ const MediaViewer = ({ open, onOpenChange, media }: MediaViewerProps) => {
 
           {/* Details Column */}
           <div className="flex-1 space-y-4">
-            {/* Telegram Data */}
-            <div className="bg-muted/30 p-4 rounded-lg space-y-2">
-              <h3 className="font-medium text-lg mb-3">Telegram Information</h3>
-              <div>
-                <span className="font-medium">Type: </span>
-                {telegramData.chat?.type || 'N/A'}
-              </div>
-              <div>
-                <span className="font-medium">Title: </span>
-                {telegramData.chat?.title || 'N/A'}
-              </div>
-            </div>
-
-            {/* Product Details */}
+            {media.caption && (
+              <p className="text-muted-foreground">{media.caption}</p>
+            )}
             <div className="grid gap-3">
               {media.product_name && (
                 <div>
