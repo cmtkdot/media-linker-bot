@@ -1,10 +1,10 @@
 import React, { useState } from "react";
 import { Card } from "@/components/ui/card";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Grid, List } from "lucide-react";
+import { Grid, List, RefreshCw } from "lucide-react";
 import MediaTable from "./MediaTable";
 import {
   Dialog,
@@ -33,7 +33,9 @@ const MediaGrid = () => {
   const [view, setView] = useState<'grid' | 'table'>('grid');
   const [search, setSearch] = useState("");
   const [editItem, setEditItem] = useState<MediaItem | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const { data: mediaItems, isLoading, error } = useQuery({
     queryKey: ['telegram-media', search],
@@ -52,6 +54,36 @@ const MediaGrid = () => {
       return data as MediaItem[];
     }
   });
+
+  const handleSync = async () => {
+    if (!editItem?.id) return;
+    
+    setIsSyncing(true);
+    try {
+      const { error } = await supabase
+        .rpc('sync_media_group_info', { 
+          media_id: editItem.id 
+        });
+
+      if (error) throw error;
+
+      await queryClient.invalidateQueries({ queryKey: ['telegram-media'] });
+      
+      toast({
+        title: "Sync successful",
+        description: "Media group information has been synchronized.",
+      });
+    } catch (error) {
+      console.error('Error syncing media:', error);
+      toast({
+        title: "Sync failed",
+        description: "Failed to synchronize media group information.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const handleEdit = async () => {
     if (!editItem) return;
@@ -118,6 +150,14 @@ const MediaGrid = () => {
           onChange={(e) => setSearch(e.target.value)}
         />
         <div className="flex space-x-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={handleSync}
+            disabled={!editItem || isSyncing}
+          >
+            <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+          </Button>
           <Button
             variant={view === 'grid' ? "default" : "outline"}
             size="icon"
