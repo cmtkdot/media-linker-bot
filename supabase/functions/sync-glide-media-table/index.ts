@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
-import { Table } from 'https://esm.sh/@glideapps/tables@1.0.5';
+import { Table } from 'https://esm.sh/@glideapps/tables@1.0.5/dist/index.js';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -67,7 +67,7 @@ serve(async (req) => {
         
         // Get all rows from both systems
         const [glideRows, { data: supabaseRows, error: supabaseError }] = await Promise.all([
-          table.rows(),
+          table.getRows(),
           supabase.from(glideConfig.supabase_table_name).select('*')
         ]);
 
@@ -82,7 +82,7 @@ serve(async (req) => {
         });
 
         // Create maps for easy lookup
-        const glideMap = new Map(glideRows.map(row => [row.get('id') as string, row]));
+        const glideMap = new Map(glideRows.map(row => [row.id, row]));
         const supabaseMap = new Map(supabaseRows?.map(row => [row.id, row]) || []);
 
         const syncResult = {
@@ -127,8 +127,8 @@ serve(async (req) => {
             } else {
               // Update existing row
               const glideRow = glideMap.get(id)!;
-              if (new Date(supabaseRow.updated_at) > new Date(glideRow.get('updated_at') as string)) {
-                await table.updateRow(glideRow.rowId, {
+              if (new Date(supabaseRow.updated_at) > new Date(glideRow.updated_at)) {
+                await table.updateRow(glideRow.id, {
                   file_id: supabaseRow.file_id,
                   file_unique_id: supabaseRow.file_unique_id,
                   file_type: supabaseRow.file_type,
@@ -165,24 +165,24 @@ serve(async (req) => {
           try {
             const supabaseRow = supabaseMap.get(id);
             if (supabaseRow) {
-              const glideUpdatedAt = new Date(glideRow.get('updated_at') as string);
+              const glideUpdatedAt = new Date(glideRow.updated_at);
               const supabaseUpdatedAt = new Date(supabaseRow.updated_at);
 
               if (glideUpdatedAt > supabaseUpdatedAt) {
                 const { error: updateError } = await supabase
                   .from(glideConfig.supabase_table_name)
                   .update({
-                    caption: glideRow.get('caption'),
-                    product_name: glideRow.get('product_name'),
-                    product_code: glideRow.get('product_code'),
-                    quantity: glideRow.get('quantity'),
-                    vendor_uid: glideRow.get('vendor_uid'),
-                    purchase_date: glideRow.get('purchase_date'),
-                    notes: glideRow.get('notes'),
-                    updated_at: glideRow.get('updated_at'),
-                    analyzed_content: JSON.parse(glideRow.get('analyzed_content') as string || '{}'),
-                    purchase_order_uid: glideRow.get('purchase_order_uid'),
-                    default_public_url: glideRow.get('default_public_url')
+                    caption: glideRow.caption,
+                    product_name: glideRow.product_name,
+                    product_code: glideRow.product_code,
+                    quantity: glideRow.quantity,
+                    vendor_uid: glideRow.vendor_uid,
+                    purchase_date: glideRow.purchase_date,
+                    notes: glideRow.notes,
+                    updated_at: glideRow.updated_at,
+                    analyzed_content: JSON.parse(glideRow.analyzed_content || '{}'),
+                    purchase_order_uid: glideRow.purchase_order_uid,
+                    default_public_url: glideRow.default_public_url
                   })
                   .eq('id', id);
 
