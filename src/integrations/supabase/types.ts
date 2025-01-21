@@ -53,34 +53,34 @@ export type Database = {
       }
       glide_config: {
         Row: {
-          id: string;
-          app_id: string;
-          table_id: string;
-          table_name: string;
-          api_token: string;
-          created_at: string;
-          updated_at: string;
-          active: boolean;
+          active: boolean | null
+          api_token: string
+          app_id: string
+          created_at: string
+          id: string
+          table_id: string
+          table_name: string
+          updated_at: string
         }
         Insert: {
-          app_id: string;
-          table_id: string;
-          table_name: string;
-          api_token: string;
-          created_at?: string;
-          id?: string;
-          updated_at?: string;
-          active?: boolean;
+          active?: boolean | null
+          api_token: string
+          app_id: string
+          created_at?: string
+          id?: string
+          table_id: string
+          table_name: string
+          updated_at?: string
         }
         Update: {
-          api_token?: string;
-          app_id?: string;
-          created_at?: string;
-          id?: string;
-          table_id?: string;
-          table_name?: string;
-          updated_at?: string;
-          active?: boolean;
+          active?: boolean | null
+          api_token?: string
+          app_id?: string
+          created_at?: string
+          id?: string
+          table_id?: string
+          table_name?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -338,7 +338,7 @@ export type Tables<
   TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
     ? keyof (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
         Database[PublicTableNameOrOptions["schema"]]["Views"])
-    : never,
+    : never = never,
 > = PublicTableNameOrOptions extends { schema: keyof Database }
   ? (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
       Database[PublicTableNameOrOptions["schema"]]["Views"])[TableName] extends {
