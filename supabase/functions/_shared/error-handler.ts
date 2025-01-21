@@ -15,7 +15,6 @@ export async function handleProcessingError(
   });
 
   try {
-    // Log the failed update to the failed_webhook_updates table
     const { error: logError } = await supabase
       .from('failed_webhook_updates')
       .insert({
@@ -35,7 +34,6 @@ export async function handleProcessingError(
       });
     }
 
-    // Update message with retry information
     const { error: updateError } = await supabase
       .from('messages')
       .update({
@@ -47,23 +45,14 @@ export async function handleProcessingError(
       })
       .eq('id', messageRecord.id);
 
-    if (updateError) {
-      console.error('Error updating retry information:', {
-        error: updateError,
-        message_id: messageRecord.id
-      });
-      throw updateError;
-    }
+    if (updateError) throw updateError;
 
     if (error.message?.includes('Too Many Requests') || error.code === 429) {
       const backoffDelay = calculateBackoffDelay(retryCount);
-      console.log(`Rate limited. Waiting ${backoffDelay}ms before retry...`, {
-        retry_count: retryCount,
-        delay: backoffDelay
-      });
+      console.log(`Rate limited. Waiting ${backoffDelay}ms before retry...`);
       await delay(backoffDelay);
     } else if (retryCount < MAX_RETRY_ATTEMPTS) {
-      await delay(1000); // Small delay for non-rate-limit errors
+      await delay(1000);
     }
 
     if (retryCount >= MAX_RETRY_ATTEMPTS) {

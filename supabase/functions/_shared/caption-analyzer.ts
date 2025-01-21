@@ -1,7 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 export async function analyzeCaptionWithAI(caption: string, supabaseUrl: string, supabaseKey: string) {
-  if (!caption) {
+  if (!caption?.trim()) {
     console.log('No caption to analyze');
     return null;
   }
@@ -18,16 +18,10 @@ export async function analyzeCaptionWithAI(caption: string, supabaseUrl: string,
       throw error;
     }
     
-    if (!data) {
-      console.warn('No data returned from caption analysis');
-      return null;
-    }
-    
     console.log('Caption analysis result:', data);
-    return data;
+    return data || null;
   } catch (error) {
     console.error('Error analyzing caption:', error);
-    // Return null instead of throwing to allow processing to continue
     return null;
   }
 }

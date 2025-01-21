@@ -9,18 +9,6 @@ export async function createMessage(supabase: any, message: any, productInfo: an
   });
 
   try {
-    const { data: existingMessage, error: checkError } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('message_id', message.message_id)
-      .eq('chat_id', message.chat.id)
-      .single();
-
-    if (checkError && checkError.code !== 'PGRST116') {
-      console.error('Error checking for existing message:', checkError);
-      throw checkError;
-    }
-
     const messageData = {
       message_id: message.message_id,
       chat_id: message.chat.id,
@@ -42,8 +30,14 @@ export async function createMessage(supabase: any, message: any, productInfo: an
       })
     };
 
+    const { data: existingMessage, error: checkError } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('message_id', message.message_id)
+      .eq('chat_id', message.chat.id)
+      .single();
+
     if (existingMessage) {
-      console.log('Updating existing message:', existingMessage.id);
       const { data: updatedMessage, error: updateError } = await supabase
         .from('messages')
         .update(messageData)

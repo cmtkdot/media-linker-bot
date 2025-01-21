@@ -1,8 +1,9 @@
 import { validateMediaFile, getMediaType } from './media-validators.ts';
 import { ensureStorageBucket, uploadMediaToStorage } from './storage-manager.ts';
 import { updateExistingMedia, createNewMediaRecord } from './media-database.ts';
-import { getAndDownloadTelegramFile, generateSafeFileName, analyzeCaptionWithAI } from './telegram-service.ts';
+import { getAndDownloadTelegramFile, generateSafeFileName } from './telegram-service.ts';
 import { handleMediaGroup } from './media-group-handler.ts';
+import { analyzeCaptionWithAI } from './caption-analyzer.ts';
 
 export async function processNewMedia(
   supabase: any,
@@ -19,23 +20,18 @@ export async function processNewMedia(
     await validateMediaFile(mediaFile, mediaType);
     await ensureStorageBucket(supabase);
 
-    // First analyze the caption if it exists and no product info was provided
     if (message.caption && !productInfo) {
-      console.log('Analyzing caption:', message.caption);
       productInfo = await analyzeCaptionWithAI(
         message.caption,
         Deno.env.get('SUPABASE_URL') || '',
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
       );
-      console.log('Caption analysis result:', productInfo);
     }
 
     const { buffer, filePath } = await getAndDownloadTelegramFile(mediaFile.file_id, botToken);
-    
     const fileExt = filePath.split('.').pop() || '';
     const mimeType = mediaType === 'photo' ? 'image/jpeg' : mediaFile.mime_type || 'video/mp4';
     
-    // Generate filename using analyzed product information
     const uniqueFileName = generateSafeFileName(
       productInfo?.product_name || 'untitled',
       productInfo?.product_code || 'no_code',
@@ -70,8 +66,7 @@ export async function processMedia(
   message: any,
   messageRecord: any,
   botToken: string,
-  productInfo: any,
-  retryCount: number
+  productInfo: any = null
 ) {
   const mediaType = getMediaType(message);
   const mediaFile = mediaType === 'photo' 
@@ -84,15 +79,14 @@ export async function processMedia(
 
   console.log('Processing media file:', {
     file_id: mediaFile.file_id,
-    type: mediaType,
-    retry_count: retryCount
+    type: mediaType
   });
 
   const { data: existingMedia } = await supabase
     .from('telegram_media')
     .select('*')
     .eq('file_unique_id', mediaFile.file_unique_id)
-    .maybeSingle();
+    .single();
 
   if (existingMedia) {
     return await updateExistingMedia(supabase, mediaFile, message, messageRecord, productInfo);

@@ -12,12 +12,10 @@ export const updateExistingMedia = async (
       .from('telegram_media')
       .select('*')
       .eq('file_unique_id', mediaFile.file_unique_id)
-      .maybeSingle();
+      .single();
 
     if (mediaFetchError) throw mediaFetchError;
-    if (!existingMedia) throw new Error('Existing media record not found');
 
-    const videoMetadata = extractVideoMetadata(message);
     const telegramData = {
       ...existingMedia.telegram_data,
       message_id: message.message_id,
@@ -26,8 +24,7 @@ export const updateExistingMedia = async (
       chat: message.chat,
       date: message.date,
       caption: message.caption,
-      media_group_id: message.media_group_id,
-      ...(videoMetadata && { video_metadata: videoMetadata })
+      media_group_id: message.media_group_id
     };
 
     const { error: mediaError } = await supabase
@@ -35,17 +32,14 @@ export const updateExistingMedia = async (
       .update({
         telegram_data: telegramData,
         caption: message.caption,
-        media_metadata: {
-          ...existingMedia.media_metadata,
-          ...(videoMetadata && { video: videoMetadata })
-        },
         ...(productInfo && {
           product_name: productInfo.product_name,
           product_code: productInfo.product_code,
           quantity: productInfo.quantity,
           vendor_uid: productInfo.vendor_uid,
           purchase_date: productInfo.purchase_date,
-          notes: productInfo.notes
+          notes: productInfo.notes,
+          analyzed_content: productInfo
         }),
         updated_at: new Date().toISOString()
       })
@@ -70,7 +64,6 @@ export const createNewMediaRecord = async (
   storagePath: string,
   productInfo: any = null
 ) => {
-  const metadata = buildMediaMetadata(mediaFile, mediaType, storagePath);
   const telegramData = {
     message_id: message.message_id,
     chat_id: message.chat.id,
@@ -91,7 +84,6 @@ export const createNewMediaRecord = async (
       message_id: messageRecord.id,
       public_url: publicUrl,
       telegram_data: telegramData,
-      media_metadata: metadata,
       caption: message.caption,
       ...(productInfo && {
         product_name: productInfo.product_name,
@@ -99,7 +91,8 @@ export const createNewMediaRecord = async (
         quantity: productInfo.quantity,
         vendor_uid: productInfo.vendor_uid,
         purchase_date: productInfo.purchase_date,
-        notes: productInfo.notes
+        notes: productInfo.notes,
+        analyzed_content: productInfo
       })
     });
 
