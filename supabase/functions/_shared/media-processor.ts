@@ -1,6 +1,4 @@
-import { generateSafeFileName, getAndDownloadTelegramFile } from './telegram-service.ts';
-import { delay } from './retry-utils.ts';
-import { syncMediaGroupCaptions } from './caption-sync.ts';
+import { getAndDownloadTelegramFile } from './telegram-service.ts';
 import { getMimeType } from './media-validators.ts';
 
 export async function processMediaFiles(
@@ -17,23 +15,6 @@ export async function processMediaFiles(
   });
 
   try {
-    // If part of a media group, sync captions first
-    if (message.media_group_id) {
-      await syncMediaGroupCaptions(message.media_group_id, supabase);
-      await delay(500); // Allow time for sync to complete
-    }
-
-    // Get the most up-to-date message data after sync
-    const { data: updatedMessage } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('id', messageRecord.id)
-      .single();
-
-    if (!updatedMessage) {
-      throw new Error('Failed to get updated message data');
-    }
-
     // Determine media files to process
     const mediaFiles = [];
     if (message.photo) {
@@ -89,7 +70,7 @@ export async function processMediaFiles(
         .from('media')
         .getPublicUrl(fileName);
 
-      // Create media record with synchronized data
+      // Create media record
       const mediaRecord = {
         file_id: file.file_id,
         file_unique_id: file.file_unique_id,
@@ -102,18 +83,18 @@ export async function processMediaFiles(
           sender_chat: message.sender_chat,
           chat: message.chat,
           date: message.date,
-          caption: updatedMessage.caption,
+          caption: message.caption,
           media_group_id: message.media_group_id,
           storage_path: fileName
         },
-        caption: updatedMessage.caption,
-        product_name: updatedMessage.product_name,
-        product_code: updatedMessage.product_code,
-        quantity: updatedMessage.quantity,
-        vendor_uid: updatedMessage.vendor_uid,
-        purchase_date: updatedMessage.purchase_date,
-        notes: updatedMessage.notes,
-        analyzed_content: updatedMessage.analyzed_content
+        caption: message.caption,
+        product_name: messageRecord.product_name,
+        product_code: messageRecord.product_code,
+        quantity: messageRecord.quantity,
+        vendor_uid: messageRecord.vendor_uid,
+        purchase_date: messageRecord.purchase_date,
+        notes: messageRecord.notes,
+        analyzed_content: messageRecord.analyzed_content
       };
 
       const { error: insertError } = await supabase
@@ -130,9 +111,6 @@ export async function processMediaFiles(
         file_id: file.file_id,
         public_url: publicUrl
       });
-
-      // Add delay between files
-      await delay(1000);
     }
 
     return { success: true };

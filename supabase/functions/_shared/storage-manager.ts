@@ -1,37 +1,5 @@
+import { ensureStorageBucket } from './storage-utils.ts';
 import { getMimeType } from './media-validators.ts';
-
-export const ensureStorageBucket = async (supabase: any) => {
-  try {
-    const { data: buckets, error: listError } = await supabase.storage.listBuckets();
-    
-    if (listError) {
-      console.error('Error listing buckets:', listError);
-      throw listError;
-    }
-
-    const mediaBucket = buckets.find((b: any) => b.name === 'media');
-    
-    if (!mediaBucket) {
-      console.log('Creating media storage bucket');
-      const { error: createError } = await supabase.storage.createBucket('media', {
-        public: true,
-        allowedMimeTypes: [
-          'image/jpeg', 'image/jpg', 'image/png', 'image/webp',
-          'image/gif', 'image/tiff', 'image/bmp', 'image/heic',
-          'image/heif', 'video/mp4', 'video/quicktime', 'video/webm',
-          'video/x-msvideo', 'video/x-matroska', 'video/3gpp',
-          'video/x-ms-wmv', 'video/ogg'
-        ],
-        fileSizeLimit: 100 * 1024 * 1024 // 100MB limit
-      });
-      
-      if (createError) throw createError;
-    }
-  } catch (error) {
-    console.error('Error ensuring storage bucket:', error);
-    throw error;
-  }
-};
 
 export const uploadMediaToStorage = async (
   supabase: any,
@@ -44,15 +12,11 @@ export const uploadMediaToStorage = async (
   console.log('Uploading file:', fileName);
   
   // For Telegram photos, always use image/jpeg
-  let finalMimeType = defaultMimeType;
-  if (fileName.includes('photo_')) {
-    finalMimeType = 'image/jpeg';
-    console.log('Using image/jpeg for Telegram photo');
-  } else {
-    // For other files, try to determine MIME type from extension
-    finalMimeType = getMimeType(fileName, defaultMimeType);
-    console.log('Determined MIME type:', finalMimeType);
-  }
+  const finalMimeType = defaultMimeType === 'image/jpeg' 
+    ? defaultMimeType 
+    : getMimeType(fileName, defaultMimeType);
+
+  console.log('Using MIME type:', finalMimeType);
 
   try {
     // Ensure storage bucket exists before upload
@@ -82,40 +46,22 @@ export const uploadMediaToStorage = async (
       });
 
     if (uploadError) {
-      console.error('Storage upload error:', { error: uploadError, mimeType: finalMimeType, fileName });
-      throw new Error(`Failed to upload file: ${uploadError.message}`);
+      console.error('Upload error:', uploadError);
+      throw uploadError;
     }
 
-    const { data: { publicUrl }, error: urlError } = await supabase.storage
+    const { data: { publicUrl } } = await supabase.storage
       .from('media')
       .getPublicUrl(fileName);
 
-    if (urlError) {
-      console.error('Error getting public URL:', urlError);
-      throw new Error(`Failed to get public URL: ${urlError.message}`);
-    }
+    console.log('Successfully uploaded file:', {
+      fileName,
+      publicUrl
+    });
 
-    return { uploadData, publicUrl };
+    return { publicUrl };
   } catch (error) {
-    console.error('Storage upload error:', { error, mimeType: finalMimeType, fileName });
-    throw error;
-  }
-};
-
-export const deleteMediaFromStorage = async (supabase: any, filePath: string) => {
-  try {
-    const { error } = await supabase.storage
-      .from('media')
-      .remove([filePath]);
-
-    if (error) {
-      console.error('Error deleting file from storage:', error);
-      throw error;
-    }
-
-    console.log('Successfully deleted file from storage:', filePath);
-  } catch (error) {
-    console.error('Error in deleteMediaFromStorage:', error);
+    console.error('Error uploading media:', error);
     throw error;
   }
 };
