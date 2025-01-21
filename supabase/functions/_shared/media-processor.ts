@@ -1,7 +1,7 @@
 import { validateMediaFile, getMediaType } from './media-validators.ts';
 import { ensureStorageBucket, uploadMediaToStorage } from './storage-manager.ts';
 import { updateExistingMedia, createNewMediaRecord } from './media-database.ts';
-import { getAndDownloadTelegramFile, generateSafeFileName } from './telegram-service.ts';
+import { getAndDownloadTelegramFile, generateSafeFileName, analyzeCaptionWithAI } from './telegram-service.ts';
 import { handleMediaGroup } from './media-group-handler.ts';
 
 export async function processNewMedia(
@@ -19,12 +19,23 @@ export async function processNewMedia(
     await validateMediaFile(mediaFile, mediaType);
     await ensureStorageBucket(supabase);
 
+    // First analyze the caption if it exists and no product info was provided
+    if (message.caption && !productInfo) {
+      console.log('Analyzing caption:', message.caption);
+      productInfo = await analyzeCaptionWithAI(
+        message.caption,
+        Deno.env.get('SUPABASE_URL') || '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+      );
+      console.log('Caption analysis result:', productInfo);
+    }
+
     const { buffer, filePath } = await getAndDownloadTelegramFile(mediaFile.file_id, botToken);
     
     const fileExt = filePath.split('.').pop() || '';
     const mimeType = mediaType === 'photo' ? 'image/jpeg' : mediaFile.mime_type || 'video/mp4';
     
-    // Generate filename using product information
+    // Generate filename using analyzed product information
     const uniqueFileName = generateSafeFileName(
       productInfo?.product_name || 'untitled',
       productInfo?.product_code || 'no_code',

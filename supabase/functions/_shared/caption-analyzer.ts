@@ -9,6 +9,8 @@ export async function analyzeCaptionWithAI(caption: string, supabaseUrl: string,
     });
 
     if (error) throw error;
+    
+    console.log('Caption analysis result:', data);
     return data;
   } catch (error) {
     console.error('Error analyzing caption:', error);
