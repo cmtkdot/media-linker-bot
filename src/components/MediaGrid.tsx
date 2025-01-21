@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Grid, List, Pencil } from "lucide-react";
+import { Grid, List, Pencil, Play } from "lucide-react";
 import MediaTable from "./MediaTable";
 import MediaViewer from "./MediaViewer";
 import {
@@ -116,6 +116,15 @@ const MediaGrid = () => {
     videoElement.currentTime = 0;
   };
 
+  const handlePlayClick = (e: React.MouseEvent<HTMLButtonElement>, video: HTMLVideoElement) => {
+    e.stopPropagation();
+    if (video.paused) {
+      video.play();
+    } else {
+      video.pause();
+    }
+  };
+
   if (isLoading) {
     return <div className="text-center p-4">Loading media...</div>;
   }
@@ -196,15 +205,25 @@ const MediaGrid = () => {
                 onClick={() => setPreviewItem(item)}
               >
                 {item.file_type === 'video' ? (
-                  <video 
-                    src={item.public_url || item.default_public_url}
-                    className="object-cover w-full h-full"
-                    muted
-                    playsInline
-                    onMouseEnter={(e) => handleVideoHover(e.target as HTMLVideoElement)}
-                    onMouseLeave={(e) => handleVideoLeave(e.target as HTMLVideoElement)}
-                    onError={(e) => handleVideoError(e.target as HTMLVideoElement, item.default_public_url)}
-                  />
+                  <div className="relative h-full">
+                    <video 
+                      src={item.public_url || item.default_public_url}
+                      className="object-cover w-full h-full"
+                      muted
+                      playsInline
+                      onMouseEnter={(e) => handleVideoHover(e.target as HTMLVideoElement)}
+                      onMouseLeave={(e) => handleVideoLeave(e.target as HTMLVideoElement)}
+                      onError={(e) => handleVideoError(e.target as HTMLVideoElement, item.default_public_url)}
+                    />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="absolute bottom-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80"
+                      onClick={(e) => handlePlayClick(e, e.currentTarget.parentElement?.querySelector('video') as HTMLVideoElement)}
+                    >
+                      <Play className="h-4 w-4" />
+                    </Button>
+                  </div>
                 ) : (
                   <img
                     src={item.public_url || item.default_public_url}
@@ -213,20 +232,19 @@ const MediaGrid = () => {
                     onError={(e) => handleImageError(e.target as HTMLImageElement, item.default_public_url)}
                   />
                 )}
-                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity p-4">
-                  <div className="text-white">
-                    {item.caption && <p className="font-medium mb-2">{item.caption}</p>}
-                    {item.product_name && <p className="text-sm">{item.product_name}</p>}
-                    {item.product_code && <p className="text-sm">#{item.product_code}</p>}
-                    {item.vendor_uid && <p className="text-sm">Vendor: {item.vendor_uid}</p>}
-                    {item.purchase_date && <p className="text-sm">Purchased: {new Date(item.purchase_date).toLocaleDateString()}</p>}
-                    {item.quantity && <p className="text-sm">Quantity: {item.quantity}</p>}
-                  </div>
-                </div>
               </div>
-              <div className="p-2 text-sm">
+              <div className="p-2 text-sm space-y-1">
                 <p className="font-medium truncate">{item.product_name || 'Untitled'}</p>
                 <p className="text-muted-foreground capitalize">{item.file_type}</p>
+                {item.quantity && (
+                  <p className="text-muted-foreground">Quantity: {item.quantity}</p>
+                )}
+                {item.vendor_uid && (
+                  <p className="text-muted-foreground">Vendor: {item.vendor_uid}</p>
+                )}
+                {item.purchase_date && (
+                  <p className="text-muted-foreground">Purchase Date: {new Date(item.purchase_date).toLocaleDateString()}</p>
+                )}
               </div>
             </Card>
           ))}
