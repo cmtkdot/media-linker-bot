@@ -38,14 +38,14 @@ serve(async (req) => {
         messages: [
           {
             role: 'system',
-            content: `Extract product information from captions following the format: "{Product Name} #{PurchaseCode} x {Quantity}". 
-            The PurchaseCode consists of a VendorUID (first 4 characters) followed by the Purchase Date in mmDDYY format.
+            content: `Extract product information from captions, it often follows the format: "{Product Name} #{PurchaseCode} x {Quantity}". 
+            The PurchaseCode consists of a VendorUID which is the text characters from the caption PurchaseCode followed by the Purchase Date in mmDDYY format.
             Return a JSON object with:
-            - product_name
-            - product_code
-            - quantity
-            - vendor_uid (first 4 characters of product_code)
-            - purchase_date (convert mmDDYY to MM/DD/YYYY format)
+            - product_name: which is the product name from the caption for the cannabis product
+            - product_code: which is the code from the caption that is started with # and followed by the PurchaseCode
+            - quantity: which is the quantity from the caption for the product often followed by the word "x"
+            - vendor_uid which is the vendor uid from the caption that are text characters from the PurchaseCode
+            - purchase_date (convert mmDDYY to MM/DD/YYYY format) which is the purchase date from the caption
             
             Example caption: "Cherry Blow Pop #FISH011625 x 3"
             Example response: {
@@ -55,13 +55,7 @@ serve(async (req) => {
               "vendor_uid": "FISH",
               "purchase_date": "01/16/2025"
             }
-            If any part is missing, set it to null.
-            
-            Important: For the purchase_date, extract the date components from positions 5-10 of the product_code:
-            - Month: positions 5-6
-            - Day: positions 7-8
-            - Year: positions 9-10 (prefix with "20" for full year)
-            Then format as MM/DD/YYYY.`
+            If any part is missing, set it to null.`
           },
           {
             role: 'user',
