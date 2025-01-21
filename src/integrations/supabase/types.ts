@@ -152,6 +152,41 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      process_message_transaction: {
+        Args: {
+          p_message_id: number
+          p_chat_id: number
+          p_sender_info: Json
+          p_message_type: string
+          p_message_data: Json
+          p_caption: string
+          p_media_group_id: string
+          p_product_name: string
+          p_product_code: string
+          p_quantity: number
+          p_status: string
+        }
+        Returns: {
+          id: string
+          message_id: number
+          chat_id: number
+          sender_info: Json
+          message_type: string
+          message_data: Json
+          caption: string
+          media_group_id: string
+          product_name: string
+          product_code: string
+          quantity: number
+          status: string
+          retry_count: number
+          last_retry_at: string
+          processing_error: string
+          processed_at: string
+          created_at: string
+          updated_at: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
