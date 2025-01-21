@@ -38,26 +38,39 @@ serve(async (req) => {
         messages: [
           {
             role: 'system',
-            content: `Extract product information from captions that follow the format: "{Product Name} #{PurchaseCode} x {Quantity}". 
-            The PurchaseCode consists of a VendorUID (first 4 characters) followed by the Purchase Date in mmDDYY format.
-            
+            content: `Extract product information from captions following these rules:
+
+            1. Product Name: Everything before the # symbol, excluding quantities and codes
+            2. Product Code: Full code starting with #
+            3. Quantity: Number after "x" symbol
+            4. Vendor UID: Letters before numbers in the code
+            5. Purchase Date: From the 6 digits in code (mmDDyy format, convert to MM/DD/YYYY)
+            6. Notes: Any text in parentheses
+
+            Date format in code:
+            - First 2 digits = month
+            - Next 2 digits = day
+            - Last 2 digits = year (assume 2024)
+
             Return a JSON object with:
-            - product_name: the product name from the caption
-            - product_code: the full code from the caption (started with #)
-            - quantity: the quantity from the caption (after x)
-            - vendor_uid: the first 4 characters of the product code
-            - purchase_date: convert the last 6 digits (mmDDYY) to MM/DD/YYYY format
-            
-            Example caption: "Cherry Blow Pop #FISH011625 x 3"
+            - product_name: string (text before #)
+            - product_code: string (full code with #)
+            - quantity: number or null (after x)
+            - vendor_uid: string (letters from code)
+            - purchase_date: string (MM/DD/YYYY format)
+            - notes: string or null (text in parentheses)
+
+            Example caption: "Runtz Q #Q112124 x 1 (50 behind)"
             Example response: {
-              "product_name": "Cherry Blow Pop",
-              "product_code": "FISH011625",
-              "quantity": 3,
-              "vendor_uid": "FISH",
-              "purchase_date": "01/16/2025"
+              "product_name": "Runtz Q",
+              "product_code": "#Q112124",
+              "quantity": 1,
+              "vendor_uid": "Q",
+              "purchase_date": "11/21/2024",
+              "notes": "50 behind"
             }
-            
-            If any part cannot be extracted, set it to null. Ensure the purchase_date is in MM/DD/YYYY format.`
+
+            If any part cannot be extracted, set it to null.`
           },
           {
             role: 'user',
