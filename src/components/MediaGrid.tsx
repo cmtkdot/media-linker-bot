@@ -102,10 +102,11 @@ const MediaGrid = () => {
   const formatDate = (dateString: string | null) => {
     if (!dateString) return null;
     const date = new Date(dateString);
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    return date.toLocaleDateString('en-US', {
+      month: '2-digit',
+      day: '2-digit',
+      year: 'numeric'
+    });
   };
 
   return (
@@ -113,7 +114,7 @@ const MediaGrid = () => {
       <div className="flex justify-between items-center">
         <Input
           className="max-w-sm"
-          placeholder="Search by caption, product name, code, or vendor..."
+          placeholder="Search by caption, product name, code, vendor..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -157,16 +158,19 @@ const MediaGrid = () => {
                   <div className="text-white">
                     {item.caption && <p className="font-medium mb-2">{item.caption}</p>}
                     {item.product_name && <p className="text-sm">{item.product_name}</p>}
-                    {item.product_code && <p className="text-sm">#{item.product_code}</p>}
+                    {item.product_code && <p className="text-sm">Code: #{item.product_code}</p>}
                     {item.vendor_uid && <p className="text-sm">Vendor: {item.vendor_uid}</p>}
-                    {item.purchase_date && <p className="text-sm">Purchased: {new Date(item.purchase_date).toLocaleDateString()}</p>}
+                    {item.purchase_date && <p className="text-sm">Purchased: {formatDate(item.purchase_date)}</p>}
                     {item.quantity && <p className="text-sm">Quantity: {item.quantity}</p>}
                   </div>
                 </div>
               </div>
-              <div className="p-2 text-sm">
+              <div className="p-2 space-y-1">
                 <p className="font-medium truncate">{item.product_name || 'Untitled'}</p>
-                <p className="text-muted-foreground capitalize">{item.file_type}</p>
+                <div className="flex justify-between text-sm text-muted-foreground">
+                  <span className="capitalize">{item.file_type}</span>
+                  {item.vendor_uid && <span>Vendor: {item.vendor_uid}</span>}
+                </div>
               </div>
             </Card>
           ))}

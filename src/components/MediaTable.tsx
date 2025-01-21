@@ -49,7 +49,12 @@ const MediaTable = ({ data, onEdit }: MediaTableProps) => {
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return '-';
-    return new Date(dateString).toLocaleDateString();
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      month: '2-digit',
+      day: '2-digit',
+      year: 'numeric'
+    });
   };
 
   return (
@@ -91,7 +96,7 @@ const MediaTable = ({ data, onEdit }: MediaTableProps) => {
               <TableCell>{item.vendor_uid || '-'}</TableCell>
               <TableCell>{formatDate(item.purchase_date)}</TableCell>
               <TableCell>{item.quantity || '-'}</TableCell>
-              <TableCell>{item.file_type}</TableCell>
+              <TableCell className="capitalize">{item.file_type}</TableCell>
               <TableCell>
                 <div className="flex space-x-2">
                   <Button
