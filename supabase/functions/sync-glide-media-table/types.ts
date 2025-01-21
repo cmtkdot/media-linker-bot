@@ -55,3 +55,8 @@ export interface TelegramMedia {
   default_public_url?: string;
   telegram_media_row_id?: string;
 }
+
+export interface GlideResponse {
+  rowIDs?: string[];
+  error?: string;
+}

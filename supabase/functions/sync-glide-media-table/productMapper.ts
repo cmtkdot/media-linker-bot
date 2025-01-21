@@ -23,7 +23,7 @@ export function mapSupabaseToGlide(supabaseRow: TelegramMedia): Record<string, a
   return mappedData;
 }
 
-export function mapGlideToSupabase(glideData: Record<string, any>): Partial<TelegramMedia> {
+export function mapGlideToSupabase(glideData: Record<string, any>, rowID?: string): Partial<TelegramMedia> {
   const schema = GlideTableSchema;
   
   return {
@@ -39,6 +39,7 @@ export function mapGlideToSupabase(glideData: Record<string, any>): Partial<Tele
     notes: glideData[schema.notes.name],
     analyzed_content: JSON.parse(glideData[schema.analyzedContent.name] || '{}'),
     purchase_order_uid: glideData[schema.purchaseOrderUid.name],
-    default_public_url: glideData[schema.defaultPublicUrl.name]
+    default_public_url: glideData[schema.defaultPublicUrl.name],
+    telegram_media_row_id: rowID
   };
 }

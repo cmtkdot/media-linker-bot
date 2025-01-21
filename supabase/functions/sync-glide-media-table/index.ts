@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
-import { GlideTableSchema, SyncResult } from './types.ts';
+import { GlideTableSchema, SyncResult, GlideResponse } from './types.ts';
+import { mapSupabaseToGlide, mapGlideToSupabase } from './productMapper.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -67,30 +68,15 @@ serve(async (req) => {
 
     for (const item of queueItems || []) {
       try {
-        const schema = GlideTableSchema;
         let columnValues: Record<string, any> = {};
+        let rowID = item.operation === 'INSERT' ? undefined : 
+                   item.operation === 'UPDATE' ? item.new_data?.telegram_media_row_id :
+                   item.old_data?.telegram_media_row_id;
 
         // Map data according to operation type
         if (item.operation !== 'DELETE') {
           const data = item.operation === 'UPDATE' ? item.new_data : item.old_data;
-          
-          // Map the data to Glide column names
-          columnValues = {
-            [schema.id.name]: data.id,
-            [schema.fileType.name]: data.file_type,
-            [schema.publicUrl.name]: data.public_url,
-            [schema.productName.name]: data.product_name,
-            [schema.productCode.name]: data.product_code,
-            [schema.quantity.name]: data.quantity,
-            [schema.lastSyncedAt.name]: new Date().toISOString(),
-            [schema.caption.name]: data.caption,
-            [schema.vendorUid.name]: data.vendor_uid,
-            [schema.purchaseDate.name]: data.purchase_date,
-            [schema.notes.name]: data.notes,
-            [schema.analyzedContent.name]: JSON.stringify(data.analyzed_content),
-            [schema.purchaseOrderUid.name]: data.purchase_order_uid,
-            [schema.defaultPublicUrl.name]: data.default_public_url
-          };
+          columnValues = mapSupabaseToGlide(data);
         }
 
         const response = await fetch(`${GLIDE_API_BASE}/mutateTables`, {
@@ -107,9 +93,7 @@ serve(async (req) => {
                      'add-row-to-table',
               tableName: config.table_id,
               ...(item.operation !== 'DELETE' && { columnValues }),
-              ...(item.operation !== 'INSERT' && { 
-                rowID: item.old_data?.telegram_media_row_id || item.new_data?.telegram_media_row_id 
-              })
+              ...(rowID && { rowID })
             }]
           })
         });
@@ -119,14 +103,15 @@ serve(async (req) => {
           throw new Error(`Glide API error: ${response.status} ${errorText}`);
         }
 
-        const responseData = await response.json();
+        const responseData = await response.json() as GlideResponse;
         
         // If this was an INSERT, store the Glide row ID
         if (item.operation === 'INSERT' && responseData.rowIDs?.[0]) {
+          const newRowID = responseData.rowIDs[0];
           await supabase
             .from(config.supabase_table_name)
             .update({ 
-              telegram_media_row_id: responseData.rowIDs[0],
+              telegram_media_row_id: newRowID,
               glide_data: columnValues,
               last_synced_at: new Date().toISOString()
             })
@@ -184,21 +169,8 @@ serve(async (req) => {
 
     if (!mediaError && mediaRecords) {
       for (const record of mediaRecords) {
-        const currentData = {
-          id: record.id,
-          file_type: record.file_type,
-          public_url: record.public_url,
-          product_name: record.product_name,
-          product_code: record.product_code,
-          quantity: record.quantity,
-          caption: record.caption,
-          vendor_uid: record.vendor_uid,
-          purchase_date: record.purchase_date,
-          notes: record.notes,
-          analyzed_content: record.analyzed_content,
-          purchase_order_uid: record.purchase_order_uid,
-          default_public_url: record.default_public_url
-        };
+        const currentData = mapSupabaseToGlide(record);
+        const mappedGlideData = mapGlideToSupabase(currentData, record.telegram_media_row_id);
 
         // Compare with stored Glide data
         if (record.glide_data && JSON.stringify(currentData) !== JSON.stringify(record.glide_data)) {
@@ -211,7 +183,7 @@ serve(async (req) => {
               table_name: config.supabase_table_name,
               record_id: record.id,
               operation: 'UPDATE',
-              new_data: currentData,
+              new_data: mappedGlideData,
               old_data: record.glide_data
             });
         }
