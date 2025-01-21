@@ -43,12 +43,19 @@ export const uploadMediaToStorage = async (
   
   // Get proper MIME type based on file extension or default
   const mimeType = getMimeType(fileName, defaultMimeType);
-  console.log('Determined MIME type:', mimeType);
+  console.log('Determined MIME type for upload:', mimeType);
   
+  // For Telegram photos without extension, ensure they're treated as JPEGs
+  const finalMimeType = mimeType === 'application/octet-stream' && fileName.includes('photo') 
+    ? 'image/jpeg' 
+    : mimeType;
+  
+  console.log('Final MIME type for upload:', finalMimeType);
+
   const { data: uploadData, error: uploadError } = await supabase.storage
     .from('media')
     .upload(fileName, buffer, {
-      contentType: mimeType,
+      contentType: finalMimeType,
       upsert: false,
       cacheControl: '3600'
     });

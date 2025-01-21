@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getMessageType, getAndDownloadTelegramFile, generateSafeFileName } from './telegram-service.ts';
+import { getMimeType } from './media-validators.ts';
 
 export async function createMessage(supabase: any, message: any, productInfo: any = null) {
   console.log('Creating message:', { 
@@ -100,10 +101,22 @@ export async function processMediaFile(
       fileExt
     );
 
+    // Determine proper MIME type
+    let mimeType = mediaFile.mime_type;
+    if (!mimeType || mimeType === 'application/octet-stream') {
+      if (mediaType === 'photo') {
+        mimeType = 'image/jpeg';
+      } else {
+        mimeType = getMimeType(filePath, mediaType === 'photo' ? 'image/jpeg' : 'application/octet-stream');
+      }
+    }
+
+    console.log('Using MIME type for upload:', mimeType);
+
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('media')
       .upload(uniqueFileName, buffer, {
-        contentType: mediaFile.mime_type || 'application/octet-stream',
+        contentType: mimeType,
         upsert: false,
         cacheControl: '3600'
       });
@@ -123,7 +136,7 @@ export async function processMediaFile(
       caption: message.caption,
       media_group_id: message.media_group_id,
       file_size: mediaFile.file_size,
-      mime_type: mediaFile.mime_type,
+      mime_type: mimeType,
       width: mediaFile.width,
       height: mediaFile.height,
       duration: 'duration' in mediaFile ? mediaFile.duration : null,

@@ -32,7 +32,15 @@ export const validateMediaFile = async (file: any, mediaType: string) => {
 
   // Special handling for Telegram files without explicit MIME type
   if (!file.mime_type && file.file_path) {
-    file.mime_type = getMimeType(file.file_path);
+    const inferredMimeType = getMimeType(file.file_path);
+    console.log('Inferred MIME type from file path:', inferredMimeType);
+    file.mime_type = inferredMimeType;
+  }
+
+  // For photos without file_path, default to image/jpeg
+  if (mediaType === 'photo' && !file.mime_type) {
+    console.log('Setting default MIME type for photo to image/jpeg');
+    file.mime_type = 'image/jpeg';
   }
 
   const mimeType = file.mime_type?.toLowerCase();
@@ -40,7 +48,6 @@ export const validateMediaFile = async (file: any, mediaType: string) => {
 
   if (mimeType && !allowedTypes.includes(mimeType)) {
     console.warn(`Warning: Received mime type ${mimeType} for ${mediaType}`);
-    // Don't throw error, let's try to infer from extension
   }
 
   return true;
@@ -104,8 +111,11 @@ export const getMimeType = (filePath: string, defaultType: string = 'application
 
   // For Telegram photos that come without extension
   if (!ext && defaultType !== 'application/octet-stream') {
+    console.log('Using default MIME type:', defaultType);
     return defaultType;
   }
 
-  return ext ? (mimeTypes[ext] || defaultType) : defaultType;
+  const mimeType = ext ? (mimeTypes[ext] || defaultType) : defaultType;
+  console.log('Determined MIME type:', mimeType, 'for extension:', ext);
+  return mimeType;
 };
