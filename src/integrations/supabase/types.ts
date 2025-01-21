@@ -209,7 +209,7 @@ export type Database = {
           {
             foreignKeyName: "telegram_media_message_id_fkey"
             columns: ["message_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "messages"
             referencedColumns: ["id"]
           },
