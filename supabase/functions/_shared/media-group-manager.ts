@@ -1,5 +1,3 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
 export async function syncMediaGroupCaptions(
   supabase: any,
   mediaGroupId: string,
@@ -13,7 +11,7 @@ export async function syncMediaGroupCaptions(
   });
 
   try {
-    // First, get all media in this group ordered by creation date
+    // Get all media in this group ordered by creation date
     const { data: groupMedia, error: fetchError } = await supabase
       .from('telegram_media')
       .select('*')
