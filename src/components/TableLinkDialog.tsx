@@ -41,20 +41,38 @@ export function TableLinkDialog({ config, onClose, onSuccess }: TableLinkDialogP
 
   const fetchAvailableTables = async () => {
     try {
-      // Get all tables that start with 'glide_'
-      const { data, error } = await supabase
+      // Get all tables from Supabase
+      const { data: tablesData, error: tablesError } = await supabase
         .from('glide_config')
         .select('supabase_table_name')
         .not('supabase_table_name', 'is', null);
 
-      if (error) throw error;
+      if (tablesError) throw tablesError;
 
-      // Filter out tables that are already linked
-      const linkedTables = new Set(data.map(d => d.supabase_table_name));
-      const tables = ['telegram_media']; // Add default table
-      setAvailableTables(tables.filter(table => !linkedTables.has(table)));
+      // Get list of linked tables
+      const linkedTables = new Set(tablesData.map(d => d.supabase_table_name));
+
+      // Get all tables in the database
+      const { data: allTables, error: allTablesError } = await supabase
+        .rpc('get_all_tables');
+
+      if (allTablesError) throw allTablesError;
+
+      // Filter out system tables and already linked tables
+      const availableTables = allTables.filter((table: string) => 
+        !linkedTables.has(table) && 
+        !table.startsWith('_') && 
+        !['schema_migrations', 'spatial_ref_sys'].includes(table)
+      );
+
+      setAvailableTables(availableTables);
     } catch (error) {
       console.error('Error fetching tables:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch available tables",
+        variant: "destructive",
+      });
     }
   };
 
