@@ -1,10 +1,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { TelegramUpdate } from './telegram-types.ts';
-import { analyzeCaption } from './telegram-service.ts';
-import { createMessage } from './database-service.ts';
-import { updateExistingMedia, processNewMedia } from './media-processor.ts';
-import { handleProcessingError } from './error-handler.ts';
-import { MAX_RETRY_ATTEMPTS } from './constants.ts';
+import { analyzeCaptionWithAI } from './caption-analyzer.ts';
+import { handleMessageProcessing } from './message-manager.ts';
+import { processMedia } from './media-handler.ts';
 
 export async function handleWebhookUpdate(
   update: TelegramUpdate,
@@ -35,20 +33,13 @@ export async function handleWebhookUpdate(
   try {
     let productInfo = null;
     if (message.caption) {
-      console.log('Analyzing caption:', message.caption);
-      try {
-        productInfo = await analyzeCaption(
-          message.caption,
-          Deno.env.get('SUPABASE_URL') || '',
-          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
-        );
-        console.log('Product info from AI analysis:', productInfo);
-      } catch (error) {
-        console.error('Error analyzing caption:', error);
-      }
+      productInfo = await analyzeCaptionWithAI(
+        message.caption,
+        Deno.env.get('SUPABASE_URL') || '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+      );
     }
 
-    // Check for existing message using maybeSingle() instead of single()
     const { data: existingMessage, error: fetchError } = await supabase
       .from('messages')
       .select('*')
@@ -78,202 +69,21 @@ export async function handleWebhookUpdate(
       };
     }
 
-    let messageRecord = existingMessage;
-    let retryCount = existingMessage?.retry_count || 0;
+    const { messageRecord, retryCount } = await handleMessageProcessing(
+      supabase,
+      message,
+      existingMessage,
+      productInfo
+    );
 
-    if (existingMessage && productInfo) {
-      try {
-        const { error: updateError } = await supabase
-          .from('messages')
-          .update({
-            caption: message.caption,
-            product_name: productInfo.product_name,
-            product_code: productInfo.product_code,
-            quantity: productInfo.quantity,
-            vendor_uid: productInfo.vendor_uid,
-            purchase_date: productInfo.purchase_date,
-            notes: productInfo.notes,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingMessage.id);
-
-        if (updateError) throw updateError;
-        console.log('Updated existing message with new product info:', {
-          id: existingMessage.id,
-          product_info: productInfo
-        });
-
-        if (message.media_group_id) {
-          const { error: mediaGroupUpdateError } = await supabase
-            .from('telegram_media')
-            .update({
-              caption: message.caption,
-              product_name: productInfo.product_name,
-              product_code: productInfo.product_code,
-              quantity: productInfo.quantity,
-              vendor_uid: productInfo.vendor_uid,
-              purchase_date: productInfo.purchase_date,
-              notes: productInfo.notes,
-              updated_at: new Date().toISOString()
-            })
-            .eq('telegram_data->media_group_id', message.media_group_id);
-
-          if (mediaGroupUpdateError) {
-            console.error('Error updating media group:', mediaGroupUpdateError);
-          }
-        }
-      } catch (error) {
-        console.error('Error updating existing message:', error);
-      }
-    } else if (!existingMessage) {
-      try {
-        messageRecord = await createMessage(supabase, message, productInfo);
-        console.log('Created new message record:', {
-          id: messageRecord.id,
-          message_id: message.message_id
-        });
-      } catch (error) {
-        console.error('Error creating message:', {
-          error: error.message,
-          message_id: message.message_id
-        });
-        
-        await supabase.from('failed_webhook_updates').insert({
-          message_id: message.message_id,
-          chat_id: message.chat.id,
-          error_message: error.message,
-          error_stack: error.stack,
-          message_data: message,
-          status: 'failed'
-        });
-        
-        return { 
-          error: 'Failed to create message',
-          details: error.message
-        };
-      }
-    }
-
-    // Process media with retries
-    while (retryCount < MAX_RETRY_ATTEMPTS) {
-      try {
-        const mediaTypes = ['photo', 'video', 'document', 'animation'] as const;
-        let mediaFile = null;
-        let mediaType = '';
-
-        for (const type of mediaTypes) {
-          if (message[type]) {
-            mediaFile = type === 'photo' 
-              ? message[type]![message[type]!.length - 1] 
-              : message[type];
-            mediaType = type;
-            break;
-          }
-        }
-
-        if (!mediaFile) {
-          throw new Error('No media file found in message');
-        }
-
-        console.log('Processing media file:', {
-          file_id: mediaFile.file_id,
-          type: mediaType,
-          retry_count: retryCount
-        });
-
-        // Check for existing media
-        const { data: existingMedia, error: mediaCheckError } = await supabase
-          .from('telegram_media')
-          .select('*')
-          .eq('file_unique_id', mediaFile.file_unique_id)
-          .maybeSingle();
-
-        if (mediaCheckError) {
-          throw mediaCheckError;
-        }
-
-        let result;
-        if (existingMedia) {
-          console.log('Found existing media, updating records:', {
-            media_id: existingMedia.id,
-            file_unique_id: mediaFile.file_unique_id
-          });
-
-          // Update existing media with new product info if available
-          if (productInfo) {
-            const { error: mediaUpdateError } = await supabase
-              .from('telegram_media')
-              .update({
-                caption: message.caption,
-                product_name: productInfo.product_name,
-                product_code: productInfo.product_code,
-                quantity: productInfo.quantity,
-                vendor_uid: productInfo.vendor_uid,
-                purchase_date: productInfo.purchase_date,
-                notes: productInfo.notes,
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', existingMedia.id);
-
-            if (mediaUpdateError) {
-              console.error('Error updating existing media with new product info:', mediaUpdateError);
-            } else {
-              console.log('Updated existing media with new product info:', {
-                id: existingMedia.id,
-                product_info: productInfo
-              });
-            }
-          }
-
-          result = await updateExistingMedia(supabase, mediaFile, message, messageRecord);
-        } else {
-          console.log('Processing new media file:', {
-            file_id: mediaFile.file_id,
-            type: mediaType
-          });
-          result = await processNewMedia(
-            supabase,
-            mediaFile,
-            mediaType,
-            message,
-            messageRecord,
-            botToken,
-            productInfo
-          );
-        }
-
-        // Update message status to success
-        const { error: statusError } = await supabase
-          .from('messages')
-          .update({
-            status: 'success',
-            processed_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', messageRecord.id);
-
-        if (statusError) {
-          throw statusError;
-        }
-
-        console.log('Successfully processed message:', {
-          message_id: messageRecord.id,
-          media_type: mediaType
-        });
-
-        return { 
-          message: 'Media processed successfully', 
-          messageId: messageRecord.id, 
-          ...result 
-        };
-
-      } catch (error) {
-        retryCount++;
-        await handleProcessingError(supabase, error, messageRecord, retryCount);
-      }
-    }
-
-    throw new Error(`Processing failed after ${MAX_RETRY_ATTEMPTS} attempts`);
+    return await processMedia(
+      supabase,
+      message,
+      messageRecord,
+      botToken,
+      productInfo,
+      retryCount
+    );
 
   } catch (error) {
     console.error('Error in handleWebhookUpdate:', {
