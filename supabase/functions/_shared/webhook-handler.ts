@@ -33,6 +33,22 @@ export async function handleWebhookUpdate(
   });
 
   try {
+    // First analyze caption if present
+    let productInfo = null;
+    if (message.caption) {
+      console.log('Analyzing caption:', message.caption);
+      try {
+        productInfo = await analyzeCaption(
+          message.caption,
+          Deno.env.get('SUPABASE_URL') || '',
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+        );
+        console.log('Caption analysis result:', productInfo);
+      } catch (error) {
+        console.error('Error analyzing caption:', error);
+      }
+    }
+
     // Check for existing message
     const { data: existingMessage, error: fetchError } = await supabase
       .from('messages')
@@ -47,66 +63,42 @@ export async function handleWebhookUpdate(
         message_id: message.message_id,
         chat_id: message.chat.id
       });
-      
-      // Log the error and continue with next message
-      await supabase.from('failed_webhook_updates').insert({
-        message_id: message.message_id,
-        chat_id: message.chat.id,
-        error_message: fetchError.message,
-        error_stack: fetchError.stack,
-        message_data: message,
-        status: 'failed'
-      });
-      
-      return { 
-        error: 'Failed to check for existing message',
-        details: fetchError.message
-      };
+      throw fetchError;
     }
 
     let messageRecord = existingMessage;
     let retryCount = existingMessage?.retry_count || 0;
 
-    // Create new message record if it doesn't exist
+    // If message doesn't exist, create it with product info
     if (!existingMessage) {
       try {
-        let productInfo = null;
-        if (message.caption) {
-          console.log('Analyzing caption:', message.caption);
-          productInfo = await analyzeCaption(
-            message.caption,
-            Deno.env.get('SUPABASE_URL') || '',
-            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
-          );
-        }
         messageRecord = await createMessage(supabase, message, productInfo);
         console.log('Created new message record:', {
           id: messageRecord.id,
-          message_id: message.message_id
+          message_id: message.message_id,
+          product_info: productInfo
         });
       } catch (error) {
-        console.error('Error creating message:', {
-          error: error.message,
-          message_id: message.message_id
-        });
-        
-        // Log the error and continue with next message
-        await supabase.from('failed_webhook_updates').insert({
-          message_id: message.message_id,
-          chat_id: message.chat.id,
-          error_message: error.message,
-          error_stack: error.stack,
-          message_data: message,
-          status: 'failed'
-        });
-        
-        return { 
-          error: 'Failed to create message',
-          details: error.message
-        };
+        if (error.message === 'Duplicate file_id found in message_data') {
+          // For duplicate file_id, we'll update existing records instead
+          console.log('Duplicate media detected, will update existing records');
+          await supabase.from('failed_webhook_updates').insert({
+            message_id: message.message_id,
+            chat_id: message.chat.id,
+            error_message: error.message,
+            message_data: message,
+            status: 'duplicate'
+          });
+          return {
+            error: 'Duplicate media file',
+            details: error.message
+          };
+        }
+        throw error;
       }
     }
 
+    // Process media with retry logic
     while (retryCount < MAX_RETRY_ATTEMPTS) {
       try {
         const mediaTypes = ['photo', 'video', 'document', 'animation'] as const;
@@ -130,7 +122,8 @@ export async function handleWebhookUpdate(
         console.log('Processing media file:', {
           file_id: mediaFile.file_id,
           type: mediaType,
-          retry_count: retryCount
+          retry_count: retryCount,
+          product_info: productInfo
         });
 
         // Check for existing media
@@ -146,15 +139,17 @@ export async function handleWebhookUpdate(
 
         let result;
         if (existingMedia) {
-          console.log('Found existing media, updating records without re-upload:', {
+          console.log('Found existing media, updating records:', {
             media_id: existingMedia.id,
-            file_unique_id: mediaFile.file_unique_id
+            file_unique_id: mediaFile.file_unique_id,
+            product_info: productInfo
           });
           result = await updateExistingMedia(supabase, mediaFile, message, messageRecord);
         } else {
           console.log('Processing new media file:', {
             file_id: mediaFile.file_id,
-            type: mediaType
+            type: mediaType,
+            product_info: productInfo
           });
           result = await processNewMedia(
             supabase,
@@ -163,7 +158,7 @@ export async function handleWebhookUpdate(
             message,
             messageRecord,
             botToken,
-            messageRecord.product_info
+            productInfo
           );
         }
 
@@ -183,7 +178,8 @@ export async function handleWebhookUpdate(
 
         console.log('Successfully processed message:', {
           message_id: messageRecord.id,
-          media_type: mediaType
+          media_type: mediaType,
+          product_info: productInfo
         });
 
         return { 
@@ -194,21 +190,6 @@ export async function handleWebhookUpdate(
 
       } catch (error) {
         retryCount++;
-        if (error.message === 'Duplicate file_id found in message_data') {
-          // For duplicate file_id errors, log and continue without retrying
-          await supabase.from('failed_webhook_updates').insert({
-            message_id: message.message_id,
-            chat_id: message.chat.id,
-            error_message: error.message,
-            error_stack: error.stack,
-            message_data: message,
-            status: 'duplicate'
-          });
-          return {
-            error: 'Duplicate media file',
-            details: error.message
-          };
-        }
         await handleProcessingError(supabase, error, messageRecord, retryCount);
       }
     }
@@ -222,7 +203,6 @@ export async function handleWebhookUpdate(
       chat_id: message?.chat?.id
     });
     
-    // Ensure the error is logged in the failed_webhook_updates table
     await supabase.from('failed_webhook_updates').insert({
       message_id: message?.message_id,
       chat_id: message?.chat?.id,

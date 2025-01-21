@@ -1,11 +1,17 @@
 import { getMessageType, getAndDownloadTelegramFile, generateSafeFileName } from './telegram-service.ts';
 import { handleMediaGroup } from './media-group-handler.ts';
-import { processMediaFile } from './database-service.ts';
 
 export async function updateExistingMedia(supabase: any, mediaFile: any, message: any, messageRecord: any) {
   console.log('Updating existing media record for file_unique_id:', mediaFile.file_unique_id, {
     message_id: message.message_id,
-    chat_id: message.chat.id
+    chat_id: message.chat.id,
+    product_info: {
+      product_name: messageRecord.product_name,
+      product_code: messageRecord.product_code,
+      quantity: messageRecord.quantity,
+      vendor_uid: messageRecord.vendor_uid,
+      purchase_date: messageRecord.purchase_date
+    }
   });
   
   try {
@@ -78,7 +84,8 @@ export async function updateExistingMedia(supabase: any, mediaFile: any, message
 
     console.log('Updating message record:', {
       id: messageRecord.id,
-      message_id: message.message_id
+      message_id: message.message_id,
+      product_info: productInfo
     });
 
     // Update message record with all fields
@@ -86,12 +93,7 @@ export async function updateExistingMedia(supabase: any, mediaFile: any, message
       .from('messages')
       .update({
         message_data: message,
-        caption: message.caption,
-        product_name: messageRecord.product_name,
-        product_code: messageRecord.product_code,
-        quantity: messageRecord.quantity,
-        vendor_uid: messageRecord.vendor_uid,
-        purchase_date: messageRecord.purchase_date,
+        ...productInfo,
         updated_at: new Date().toISOString(),
         status: 'success',
         processed_at: new Date().toISOString()
@@ -131,16 +133,15 @@ export async function processNewMedia(
   botToken: string,
   productInfo: any = null
 ) {
-  console.log(`Processing new ${mediaType} file:`, mediaFile.file_id);
+  console.log(`Processing new ${mediaType} file:`, {
+    file_id: mediaFile.file_id,
+    product_info: productInfo
+  });
 
-  const { buffer, filePath } = await getAndDownloadTelegramFile(mediaFile.file_id, botToken);
-  
-    // Ensure proper file extension for photos
-    let fileExt = filePath.split('.').pop() || '';
-    if (mediaType === 'photo' && !fileExt) {
-      fileExt = 'jpg';
-    }
+  try {
+    const { buffer, filePath } = await getAndDownloadTelegramFile(mediaFile.file_id, botToken);
     
+    const fileExt = filePath.split('.').pop() || '';
     const uniqueFileName = generateSafeFileName(
       `${mediaType}_${mediaFile.file_unique_id}_${Date.now()}`,
       fileExt
@@ -150,7 +151,7 @@ export async function processNewMedia(
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('media')
       .upload(uniqueFileName, buffer, {
-        contentType: mediaFile.mime_type || (mediaType === 'photo' ? 'image/jpeg' : 'application/octet-stream'),
+        contentType: mediaFile.mime_type || 'application/octet-stream',
         upsert: false,
         cacheControl: '3600'
       });
@@ -174,18 +175,29 @@ export async function processNewMedia(
       caption: message.caption,
       media_group_id: message.media_group_id,
       file_size: mediaFile.file_size ? BigInt(mediaFile.file_size).toString() : null,
-      mime_type: mediaFile.mime_type || (mediaType === 'photo' ? 'image/jpeg' : 'application/octet-stream'),
+      mime_type: mediaFile.mime_type,
       width: mediaFile.width ? BigInt(mediaFile.width).toString() : null,
       height: mediaFile.height ? BigInt(mediaFile.height).toString() : null,
       duration: 'duration' in mediaFile ? BigInt(mediaFile.duration).toString() : null,
       storage_path: uniqueFileName
     };
 
+    // Prepare product info from messageRecord
+    const mediaProductInfo = {
+      caption: message.caption,
+      product_name: messageRecord.product_name,
+      product_code: messageRecord.product_code,
+      quantity: messageRecord.quantity,
+      vendor_uid: messageRecord.vendor_uid,
+      purchase_date: messageRecord.purchase_date
+    };
+
     console.log('Inserting media record with data:', {
       file_id: mediaFile.file_id,
       file_type: mediaType,
       public_url: publicUrl,
-      message_id: messageRecord.id
+      message_id: messageRecord.id,
+      product_info: mediaProductInfo
     });
 
     const { error: dbError } = await supabase
@@ -197,12 +209,7 @@ export async function processNewMedia(
         telegram_data: telegramData,
         message_id: messageRecord.id,
         public_url: publicUrl,
-        caption: message.caption,
-        ...(productInfo && {
-          product_name: productInfo.product_name,
-          product_code: productInfo.product_code,
-          quantity: productInfo.quantity ? BigInt(productInfo.quantity).toString() : null
-        })
+        ...mediaProductInfo
       });
 
     if (dbError) {
@@ -210,7 +217,14 @@ export async function processNewMedia(
       throw new Error(`Failed to insert into database: ${dbError.message}`);
     }
 
-  await handleMediaGroup(supabase, message, messageRecord);
-  
-  return { public_url: publicUrl };
+    // Handle media group updates if needed
+    if (message.media_group_id) {
+      await handleMediaGroup(supabase, message, messageRecord);
+    }
+
+    return { public_url: publicUrl };
+  } catch (error) {
+    console.error(`Error processing ${mediaType} file:`, error);
+    throw error;
+  }
 }

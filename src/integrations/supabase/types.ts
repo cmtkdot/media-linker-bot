@@ -62,6 +62,7 @@ export type Database = {
           message_data: Json
           message_id: number
           message_type: string
+          notes: string | null
           processed_at: string | null
           processing_error: string | null
           product_code: string | null
@@ -84,6 +85,7 @@ export type Database = {
           message_data?: Json
           message_id: number
           message_type: string
+          notes?: string | null
           processed_at?: string | null
           processing_error?: string | null
           product_code?: string | null
@@ -106,6 +108,7 @@ export type Database = {
           message_data?: Json
           message_id?: number
           message_type?: string
+          notes?: string | null
           processed_at?: string | null
           processing_error?: string | null
           product_code?: string | null
@@ -132,6 +135,7 @@ export type Database = {
           last_synced_at: string | null
           media_metadata: Json
           message_id: string | null
+          notes: string | null
           processed: boolean | null
           processing_error: string | null
           product_code: string | null
@@ -154,6 +158,7 @@ export type Database = {
           last_synced_at?: string | null
           media_metadata?: Json
           message_id?: string | null
+          notes?: string | null
           processed?: boolean | null
           processing_error?: string | null
           product_code?: string | null
@@ -176,6 +181,7 @@ export type Database = {
           last_synced_at?: string | null
           media_metadata?: Json
           message_id?: string | null
+          notes?: string | null
           processed?: boolean | null
           processing_error?: string | null
           product_code?: string | null
