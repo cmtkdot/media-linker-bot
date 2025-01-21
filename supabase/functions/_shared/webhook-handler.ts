@@ -1,4 +1,3 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { TelegramUpdate } from './telegram-types.ts';
 import { analyzeCaptionWithAI } from './caption-analyzer.ts';
 import { handleMessageProcessing } from './message-manager.ts';
@@ -32,7 +31,7 @@ export async function handleWebhookUpdate(
   });
 
   try {
-    // Step 1: Analyze caption first if present
+    // Step 1: Analyze caption if present
     let productInfo = null;
     if (message.caption) {
       try {
@@ -47,54 +46,29 @@ export async function handleWebhookUpdate(
       }
     }
 
-    // Step 2: Check for existing message and media in parallel
-    const [messageCheck, mediaCheck] = await Promise.all([
-      supabase
-        .from('messages')
-        .select('*')
-        .eq('chat_id', message.chat.id)
-        .eq('message_id', message.message_id)
-        .maybeSingle(),
-      supabase
-        .from('telegram_media')
-        .select('*')
-        .eq('file_unique_id', message.photo?.[0]?.file_unique_id || 
-                             message.video?.file_unique_id || 
-                             message.document?.file_unique_id || 
-                             message.animation?.file_unique_id)
-        .maybeSingle()
-    ]);
-
-    if (messageCheck.error) {
-      console.error('Error checking for existing message:', messageCheck.error);
-      throw messageCheck.error;
-    }
-
-    if (mediaCheck.error) {
-      console.error('Error checking for existing media:', mediaCheck.error);
-      throw mediaCheck.error;
-    }
-
-    // Step 3: Process message with analyzed content
+    // Step 2: Process message and create record
     const { messageRecord, retryCount } = await handleMessageProcessing(
       supabase,
       message,
-      messageCheck.data,
+      null, // No existing message for new updates
       productInfo
     );
 
-    // Step 4: Process media with all gathered data
+    if (!messageRecord) {
+      throw new Error('Failed to create message record');
+    }
+
+    // Step 3: Process media with gathered data
     const result = await processMedia(
       supabase,
       message,
       messageRecord,
       botToken,
       productInfo,
-      retryCount,
-      mediaCheck.data
+      retryCount
     );
 
-    // Step 5: Update message status on success
+    // Step 4: Update message status on success
     const { error: statusError } = await supabase
       .from('messages')
       .update({
@@ -110,7 +84,7 @@ export async function handleWebhookUpdate(
       throw statusError;
     }
 
-    // Step 6: Clean up old failed records
+    // Step 5: Clean up old failed records
     await cleanupFailedRecords(supabase);
 
     console.log('Successfully processed update:', {
@@ -132,29 +106,8 @@ export async function handleWebhookUpdate(
       stack: error.stack,
       update_id: update.update_id,
       message_id: message?.message_id || 'undefined',
-      chat_id: message?.chat?.id || 'undefined',
-      retry_count: error.retryCount || 0
+      chat_id: message?.chat?.id || 'undefined'
     });
-
-    // Log to failed_webhook_updates table
-    try {
-      const { error: logError } = await supabase
-        .from('failed_webhook_updates')
-        .insert({
-          message_id: message?.message_id,
-          chat_id: message?.chat?.id,
-          error_message: error.message,
-          error_stack: error.stack,
-          message_data: message,
-          status: 'failed'
-        });
-
-      if (logError) {
-        console.error('Error logging failed webhook:', logError);
-      }
-    } catch (logError) {
-      console.error('Error logging to failed_webhook_updates:', logError);
-    }
 
     throw error;
   }

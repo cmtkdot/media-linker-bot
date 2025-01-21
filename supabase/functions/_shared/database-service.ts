@@ -3,6 +3,11 @@ import { getMessageType, getAndDownloadTelegramFile, generateSafeFileName } from
 import { getMimeType } from './media-validators.ts';
 
 export async function createMessage(supabase: any, message: any, productInfo: any = null) {
+  if (!message?.message_id || !message?.chat?.id) {
+    console.error('Invalid message data:', { message });
+    throw new Error('Invalid message data: missing required fields');
+  }
+
   console.log('Creating message:', { 
     message_id: message.message_id, 
     chat_id: message.chat.id,
@@ -36,9 +41,15 @@ export async function createMessage(supabase: any, message: any, productInfo: an
       .select('*')
       .eq('message_id', message.message_id)
       .eq('chat_id', message.chat.id)
-      .single();
+      .maybeSingle();
+
+    if (checkError) {
+      console.error('Error checking for existing message:', checkError);
+      throw checkError;
+    }
 
     if (existingMessage) {
+      console.log('Updating existing message:', existingMessage.id);
       const { data: updatedMessage, error: updateError } = await supabase
         .from('messages')
         .update(messageData)
@@ -46,17 +57,29 @@ export async function createMessage(supabase: any, message: any, productInfo: an
         .select()
         .single();
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error('Error updating message:', updateError);
+        throw updateError;
+      }
       return updatedMessage;
     }
 
+    console.log('Creating new message with data:', messageData);
     const { data: newMessage, error: insertError } = await supabase
       .from('messages')
       .insert(messageData)
       .select()
       .single();
 
-    if (insertError) throw insertError;
+    if (insertError) {
+      console.error('Error creating message:', insertError);
+      throw insertError;
+    }
+
+    if (!newMessage) {
+      throw new Error('Failed to create message record: no data returned');
+    }
+
     return newMessage;
   } catch (error) {
     console.error('Error in createMessage:', error);
