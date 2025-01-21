@@ -16,15 +16,7 @@ export function mapGlideToSupabase(glideRow: GlideMediaRow): Partial<SupabaseMed
     processing_error: glideRow.processingError,
     last_synced_at: glideRow.lastSyncedAt,
     created_at: glideRow.createdAt,
-    updated_at: glideRow.updatedAt,
-    message_id: glideRow.messageId,
-    caption: glideRow.caption,
-    vendor_uid: glideRow.vendorUid,
-    purchase_date: glideRow.purchaseDate,
-    notes: glideRow.notes,
-    analyzed_content: glideRow.analyzedContent ? JSON.parse(glideRow.analyzedContent) : null,
-    purchase_order_uid: glideRow.purchaseOrderUid,
-    default_public_url: glideRow.defaultPublicUrl
+    updated_at: glideRow.updatedAt
   };
 }
 
@@ -45,14 +37,6 @@ export function mapSupabaseToGlide(supabaseRow: SupabaseMediaRow): Partial<Glide
     processingError: supabaseRow.processing_error,
     lastSyncedAt: supabaseRow.last_synced_at,
     createdAt: supabaseRow.created_at,
-    updatedAt: supabaseRow.updated_at,
-    messageId: supabaseRow.message_id,
-    caption: supabaseRow.caption,
-    vendorUid: supabaseRow.vendor_uid,
-    purchaseDate: supabaseRow.purchase_date,
-    notes: supabaseRow.notes,
-    analyzedContent: supabaseRow.analyzed_content ? JSON.stringify(supabaseRow.analyzed_content) : null,
-    purchaseOrderUid: supabaseRow.purchase_order_uid,
-    defaultPublicUrl: supabaseRow.default_public_url
+    updatedAt: supabaseRow.updated_at
   };
 }

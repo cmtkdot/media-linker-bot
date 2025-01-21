@@ -1,4 +1,5 @@
 export interface GlideConfig {
+  id: string;
   app_id: string;
   table_id: string;
   table_name: string;
@@ -24,14 +25,6 @@ export interface GlideMediaRow {
   lastSyncedAt: string | null;
   createdAt: string;
   updatedAt: string;
-  messageId: string | null;
-  caption: string | null;
-  vendorUid: string | null;
-  purchaseDate: string | null;
-  notes: string | null;
-  analyzedContent: string | null;
-  purchaseOrderUid: string | null;
-  defaultPublicUrl: string | null;
 }
 
 export interface SupabaseMediaRow {
@@ -51,14 +44,6 @@ export interface SupabaseMediaRow {
   last_synced_at: string | null;
   created_at: string;
   updated_at: string;
-  message_id: string | null;
-  caption: string | null;
-  vendor_uid: string | null;
-  purchase_date: string | null;
-  notes: string | null;
-  analyzed_content: Record<string, any> | null;
-  purchase_order_uid: string | null;
-  default_public_url: string | null;
 }
 
 export interface SyncResult {

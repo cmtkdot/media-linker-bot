@@ -1,8 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import { Table } from 'https://esm.sh/@glideapps/tables@1.0.5';
+import { GlideConfig, SyncResult } from './types.ts';
 import { mapGlideToSupabase, mapSupabaseToGlide } from './productMapper.ts';
-import type { GlideConfig, SyncResult } from './types.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -20,16 +20,6 @@ serve(async (req) => {
   try {
     console.log('Starting sync operation...');
     
-    const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      throw new Error('Missing required environment variables');
-    }
-
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    
-    // Parse request body
     const { operation, tableId } = await req.json();
     console.log('Received sync request:', { operation, tableId });
     
@@ -38,6 +28,15 @@ serve(async (req) => {
     }
 
     // Get Glide configuration
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error('Missing Supabase configuration');
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
     const { data: glideConfig, error: configError } = await supabase
       .from('glide_config')
       .select('*')
@@ -54,7 +53,7 @@ serve(async (req) => {
       supabase_table_name: glideConfig.supabase_table_name
     });
 
-    // Initialize Glide table with the configuration
+    // Initialize Glide table
     const table = new Table(glideConfig.api_token, glideConfig.table_id);
 
     let result: SyncResult;
@@ -163,10 +162,10 @@ serve(async (req) => {
         stack: error.stack
       }),
       { 
-        status: 500,
-        headers: {
+        status: 400,
+        headers: { 
           ...corsHeaders,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json' 
         }
       }
     );
