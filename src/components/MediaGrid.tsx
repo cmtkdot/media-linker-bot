@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Grid, List, RefreshCw } from "lucide-react";
+import { Grid, List, Wand2 } from "lucide-react";
 import MediaTable from "./MediaTable";
 import {
   Dialog,
@@ -34,7 +34,7 @@ const MediaGrid = () => {
   const [view, setView] = useState<'grid' | 'table'>('grid');
   const [search, setSearch] = useState("");
   const [editItem, setEditItem] = useState<MediaItem | null>(null);
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -63,52 +63,35 @@ const MediaGrid = () => {
     retry: 3
   });
 
-  const handleSync = async () => {
-    if (!editItem?.id) return;
+  const handleAnalyzeCaption = async () => {
+    if (!editItem?.telegram_data?.media_group_id) return;
     
-    setIsSyncing(true);
+    setIsAnalyzing(true);
     try {
-      const { data: mediaGroup, error: groupError } = await supabase
-        .from('telegram_media')
-        .select('*')
-        .eq('telegram_data->>media_group_id', editItem.telegram_data?.media_group_id)
-        .order('created_at', { ascending: false });
+      const { data: response, error } = await supabase.functions.invoke('analyze-caption', {
+        body: { 
+          caption: editItem.caption,
+          mediaGroupId: editItem.telegram_data.media_group_id
+        }
+      });
 
-      if (groupError) throw groupError;
-
-      if (mediaGroup && mediaGroup.length > 0) {
-        const latestItem = mediaGroup[0];
-        const { error: updateError } = await supabase
-          .from('telegram_media')
-          .update({
-            caption: latestItem.caption,
-            product_name: latestItem.product_name,
-            product_code: latestItem.product_code,
-            quantity: latestItem.quantity,
-            vendor_uid: latestItem.vendor_uid,
-            purchase_date: latestItem.purchase_date,
-            notes: latestItem.notes
-          })
-          .eq('telegram_data->>media_group_id', editItem.telegram_data?.media_group_id);
-
-        if (updateError) throw updateError;
-      }
+      if (error) throw error;
 
       await queryClient.invalidateQueries({ queryKey: ['telegram-media'] });
       
       toast({
-        title: "Sync successful",
-        description: "Media group information has been synchronized.",
+        title: "Analysis complete",
+        description: "Media group captions have been analyzed and updated.",
       });
     } catch (error) {
-      console.error('Error syncing media:', error);
+      console.error('Error analyzing captions:', error);
       toast({
-        title: "Sync failed",
-        description: "Failed to synchronize media group information.",
+        title: "Analysis failed",
+        description: "Failed to analyze and update media group captions.",
         variant: "destructive",
       });
     } finally {
-      setIsSyncing(false);
+      setIsAnalyzing(false);
     }
   };
 
@@ -181,10 +164,10 @@ const MediaGrid = () => {
           <Button
             variant="outline"
             size="icon"
-            onClick={handleSync}
-            disabled={!editItem || isSyncing}
+            onClick={handleAnalyzeCaption}
+            disabled={!editItem?.telegram_data?.media_group_id || isAnalyzing}
           >
-            <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+            <Wand2 className={`h-4 w-4 ${isAnalyzing ? 'animate-spin' : ''}`} />
           </Button>
           <Button
             variant={view === 'grid' ? "default" : "outline"}
