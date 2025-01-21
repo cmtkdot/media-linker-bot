@@ -8,7 +8,8 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
+  console.log('Received sync request:', req.method);
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -22,17 +23,15 @@ serve(async (req) => {
       throw new Error('Missing required environment variables');
     }
 
-    // Initialize Supabase client
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    
-    // Get request body
     const { operation, tableId } = await req.json();
     
     if (!operation || !tableId) {
       throw new Error('Missing required parameters: operation and tableId');
     }
 
-    // Get Glide configuration for the specified table
+    console.log('Starting sync operation:', { operation, tableId });
+
     const { data: glideConfig, error: configError } = await supabase
       .from('glide_config')
       .select('*')
@@ -43,15 +42,14 @@ serve(async (req) => {
       throw new Error(`Failed to fetch Glide configuration: ${configError?.message || 'Configuration not found'}`);
     }
 
-    // Initialize Glide client with the table-specific API token
     const glide = new GlideClient(glideConfig.api_token);
     const table = glide.table(glideConfig.table_id);
-
-    console.log('Starting sync operation:', { operation, tableId });
 
     let result;
     switch (operation) {
       case 'syncBidirectional': {
+        console.log('Starting bidirectional sync');
+        
         // Get all rows from both systems
         const [glideRows, { data: supabaseRows, error: supabaseError }] = await Promise.all([
           table.rows(),
@@ -90,7 +88,15 @@ serve(async (req) => {
                 file_type: supabaseRow.file_type,
                 public_url: supabaseRow.public_url,
                 caption: supabaseRow.caption,
-                // Add other fields as needed
+                product_name: supabaseRow.product_name,
+                product_code: supabaseRow.product_code,
+                quantity: supabaseRow.quantity,
+                vendor_uid: supabaseRow.vendor_uid,
+                purchase_date: supabaseRow.purchase_date,
+                notes: supabaseRow.notes,
+                telegram_data: JSON.stringify(supabaseRow.telegram_data),
+                created_at: supabaseRow.created_at,
+                updated_at: supabaseRow.updated_at
               });
               syncResult.added++;
             } else {
@@ -103,7 +109,14 @@ serve(async (req) => {
                   file_type: supabaseRow.file_type,
                   public_url: supabaseRow.public_url,
                   caption: supabaseRow.caption,
-                  // Add other fields as needed
+                  product_name: supabaseRow.product_name,
+                  product_code: supabaseRow.product_code,
+                  quantity: supabaseRow.quantity,
+                  vendor_uid: supabaseRow.vendor_uid,
+                  purchase_date: supabaseRow.purchase_date,
+                  notes: supabaseRow.notes,
+                  telegram_data: JSON.stringify(supabaseRow.telegram_data),
+                  updated_at: supabaseRow.updated_at
                 });
                 syncResult.updated++;
               }
@@ -112,6 +125,51 @@ serve(async (req) => {
             console.error('Error syncing to Glide:', error);
             syncResult.errors.push(`Error syncing to Glide: ${error.message}`);
           }
+        }
+
+        // Sync Glide -> Supabase (only update existing records)
+        for (const [id, glideRow] of glideMap) {
+          try {
+            const supabaseRow = supabaseMap.get(id);
+            if (supabaseRow) {
+              const glideUpdatedAt = new Date(glideRow.get('updated_at') as string);
+              const supabaseUpdatedAt = new Date(supabaseRow.updated_at);
+
+              if (glideUpdatedAt > supabaseUpdatedAt) {
+                const { error: updateError } = await supabase
+                  .from('telegram_media')
+                  .update({
+                    caption: glideRow.get('caption'),
+                    product_name: glideRow.get('product_name'),
+                    product_code: glideRow.get('product_code'),
+                    quantity: glideRow.get('quantity'),
+                    vendor_uid: glideRow.get('vendor_uid'),
+                    purchase_date: glideRow.get('purchase_date'),
+                    notes: glideRow.get('notes'),
+                    updated_at: glideRow.get('updated_at')
+                  })
+                  .eq('id', id);
+
+                if (updateError) {
+                  throw updateError;
+                }
+                syncResult.updated++;
+              }
+            }
+          } catch (error) {
+            console.error('Error syncing from Glide:', error);
+            syncResult.errors.push(`Error syncing from Glide: ${error.message}`);
+          }
+        }
+
+        // Update last_synced_at for all synced records
+        const { error: syncTimeError } = await supabase
+          .from('telegram_media')
+          .update({ last_synced_at: new Date().toISOString() })
+          .in('id', [...supabaseMap.keys()]);
+
+        if (syncTimeError) {
+          console.error('Error updating last_synced_at:', syncTimeError);
         }
 
         result = syncResult;
