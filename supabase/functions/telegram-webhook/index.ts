@@ -117,35 +117,105 @@ async function analyzeCaption(caption: string, supabaseUrl: string, supabaseKey:
   }
 }
 
-async function syncMediaGroupCaption(
+async function createMessage(supabase: any, message: any, productInfo: any = null) {
+  const { data: messageData, error: messageError } = await supabase
+    .from('messages')
+    .insert({
+      message_id: message.message_id,
+      chat_id: message.chat.id,
+      sender_info: message.from || message.sender_chat || {},
+      message_type: getMessageType(message),
+      message_data: message,
+      caption: message.caption,
+      media_group_id: message.media_group_id,
+      ...(productInfo && {
+        product_name: productInfo.product_name,
+        product_code: productInfo.product_code,
+        quantity: productInfo.quantity
+      })
+    })
+    .select()
+    .single();
+
+  if (messageError) throw messageError;
+  return messageData;
+}
+
+function getMessageType(message: any): string {
+  if (message.photo) return 'photo';
+  if (message.video) return 'video';
+  if (message.document) return 'document';
+  if (message.animation) return 'animation';
+  return 'text';
+}
+
+async function processMediaFile(
   supabase: any,
-  mediaGroupId: string,
-  caption: string | undefined,
-  telegramData: any,
-  productInfo: any
+  mediaFile: any,
+  mediaType: string,
+  message: any,
+  messageRecord: any,
+  botToken: string,
+  productInfo: any = null
 ) {
-  if (!mediaGroupId) return;
-
-  const updateData: any = {
-    telegram_data: {
-      ...telegramData,
-      caption,
-    },
-  };
-
-  if (productInfo) {
-    updateData.product_name = productInfo.product_name;
-    updateData.product_code = productInfo.product_code;
-    updateData.quantity = productInfo.quantity;
+  // Get file info from Telegram
+  const fileInfo = await getFileInfo(mediaFile.file_id, botToken);
+  if (!fileInfo || !fileInfo.file_path) {
+    throw new Error('Could not get file info from Telegram');
   }
 
-  const { error } = await supabase
-    .from('telegram_media')
-    .update(updateData)
-    .eq('telegram_data->>media_group_id', mediaGroupId);
+  // Generate unique filename
+  const fileExt = fileInfo.file_path.split('.').pop();
+  const uniqueFileName = `${mediaType}_${mediaFile.file_unique_id}_${Date.now()}.${fileExt}`;
 
-  if (error) {
-    console.error('Error syncing media group caption:', error);
+  // Download and upload file
+  const fileResponse = await downloadTelegramFile(fileInfo.file_path, botToken);
+  const { data: uploadData, error: uploadError } = await supabase.storage
+    .from('media')
+    .upload(uniqueFileName, fileResponse.body, {
+      contentType: mediaFile.mime_type || 'application/octet-stream',
+      upsert: false
+    });
+
+  if (uploadError) {
+    throw new Error(`Failed to upload file: ${uploadError.message}`);
+  }
+
+  // Prepare telegram_data
+  const telegramData = {
+    message_id: message.message_id,
+    sender_chat: message.sender_chat,
+    chat: message.chat,
+    date: message.date,
+    caption: message.caption,
+    media_group_id: message.media_group_id,
+    file_size: mediaFile.file_size,
+    mime_type: mediaFile.mime_type,
+    width: mediaFile.width,
+    height: mediaFile.height,
+    duration: 'duration' in mediaFile ? mediaFile.duration : null,
+    storage_path: uniqueFileName
+  };
+
+  // Insert into telegram_media table
+  const { error: dbError } = await supabase
+    .from('telegram_media')
+    .insert({
+      file_id: mediaFile.file_id,
+      file_unique_id: mediaFile.file_unique_id,
+      file_type: mediaType,
+      telegram_data: telegramData,
+      message_id: messageRecord.id,
+      public_url: `https://kzfamethztziwqiocbwz.supabase.co/storage/v1/object/public/media/${uniqueFileName}`,
+      ...(productInfo && {
+        product_name: productInfo.product_name,
+        product_code: productInfo.product_code,
+        quantity: productInfo.quantity
+      })
+    });
+
+  if (dbError) {
+    throw new Error(`Failed to insert into database: ${dbError.message}`);
   }
 }
 
@@ -174,7 +244,6 @@ serve(async (req) => {
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
     const update: TelegramUpdate = await req.json();
     console.log('Received Telegram update:', JSON.stringify(update));
 
@@ -185,6 +254,17 @@ serve(async (req) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
       );
     }
+
+    // Analyze caption with AI if present
+    let productInfo = null;
+    if (message.caption) {
+      productInfo = await analyzeCaption(message.caption, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+      console.log('AI-extracted product info:', productInfo);
+    }
+
+    // Create message record first
+    const messageRecord = await createMessage(supabase, message, productInfo);
+    console.log('Created message record:', messageRecord);
 
     // Handle different types of media
     const mediaTypes = ['photo', 'video', 'document', 'animation'] as const;
@@ -203,92 +283,24 @@ serve(async (req) => {
 
     if (!mediaFile) {
       return new Response(
-        JSON.stringify({ message: 'No media in message' }),
+        JSON.stringify({ message: 'Message processed (no media)' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
       );
     }
 
-    // Get file info from Telegram
-    const fileInfo = await getFileInfo(mediaFile.file_id, TELEGRAM_BOT_TOKEN);
-    if (!fileInfo || !fileInfo.file_path) {
-      throw new Error('Could not get file info from Telegram');
-    }
-
-    // Generate unique filename based on file type and unique ID
-    const fileExt = fileInfo.file_path.split('.').pop();
-    const uniqueFileName = `${mediaType}_${mediaFile.file_unique_id}_${Date.now()}.${fileExt}`;
-
-    // Download file from Telegram
-    const fileResponse = await downloadTelegramFile(fileInfo.file_path, TELEGRAM_BOT_TOKEN);
-
-    // Upload to Supabase Storage
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('media')
-      .upload(uniqueFileName, fileResponse.body, {
-        contentType: mediaFile.mime_type || 'application/octet-stream',
-        upsert: false
-      });
-
-    if (uploadError) {
-      throw new Error(`Failed to upload file: ${uploadError.message}`);
-    }
-
-    // Prepare telegram_data
-    const telegramData = {
-      message_id: message.message_id,
-      sender_chat: message.sender_chat,
-      chat: message.chat,
-      date: message.date,
-      caption: message.caption,
-      media_group_id: message.media_group_id,
-      file_size: mediaFile.file_size,
-      mime_type: mediaFile.mime_type,
-      width: mediaFile.width,
-      height: mediaFile.height,
-      duration: 'duration' in mediaFile ? mediaFile.duration : null,
-      storage_path: uniqueFileName
-    };
-
-    // Analyze caption with AI if present
-    let productInfo = null;
-    if (message.caption) {
-      productInfo = await analyzeCaption(message.caption, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-      console.log('AI-extracted product info:', productInfo);
-    }
-
-    // Insert into telegram_media table
-    const { error: dbError } = await supabase
-      .from('telegram_media')
-      .insert({
-        file_id: mediaFile.file_id,
-        file_unique_id: mediaFile.file_unique_id,
-        file_type: mediaType,
-        telegram_data: telegramData,
-        public_url: `https://kzfamethztziwqiocbwz.supabase.co/storage/v1/object/public/media/${uniqueFileName}`,
-        ...(productInfo && {
-          product_name: productInfo.product_name,
-          product_code: productInfo.product_code,
-          quantity: productInfo.quantity
-        })
-      });
-
-    if (dbError) {
-      throw new Error(`Failed to insert into database: ${dbError.message}`);
-    }
-
-    // Sync caption for media group if applicable
-    if (message.media_group_id && (message.caption || productInfo)) {
-      await syncMediaGroupCaption(
-        supabase,
-        message.media_group_id,
-        message.caption,
-        telegramData,
-        productInfo
-      );
-    }
+    // Process media file
+    await processMediaFile(
+      supabase,
+      mediaFile,
+      mediaType,
+      message,
+      messageRecord,
+      TELEGRAM_BOT_TOKEN,
+      productInfo
+    );
 
     return new Response(
-      JSON.stringify({ message: 'Successfully processed media' }),
+      JSON.stringify({ message: 'Successfully processed message and media' }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
 
@@ -299,4 +311,4 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }
-})
+});

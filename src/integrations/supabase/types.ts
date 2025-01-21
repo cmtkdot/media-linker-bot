@@ -9,6 +9,60 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      messages: {
+        Row: {
+          caption: string | null
+          chat_id: number
+          created_at: string
+          id: string
+          media_group_id: string | null
+          message_data: Json
+          message_id: number
+          message_type: string
+          processed_at: string | null
+          processing_error: string | null
+          product_code: string | null
+          product_name: string | null
+          quantity: number | null
+          sender_info: Json
+          updated_at: string
+        }
+        Insert: {
+          caption?: string | null
+          chat_id: number
+          created_at?: string
+          id?: string
+          media_group_id?: string | null
+          message_data?: Json
+          message_id: number
+          message_type: string
+          processed_at?: string | null
+          processing_error?: string | null
+          product_code?: string | null
+          product_name?: string | null
+          quantity?: number | null
+          sender_info?: Json
+          updated_at?: string
+        }
+        Update: {
+          caption?: string | null
+          chat_id?: number
+          created_at?: string
+          id?: string
+          media_group_id?: string | null
+          message_data?: Json
+          message_id?: number
+          message_type?: string
+          processed_at?: string | null
+          processing_error?: string | null
+          product_code?: string | null
+          product_name?: string | null
+          quantity?: number | null
+          sender_info?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       telegram_media: {
         Row: {
           created_at: string
@@ -19,6 +73,7 @@ export type Database = {
           id: string
           last_synced_at: string | null
           media_metadata: Json
+          message_id: string | null
           processed: boolean | null
           processing_error: string | null
           product_code: string | null
@@ -37,6 +92,7 @@ export type Database = {
           id?: string
           last_synced_at?: string | null
           media_metadata?: Json
+          message_id?: string | null
           processed?: boolean | null
           processing_error?: string | null
           product_code?: string | null
@@ -55,6 +111,7 @@ export type Database = {
           id?: string
           last_synced_at?: string | null
           media_metadata?: Json
+          message_id?: string | null
           processed?: boolean | null
           processing_error?: string | null
           product_code?: string | null
@@ -64,7 +121,15 @@ export type Database = {
           telegram_data?: Json
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "telegram_media_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
