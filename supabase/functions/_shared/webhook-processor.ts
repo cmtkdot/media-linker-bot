@@ -1,6 +1,7 @@
 import { analyzeCaptionWithAI } from './caption-analyzer.ts';
 import { handleMessageProcessing } from './message-manager.ts';
 import { processMedia } from './media-handler.ts';
+import { syncMediaGroupInfo } from './media-group-sync.ts';
 import { TelegramMessage } from './webhook-types.ts';
 
 export async function processWebhookUpdate(
@@ -51,11 +52,17 @@ export async function processWebhookUpdate(
     }
 
     messageRecord = messageResult.messageRecord;
-    
-    // Step 3: Wait for message record commit
-    await new Promise(resolve => setTimeout(resolve, 1000));
 
-    // Step 4: Process media
+    // Step 3: If this is part of a media group, sync the group info
+    if (message.media_group_id && messageRecord) {
+      console.log('[Media Group Sync] Starting...', {
+        media_group_id: message.media_group_id
+      });
+      
+      await syncMediaGroupInfo(supabase, message, messageRecord);
+    }
+    
+    // Step 4: Process media after group sync
     if (messageRecord) {
       console.log('[Media Processing] Starting...', {
         message_record_id: messageRecord.id,
@@ -92,9 +99,6 @@ export async function processWebhookUpdate(
       if (messageUpdateError) {
         console.error('[Message Status Update Error]', messageUpdateError);
       }
-
-      // Step 6: Final wait for triggers
-      await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
     return { 
