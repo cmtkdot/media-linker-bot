@@ -89,9 +89,11 @@ export type Database = {
           product_code: string | null
           product_name: string | null
           public_url: string | null
+          purchase_date: string | null
           quantity: number | null
           telegram_data: Json
           updated_at: string
+          vendor_uid: string | null
         }
         Insert: {
           caption?: string | null
@@ -109,9 +111,11 @@ export type Database = {
           product_code?: string | null
           product_name?: string | null
           public_url?: string | null
+          purchase_date?: string | null
           quantity?: number | null
           telegram_data?: Json
           updated_at?: string
+          vendor_uid?: string | null
         }
         Update: {
           caption?: string | null
@@ -129,9 +133,11 @@ export type Database = {
           product_code?: string | null
           product_name?: string | null
           public_url?: string | null
+          purchase_date?: string | null
           quantity?: number | null
           telegram_data?: Json
           updated_at?: string
+          vendor_uid?: string | null
         }
         Relationships: [
           {
