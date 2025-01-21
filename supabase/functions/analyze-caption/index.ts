@@ -42,7 +42,7 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4',
         messages: [
           {
             role: 'system',
@@ -75,11 +75,15 @@ serve(async (req) => {
             content: caption
           }
         ],
-        temperature: 0.1
+        temperature: 0.1,
+        max_tokens: 500
       }),
     });
 
     if (!response.ok) {
+      console.error('OpenAI API error:', response.status, response.statusText);
+      const errorData = await response.text();
+      console.error('Error details:', errorData);
       throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
     }
 
