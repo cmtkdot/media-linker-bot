@@ -164,6 +164,10 @@ const MediaGrid = () => {
                   </div>
                 </div>
               </div>
+              <div className="p-2 text-sm">
+                <p className="font-medium truncate">{item.product_name || 'Untitled'}</p>
+                <p className="text-muted-foreground capitalize">{item.file_type}</p>
+              </div>
             </Card>
           ))}
         </div>
