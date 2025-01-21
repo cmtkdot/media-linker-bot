@@ -1,22 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
-interface GlideRecord {
-  id: string;
-  [key: string]: any;
-}
-
-interface SyncResult {
-  added: number;
-  updated: number;
-  deleted: number;
-  errors: string[];
-}
+import { corsHeaders } from './cors.ts';
+import { fetchGlideRecords, createGlideRecord, updateGlideRecord } from './glideApi.ts';
+import type { SyncResult, GlideConfig } from './types.ts';
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -32,8 +18,6 @@ serve(async (req) => {
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    // Get the request body
     const { operation, tableId } = await req.json();
 
     if (!operation || !tableId) {
@@ -51,18 +35,9 @@ serve(async (req) => {
     if (!config) throw new Error('Configuration not found');
     if (!config.supabase_table_name) throw new Error('No Supabase table linked');
 
-    // Get API token from Edge Function secrets
-    const apiToken = Deno.env.get('GLIDE_API_TOKEN')?.trim();
-    if (!apiToken) {
-      throw new Error('GLIDE_API_TOKEN is not set in Edge Function secrets');
-    }
-
     console.log('Starting sync with config:', {
       table_name: config.table_name,
       supabase_table_name: config.supabase_table_name,
-      has_token: true,
-      token_length: apiToken.length,
-      token_preview: `${apiToken.substring(0, 5)}...${apiToken.substring(apiToken.length - 5)}`
     });
 
     // Get all telegram_media records from Supabase
@@ -72,46 +47,8 @@ serve(async (req) => {
 
     if (fetchError) throw fetchError;
 
-    // Make request to Glide API with proper authorization and UTF-8 encoding
-    const glideResponse = await fetch(`https://api.glideapp.io/api/tables/${encodeURIComponent(config.table_id)}/rows`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${apiToken}`,
-        'Content-Type': 'application/json; charset=utf-8',
-        'Accept': 'application/json; charset=utf-8',
-      },
-    });
-
-    if (!glideResponse.ok) {
-      const errorText = await glideResponse.text();
-      const errorDetails = {
-        status: glideResponse.status,
-        statusText: glideResponse.statusText,
-        error: errorText,
-        config: {
-          table_id: config.table_id,
-          has_token: true,
-          token_length: apiToken.length,
-          auth_header_preview: `Bearer ${apiToken.substring(0, 5)}...${apiToken.substring(apiToken.length - 5)}`
-        }
-      };
-      
-      console.error('Glide API error:', errorDetails);
-      
-      // Provide more specific error messages based on status code
-      let errorMessage = 'Glide API error';
-      if (glideResponse.status === 401) {
-        errorMessage = 'Invalid or expired Glide API token. Please check your Edge Function secrets.';
-      } else if (glideResponse.status === 403) {
-        errorMessage = 'Access forbidden. Please verify your Glide API permissions.';
-      } else if (glideResponse.status === 404) {
-        errorMessage = 'Glide table not found. Please verify your table ID.';
-      }
-      
-      throw new Error(`${errorMessage}: ${JSON.stringify(errorDetails, null, 2)}`);
-    }
-
-    const glideData = await glideResponse.json() as GlideRecord[];
+    // Get records from Glide
+    const glideData = await fetchGlideRecords(config.table_id);
     console.log('Fetched records - Supabase:', supabaseRows.length, 'Glide:', glideData.length);
 
     const result: SyncResult = {
@@ -145,20 +82,7 @@ serve(async (req) => {
         };
 
         if (!glideRecord) {
-          // Create new record in Glide
-          const createResponse = await fetch(`https://api.glideapp.io/api/tables/${config.table_id}/rows`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${apiToken}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify([recordData])
-          });
-
-          if (!createResponse.ok) {
-            throw new Error(`Failed to create Glide record: ${await createResponse.text()}`);
-          }
-
+          await createGlideRecord(config.table_id, recordData);
           result.added++;
           console.log('Created new record in Glide:', supabaseRecord.id);
         } else {
@@ -168,23 +92,7 @@ serve(async (req) => {
           );
 
           if (needsUpdate) {
-            // Update existing record in Glide
-            const updateResponse = await fetch(
-              `https://api.glideapp.io/api/tables/${config.table_id}/rows/${glideRecord.id}`,
-              {
-                method: 'PATCH',
-                headers: {
-                  'Authorization': `Bearer ${apiToken}`,
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(recordData)
-              }
-            );
-
-            if (!updateResponse.ok) {
-              throw new Error(`Failed to update Glide record: ${await updateResponse.text()}`);
-            }
-
+            await updateGlideRecord(config.table_id, glideRecord.id, recordData);
             result.updated++;
             console.log('Updated record in Glide:', supabaseRecord.id);
           }
