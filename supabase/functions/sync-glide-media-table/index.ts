@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
-import { GlideTableSchema, SyncResult, GlideResponse } from './types.ts';
+import { GlideTableSchema, SyncResult, GlideResponse, GlideSyncQueueItem } from './types.ts';
 import { mapSupabaseToGlide, mapGlideToSupabase } from './productMapper.ts';
 
 const corsHeaders = {
@@ -14,10 +14,7 @@ serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { 
-      headers: {
-        ...corsHeaders,
-        'Access-Control-Max-Age': '86400',
-      }
+      headers: corsHeaders
     });
   }
 
@@ -31,14 +28,7 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
-    // Parse request body
-    let body;
-    try {
-      body = await req.json();
-    } catch (e) {
-      throw new Error('Invalid request body');
-    }
-    
+    const body = await req.json();
     const { operation, tableId } = body;
 
     if (!operation || !tableId) {
@@ -127,6 +117,11 @@ serve(async (req) => {
               last_synced_at: new Date().toISOString()
             })
             .eq('id', item.new_data.id);
+
+          console.log('Updated telegram_media_row_id:', {
+            record_id: item.new_data.id,
+            glide_row_id: newRowID
+          });
         } else if (item.operation === 'UPDATE') {
           await supabase
             .from(config.supabase_table_name)

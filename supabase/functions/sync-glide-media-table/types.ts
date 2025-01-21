@@ -48,3 +48,16 @@ export interface TelegramMedia {
   default_public_url?: string;
   telegram_media_row_id?: string;
 }
+
+export interface GlideSyncQueueItem {
+  id: string;
+  table_name: string;
+  record_id: string;
+  operation: 'INSERT' | 'UPDATE' | 'DELETE';
+  old_data?: Record<string, any>;
+  new_data?: Record<string, any>;
+  created_at?: string;
+  processed_at?: string | null;
+  error?: string | null;
+  retry_count?: number;
+}
