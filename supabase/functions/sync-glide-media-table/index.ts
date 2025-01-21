@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
-import { GlideClient } from 'https://esm.sh/@glideapps/tables@1.0.5';
+import { Table } from 'https://esm.sh/@glideapps/tables@1.0.5';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -55,8 +55,7 @@ serve(async (req) => {
       supabase_table_name: glideConfig.supabase_table_name
     });
 
-    const glide = new GlideClient(glideConfig.api_token);
-    const table = glide.table(glideConfig.table_id);
+    const table = new Table(glideConfig.api_token, glideConfig.table_id);
 
     let result;
     switch (operation) {
@@ -174,16 +173,6 @@ serve(async (req) => {
             console.error('Error syncing from Glide:', error);
             syncResult.errors.push(`Error syncing from Glide: ${error.message}`);
           }
-        }
-
-        // Update last_synced_at for all synced records
-        const { error: syncTimeError } = await supabase
-          .from('telegram_media')
-          .update({ last_synced_at: new Date().toISOString() })
-          .in('id', [...supabaseMap.keys()]);
-
-        if (syncTimeError) {
-          console.error('Error updating last_synced_at:', syncTimeError);
         }
 
         result = syncResult;
