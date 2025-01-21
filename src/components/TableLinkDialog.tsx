@@ -26,6 +26,10 @@ interface TableLinkDialogProps {
   onSuccess: () => void;
 }
 
+interface TableResult {
+  table_name: string;
+}
+
 export function TableLinkDialog({ config, onClose, onSuccess }: TableLinkDialogProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [newTableName, setNewTableName] = useState("");
@@ -54,12 +58,12 @@ export function TableLinkDialog({ config, onClose, onSuccess }: TableLinkDialogP
 
       // Get all tables in the database
       const { data: allTables, error: allTablesError } = await supabase
-        .rpc('get_all_tables');
+        .rpc('get_all_tables') as { data: TableResult[] | null, error: any };
 
       if (allTablesError) throw allTablesError;
 
       // Filter out system tables and already linked tables
-      const availableTables = (allTables as { table_name: string }[])
+      const availableTables = (allTables || [])
         .map(t => t.table_name)
         .filter(table => 
           !linkedTables.has(table) && 
