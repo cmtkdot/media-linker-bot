@@ -9,15 +9,14 @@ export async function createMessage(supabase: any, message: any, productInfo: an
   });
 
   try {
-    // First check for existing message
     const { data: existingMessage, error: checkError } = await supabase
       .from('messages')
       .select('*')
       .eq('message_id', message.message_id)
       .eq('chat_id', message.chat.id)
-      .maybeSingle();
+      .single();
 
-    if (checkError) {
+    if (checkError && checkError.code !== 'PGRST116') {
       console.error('Error checking for existing message:', checkError);
       throw checkError;
     }
@@ -39,11 +38,10 @@ export async function createMessage(supabase: any, message: any, productInfo: an
         vendor_uid: productInfo.vendor_uid,
         purchase_date: productInfo.purchase_date,
         notes: productInfo.notes,
-        analyzed_content: productInfo // Store the complete analyzed content
+        analyzed_content: productInfo
       })
     };
 
-    // If message exists, update it
     if (existingMessage) {
       console.log('Updating existing message:', existingMessage.id);
       const { data: updatedMessage, error: updateError } = await supabase
@@ -53,39 +51,17 @@ export async function createMessage(supabase: any, message: any, productInfo: an
         .select()
         .single();
 
-      if (updateError) {
-        console.error('Error updating message:', updateError);
-        throw updateError;
-      }
-
-      if (!updatedMessage) {
-        console.error('No data returned after update');
-        throw new Error('Message update failed - no data returned');
-      }
-
-      console.log('Successfully updated message:', updatedMessage.id);
+      if (updateError) throw updateError;
       return updatedMessage;
     }
 
-    // If no existing message, create new one
-    console.log('Creating new message with data:', messageData);
     const { data: newMessage, error: insertError } = await supabase
       .from('messages')
       .insert(messageData)
       .select()
       .single();
 
-    if (insertError) {
-      console.error('Error inserting message:', insertError);
-      throw insertError;
-    }
-
-    if (!newMessage) {
-      console.error('No data returned after insert');
-      throw new Error('Message creation failed - no data returned');
-    }
-
-    console.log('Successfully created message:', newMessage.id);
+    if (insertError) throw insertError;
     return newMessage;
   } catch (error) {
     console.error('Error in createMessage:', error);
@@ -108,14 +84,13 @@ export async function processMediaFile(
   });
 
   try {
-    // Check for existing media to prevent duplicates
     const { data: existingMedia } = await supabase
       .from('telegram_media')
       .select('id, public_url')
       .eq('file_unique_id', mediaFile.file_unique_id)
       .eq('telegram_data->chat_id', message.chat.id)
       .eq('telegram_data->message_id', message.message_id)
-      .maybeSingle();
+      .single();
 
     if (existingMedia) {
       console.log('Media already exists:', existingMedia);
@@ -123,7 +98,6 @@ export async function processMediaFile(
     }
 
     const { buffer, filePath } = await getAndDownloadTelegramFile(mediaFile.file_id, botToken);
-    
     const fileExt = filePath.split('.').pop() || '';
     const uniqueFileName = generateSafeFileName(
       productInfo?.product_name,
@@ -132,7 +106,6 @@ export async function processMediaFile(
       fileExt
     );
 
-    console.log('Uploading file:', uniqueFileName);
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('media')
       .upload(uniqueFileName, buffer, {
@@ -141,12 +114,8 @@ export async function processMediaFile(
         cacheControl: '3600'
       });
 
-    if (uploadError) {
-      console.error('Upload error:', uploadError);
-      throw new Error(`Failed to upload file: ${uploadError.message}`);
-    }
+    if (uploadError) throw new Error(`Failed to upload file: ${uploadError.message}`);
 
-    // Get the public URL for the uploaded file
     const { data: { publicUrl } } = await supabase.storage
       .from('media')
       .getPublicUrl(uniqueFileName);
@@ -159,11 +128,11 @@ export async function processMediaFile(
       date: message.date,
       caption: message.caption,
       media_group_id: message.media_group_id,
-      file_size: mediaFile.file_size ? BigInt(mediaFile.file_size).toString() : null,
+      file_size: mediaFile.file_size,
       mime_type: mediaFile.mime_type,
-      width: mediaFile.width ? BigInt(mediaFile.width).toString() : null,
-      height: mediaFile.height ? BigInt(mediaFile.height).toString() : null,
-      duration: 'duration' in mediaFile ? BigInt(mediaFile.duration).toString() : null,
+      width: mediaFile.width,
+      height: mediaFile.height,
+      duration: 'duration' in mediaFile ? mediaFile.duration : null,
       storage_path: uniqueFileName
     };
 
@@ -178,18 +147,13 @@ export async function processMediaFile(
       ...(productInfo && {
         product_name: productInfo.product_name,
         product_code: productInfo.product_code,
-        quantity: productInfo.quantity ? BigInt(productInfo.quantity).toString() : null,
+        quantity: productInfo.quantity,
         vendor_uid: productInfo.vendor_uid,
         purchase_date: productInfo.purchase_date,
         notes: productInfo.notes,
-        analyzed_content: productInfo // Store the complete analyzed content
+        analyzed_content: productInfo
       })
     };
-
-    console.log('Inserting media record:', {
-      file_id: mediaFile.file_id,
-      message_id: messageRecord?.id
-    });
 
     const { data: mediaData, error: dbError } = await supabase
       .from('telegram_media')
@@ -197,16 +161,7 @@ export async function processMediaFile(
       .select()
       .single();
 
-    if (dbError) {
-      console.error('Database error:', dbError);
-      throw new Error(`Failed to insert into database: ${dbError.message}`);
-    }
-
-    if (!mediaData) {
-      throw new Error('Media record creation failed - no data returned');
-    }
-
-    console.log(`Successfully processed ${mediaType} file:`, mediaData.id);
+    if (dbError) throw new Error(`Failed to insert into database: ${dbError.message}`);
     return mediaData;
   } catch (error) {
     console.error(`Error processing ${mediaType} file:`, error);

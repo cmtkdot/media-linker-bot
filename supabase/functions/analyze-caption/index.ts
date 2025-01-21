@@ -15,18 +15,13 @@ serve(async (req) => {
   try {
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
     if (!OPENAI_API_KEY) {
-      console.error('Missing OPENAI_API_KEY');
       throw new Error('OpenAI API key is not configured');
     }
 
-    const { caption, messageData } = await req.json();
+    const { caption, messageId, mediaGroupId } = await req.json();
     
-    // Extract required IDs from messageData
-    const telegramMediaId = messageData?.telegram_media_id;
-    const mediaGroupId = messageData?.media_group_id;
-    
-    if (!telegramMediaId && !mediaGroupId) {
-      throw new Error('Either telegramMediaId or mediaGroupId is required for updates');
+    if (!messageId && !mediaGroupId) {
+      throw new Error('Either messageId or mediaGroupId is required for updates');
     }
     
     if (!caption) {
@@ -46,18 +41,17 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4',
+        model: 'gpt-4o-mini',
         messages: [
           {
             role: 'system',
             content: `Extract product information from captions following these rules:
-
             1. product_name: Product name from caption
             2. product_code: Code after # (without the #)
-            3. quantity: Number after "x" (if present), ignore anything in () which should be added to notes
+            3. quantity: Number after "x" (if present)
             4. vendor_uid: Letters before numbers in the code
             5. purchase_date: Convert 6 digits from code (mmDDyy) to YYYY-MM-DD
-            6. notes: Any text in parentheses or text that is not part of the product name, product code, purchase date, vendor uid, or quantity
+            6. notes: Any text in parentheses
 
             Return a JSON object with:
             - product_name: string or null
@@ -67,8 +61,7 @@ serve(async (req) => {
             - purchase_date: string or null (in YYYY-MM-DD format)
             - notes: string or null 
             - raw_caption: the original caption
-            - analyzed_at: current timestamp in ISO format
-            - confidence_score: number between 0 and 1 indicating how confident you are in the analysis`
+            - analyzed_at: current timestamp in ISO format`
           },
           {
             role: 'user',
@@ -80,27 +73,16 @@ serve(async (req) => {
     });
 
     if (!response.ok) {
-      const errorData = await response.text();
-      console.error('OpenAI API error:', errorData);
       throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
     }
 
     const data = await response.json();
-    console.log('OpenAI API response:', data);
-    
     if (!data.choices?.[0]?.message?.content) {
-      console.error('Invalid response from OpenAI:', data);
       throw new Error('Invalid response from OpenAI');
     }
 
-    let result;
-    try {
-      result = JSON.parse(data.choices[0].message.content);
-      console.log('Parsed result:', result);
-    } catch (parseError) {
-      console.error('Error parsing OpenAI response:', parseError);
-      throw new Error('Failed to parse OpenAI response');
-    }
+    const result = JSON.parse(data.choices[0].message.content);
+    console.log('Parsed result:', result);
 
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
@@ -112,8 +94,8 @@ serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Update telegram_media table with analyzed content
-    if (telegramMediaId) {
+    // Update records based on messageId or mediaGroupId
+    if (messageId) {
       const { error: updateError } = await supabase
         .from('telegram_media')
         .update({
@@ -125,15 +107,11 @@ serve(async (req) => {
           purchase_date: result.purchase_date,
           notes: result.notes
         })
-        .eq('id', telegramMediaId);
+        .eq('id', messageId);
 
-      if (updateError) {
-        console.error('Error updating telegram_media:', updateError);
-        throw updateError;
-      }
+      if (updateError) throw updateError;
     }
 
-    // If media_group_id exists, update all related media
     if (mediaGroupId) {
       const { error: groupUpdateError } = await supabase
         .from('telegram_media')
@@ -148,10 +126,7 @@ serve(async (req) => {
         })
         .eq('telegram_data->>media_group_id', mediaGroupId);
 
-      if (groupUpdateError) {
-        console.error('Error updating media group:', groupUpdateError);
-        throw groupUpdateError;
-      }
+      if (groupUpdateError) throw groupUpdateError;
     }
 
     return new Response(

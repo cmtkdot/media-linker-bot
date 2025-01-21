@@ -50,15 +50,19 @@ export function getMessageType(message: any): string {
   return 'text';
 }
 
-export function generateSafeFileName(productName: string = 'untitled', productCode: string = 'no_code', mediaType: string, extension: string): string {
+export function generateSafeFileName(
+  productName: string = 'untitled',
+  productCode: string = 'no_code',
+  mediaType: string,
+  extension: string
+): string {
   console.log('Generating safe filename with:', { productName, productCode, mediaType, extension });
   
-  // Ensure all inputs are strings and have default values
   const safeName = (productName || 'untitled')
     .toLowerCase()
-    .replace(/[^\x00-\x7F]/g, '') // Remove non-ASCII characters
-    .replace(/\s+/g, '_') // Replace spaces with underscores
-    .replace(/[^a-z0-9_]/g, ''); // Remove any other special characters
+    .replace(/[^\x00-\x7F]/g, '')
+    .replace(/\s+/g, '_')
+    .replace(/[^a-z0-9_]/g, '');
 
   const safeCode = (productCode || 'no_code')
     .toLowerCase()
@@ -66,39 +70,16 @@ export function generateSafeFileName(productName: string = 'untitled', productCo
     .replace(/\s+/g, '_')
     .replace(/[^a-z0-9_]/g, '');
 
-  // Clean the media type
   const safeMediaType = (mediaType || 'unknown')
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '');
 
-  // Clean the extension
   const safeExtension = (extension || 'bin')
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '');
 
-  // Add timestamp to ensure uniqueness
   const timestamp = Date.now();
-
-  // Combine all parts with underscores
   const fileName = `${safeName}_${safeCode}_${safeMediaType}_${timestamp}`;
 
-  console.log('Generated filename:', `${fileName}.${safeExtension}`);
-
-  // Add the extension
   return `${fileName}.${safeExtension}`;
-}
-
-export async function analyzeCaption(caption: string, supabaseUrl: string, supabaseKey: string) {
-  try {
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    const { data, error } = await supabase.functions.invoke('analyze-caption', {
-      body: { caption },
-    });
-
-    if (error) throw error;
-    return data;
-  } catch (error) {
-    console.error('Error analyzing caption:', error);
-    return null;
-  }
 }
