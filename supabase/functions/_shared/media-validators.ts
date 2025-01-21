@@ -7,7 +7,8 @@ const ALLOWED_IMAGE_TYPES = [
   'image/tiff',
   'image/bmp',
   'image/heic',
-  'image/heif'
+  'image/heif',
+  'application/octet-stream'  // Allow this for Telegram photos
 ];
 
 const ALLOWED_VIDEO_TYPES = [
@@ -32,26 +33,24 @@ export const validateMediaFile = async (file: any, mediaType: string) => {
 
   // Special handling for Telegram files without explicit MIME type
   if (!file.mime_type || file.mime_type === 'application/octet-stream') {
-    // For photos, try to infer from file path first
-    if (file.file_path) {
+    // For photos, always default to JPEG
+    if (mediaType === 'photo') {
+      console.log('Setting default MIME type for Telegram photo to image/jpeg');
+      file.mime_type = 'image/jpeg';
+    }
+    // For other files, try to infer from file path first
+    else if (file.file_path) {
       const inferredMimeType = getMimeType(file.file_path);
       console.log('Inferred MIME type from file path:', inferredMimeType);
       file.mime_type = inferredMimeType;
-    }
-    
-    // If still no valid MIME type and it's a photo, default to JPEG
-    if (mediaType === 'photo' && 
-        (!file.mime_type || file.mime_type === 'application/octet-stream')) {
-      console.log('Setting default MIME type for photo to image/jpeg');
-      file.mime_type = 'image/jpeg';
     }
   }
 
   const mimeType = file.mime_type?.toLowerCase();
   const allowedTypes = mediaType === 'video' ? ALLOWED_VIDEO_TYPES : ALLOWED_IMAGE_TYPES;
 
-  // Only warn about MIME type if it's not application/octet-stream (which we expect from Telegram)
-  if (mimeType && mimeType !== 'application/octet-stream' && !allowedTypes.includes(mimeType)) {
+  // Only warn about MIME type if it's not a photo (since we handle those specially)
+  if (mimeType && mediaType !== 'photo' && !allowedTypes.includes(mimeType)) {
     console.warn(`Warning: Received mime type ${mimeType} for ${mediaType}`);
   }
 

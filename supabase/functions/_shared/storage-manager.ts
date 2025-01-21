@@ -20,7 +20,7 @@ export const ensureStorageBucket = async (supabase: any) => {
           'image/gif', 'image/tiff', 'image/bmp', 'image/heic',
           'image/heif', 'video/mp4', 'video/quicktime', 'video/webm',
           'video/x-msvideo', 'video/x-matroska', 'video/3gpp',
-          'video/x-ms-wmv', 'video/ogg'
+          'video/x-ms-wmv', 'video/ogg', 'application/octet-stream'
         ],
         fileSizeLimit: 50 * 1024 * 1024
       });
@@ -41,41 +41,28 @@ export const uploadMediaToStorage = async (
 ) => {
   console.log('Uploading file:', fileName);
   
-  // Get proper MIME type based on file extension or default
-  let mimeType = getMimeType(fileName, defaultMimeType);
-  
-  // Handle Telegram media files that come without proper MIME type
-  if (mimeType === 'application/octet-stream') {
-    if (fileName.includes('photo_')) {
-      mimeType = 'image/jpeg';  // Default for Telegram photos
-    } else if (fileName.match(/\.(jpg|jpeg|png|webp|gif|bmp)$/i)) {
-      // Use extension-based MIME type for known image formats
-      const ext = fileName.toLowerCase().split('.').pop();
-      const mimeMap: { [key: string]: string } = {
-        'jpg': 'image/jpeg',
-        'jpeg': 'image/jpeg',
-        'png': 'image/png',
-        'webp': 'image/webp',
-        'gif': 'image/gif',
-        'bmp': 'image/bmp'
-      };
-      mimeType = mimeMap[ext!] || 'image/jpeg';
-    }
+  // For Telegram photos, always use image/jpeg
+  let finalMimeType = defaultMimeType;
+  if (fileName.includes('photo_')) {
+    finalMimeType = 'image/jpeg';
+    console.log('Using image/jpeg for Telegram photo');
+  } else {
+    // For other files, try to determine MIME type from extension
+    finalMimeType = getMimeType(fileName, defaultMimeType);
+    console.log('Determined MIME type:', finalMimeType);
   }
-  
-  console.log('Using MIME type for upload:', mimeType);
 
   try {
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('media')
       .upload(fileName, buffer, {
-        contentType: mimeType,
+        contentType: finalMimeType,
         upsert: false,
         cacheControl: '3600'
       });
 
     if (uploadError) {
-      console.error('Upload error:', { error: uploadError, mimeType, fileName });
+      console.error('Storage upload error:', { error: uploadError, mimeType: finalMimeType, fileName });
       throw new Error(`Failed to upload file: ${uploadError.message}`);
     }
 
@@ -90,7 +77,7 @@ export const uploadMediaToStorage = async (
 
     return { uploadData, publicUrl };
   } catch (error) {
-    console.error('Storage upload error:', { error, mimeType, fileName });
+    console.error('Storage upload error:', { error, mimeType: finalMimeType, fileName });
     throw error;
   }
 };
