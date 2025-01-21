@@ -23,6 +23,14 @@ export async function handleMessageProcessing(
 
     console.log('Determined message type:', messageType);
 
+    // Check for existing message
+    const { data: existingRecord } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('message_id', message.message_id)
+      .eq('chat_id', message.chat.id)
+      .maybeSingle();
+
     // Prepare message data with validated type
     const messageData = {
       message_id: message.message_id,
@@ -33,7 +41,7 @@ export async function handleMessageProcessing(
       caption: message.caption,
       media_group_id: message.media_group_id,
       status: 'pending',
-      retry_count: existingMessage?.retry_count || 0,
+      retry_count: existingRecord?.retry_count || 0,
       ...(productInfo && {
         product_name: productInfo.product_name,
         product_code: productInfo.product_code,
@@ -45,58 +53,33 @@ export async function handleMessageProcessing(
       })
     };
 
-    console.log('Prepared message data:', {
-      message_id: messageData.message_id,
-      chat_id: messageData.chat_id,
-      message_type: messageData.message_type,
-      has_product_info: !!productInfo
-    });
-
     let messageRecord;
-    if (existingMessage) {
+    if (existingRecord) {
       console.log('Updating existing message:', {
-        id: existingMessage.id,
+        id: existingRecord.id,
         message_id: message.message_id
       });
 
-      const hasUpdates = Object.keys(messageData).some(key => 
-        JSON.stringify(messageData[key]) !== JSON.stringify(existingMessage[key])
-      );
+      const { data: updatedMessage, error: updateError } = await supabase
+        .from('messages')
+        .update({
+          ...messageData,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existingRecord.id)
+        .select()
+        .maybeSingle();
 
-      if (hasUpdates || !existingMessage.processed_at) {
-        const { data: updatedMessage, error: updateError } = await supabase
-          .from('messages')
-          .update({
-            ...messageData,
-            status: existingMessage.processed_at ? existingMessage.status : 'pending',
-            retry_count: existingMessage.processed_at ? existingMessage.retry_count : 0,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingMessage.id)
-          .select()
-          .single();
-
-        if (updateError) {
-          console.error('Error updating message:', updateError);
-          throw updateError;
-        }
-        
-        if (!updatedMessage) {
-          console.error('Failed to update message record');
-          throw new Error('Failed to update message record');
-        }
-        
-        messageRecord = updatedMessage;
-        console.log('Successfully updated message:', messageRecord.id);
-      } else {
-        messageRecord = existingMessage;
-        console.log('No updates needed for message:', messageRecord.id);
+      if (updateError) {
+        console.error('Error updating message:', updateError);
+        throw updateError;
       }
+
+      messageRecord = updatedMessage;
     } else {
       console.log('Creating new message:', {
         message_id: message.message_id,
-        chat_id: message.chat.id,
-        message_type: messageType
+        chat_id: message.chat.id
       });
 
       const { data: newMessage, error: insertError } = await supabase
@@ -107,20 +90,18 @@ export async function handleMessageProcessing(
           updated_at: new Date().toISOString()
         })
         .select()
-        .single();
+        .maybeSingle();
 
       if (insertError) {
         console.error('Error creating message:', insertError);
         throw insertError;
       }
 
-      if (!newMessage) {
-        console.error('Failed to create message record - no data returned');
-        throw new Error('Failed to create message record');
-      }
-      
       messageRecord = newMessage;
-      console.log('Successfully created new message:', messageRecord.id);
+    }
+
+    if (!messageRecord) {
+      throw new Error('Failed to create/update message record');
     }
 
     return { 
