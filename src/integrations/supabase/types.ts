@@ -221,10 +221,6 @@ export type Database = {
       }
     }
     Functions: {
-      cleanup_successful_webhooks: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
       get_message_file_id: {
         Args: {
           message_data: Json
