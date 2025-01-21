@@ -1,1 +1,11 @@
 project_id = "kzfamethztziwqiocbwz"
+
+[api]
+enabled = true
+url = "https://kzfamethztziwqiocbwz.supabase.co"
+
+[functions.telegram-webhook]
+verify_jwt = false
+
+[functions.set-webhook]
+verify_jwt = false
