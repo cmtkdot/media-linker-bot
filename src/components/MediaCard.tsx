@@ -117,6 +117,18 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
             onError={(e) => handleImageError(e.target as HTMLImageElement, item.default_public_url)}
           />
         )}
+        {/* Non-hover overlay with caption and metadata */}
+        <div className="absolute inset-0 flex flex-col justify-between p-4 group-hover:opacity-0 transition-opacity bg-black/40 text-white">
+          <div className="flex-1 flex items-center justify-center">
+            <p className="text-center font-medium text-lg">
+              {item.caption || 'No caption'}
+            </p>
+          </div>
+          <div className="flex justify-between items-end text-sm">
+            <span>{item.purchase_date ? new Date(item.purchase_date).toLocaleDateString() : '-'}</span>
+            <span className="capitalize">{item.file_type}</span>
+          </div>
+        </div>
       </div>
       <div className="p-2 text-sm space-y-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/95 absolute bottom-0 left-0 right-0">
         <div className="grid grid-cols-2 gap-x-2 gap-y-1">
