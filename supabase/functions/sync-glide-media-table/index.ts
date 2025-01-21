@@ -14,6 +14,7 @@ interface GlideRecord {
 interface SyncResult {
   added: number;
   updated: number;
+  deleted: number;
   errors: string[];
 }
 
@@ -50,11 +51,16 @@ serve(async (req) => {
     if (!config) throw new Error('Configuration not found');
     if (!config.supabase_table_name) throw new Error('No Supabase table linked');
 
-    // Use the API token from config or environment variable
+    // Get API token from config or environment
     const apiToken = config.api_token || Deno.env.get('GLIDE_API_TOKEN');
     if (!apiToken) {
       throw new Error('No API token available');
     }
+
+    console.log('Starting sync with config:', {
+      table_name: config.table_name,
+      supabase_table_name: config.supabase_table_name
+    });
 
     // Get all telegram_media records from Supabase
     const { data: supabaseRows, error: fetchError } = await supabase
@@ -74,6 +80,15 @@ serve(async (req) => {
 
     if (!glideResponse.ok) {
       const errorText = await glideResponse.text();
+      console.error('Glide API error:', {
+        status: glideResponse.status,
+        statusText: glideResponse.statusText,
+        error: errorText,
+        config: {
+          table_id: config.table_id,
+          has_token: !!apiToken
+        }
+      });
       throw new Error(`Glide API error: ${JSON.stringify({
         status: glideResponse.status,
         statusText: glideResponse.statusText,
@@ -87,6 +102,7 @@ serve(async (req) => {
     const result: SyncResult = {
       added: 0,
       updated: 0,
+      deleted: 0,
       errors: []
     };
 
@@ -169,7 +185,11 @@ serve(async (req) => {
           .eq('id', supabaseRecord.id);
 
       } catch (error) {
-        console.error('Error processing record:', supabaseRecord.id, error);
+        console.error('Error processing record:', {
+          record_id: supabaseRecord.id,
+          error: error.message,
+          stack: error.stack
+        });
         result.errors.push(`Error processing ${supabaseRecord.id}: ${error.message}`);
       }
     }
@@ -200,7 +220,11 @@ serve(async (req) => {
         if (updateError) throw updateError;
         result.updated++;
       } catch (error) {
-        console.error('Error updating Supabase from Glide:', glideRecord.telegram_media_row_id, error);
+        console.error('Error updating Supabase from Glide:', {
+          record_id: glideRecord.telegram_media_row_id,
+          error: error.message,
+          stack: error.stack
+        });
         result.errors.push(`Error updating Supabase record ${glideRecord.telegram_media_row_id}: ${error.message}`);
       }
     }
@@ -221,7 +245,10 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Error in sync operation:', error);
+    console.error('Error in sync operation:', {
+      error: error.message,
+      stack: error.stack
+    });
     
     return new Response(
       JSON.stringify({
