@@ -75,10 +75,8 @@ serve(async (req) => {
     // Update Supabase with Glide data
     for (const glideRow of glideRows) {
       try {
-        const existingRecord = supabaseRows?.find(row => 
-          row.telegram_media_row_id === glideRow.id || 
-          row.file_unique_id === glideRow.fileUniqueId
-        );
+        // Look for existing record by Glide ID
+        const existingRecord = supabaseRows?.find(row => row.id === glideRow.id);
 
         if (existingRecord) {
           // Update existing record
@@ -104,6 +102,7 @@ serve(async (req) => {
           const { error: insertError } = await supabase
             .from('telegram_media')
             .insert({
+              id: glideRow.id, // Use Glide's ID
               file_id: glideRow.fileId,
               file_unique_id: glideRow.fileUniqueId,
               file_type: glideRow.fileType,
@@ -131,16 +130,41 @@ serve(async (req) => {
           added++;
         }
       } catch (error) {
-        console.error('Error processing row:', error);
-        errors.push(`Error processing row ${glideRow.id}: ${error.message}`);
+        console.error('Error processing Glide row:', error);
+        errors.push(`Error processing Glide row ${glideRow.id}: ${error.message}`);
       }
     }
 
     // Update Glide with new Supabase data
     for (const supabaseRow of supabaseRows || []) {
       try {
-        if (!supabaseRow.telegram_media_row_id) {
-          // This is a new record in Supabase, create it in Glide
+        if (supabaseRow.telegram_media_row_id) {
+          // Update existing Glide record
+          await telegramMediaTable.update(supabaseRow.telegram_media_row_id, {
+            fileId: supabaseRow.file_id,
+            fileUniqueId: supabaseRow.file_unique_id,
+            fileType: supabaseRow.file_type,
+            publicUrl: supabaseRow.public_url,
+            productName: supabaseRow.product_name,
+            productCode: supabaseRow.product_code,
+            quantity: supabaseRow.quantity,
+            telegramData: JSON.stringify(supabaseRow.telegram_data),
+            glideData: JSON.stringify(supabaseRow.glide_data),
+            mediaMetadata: JSON.stringify(supabaseRow.media_metadata),
+            processed: supabaseRow.processed,
+            processingError: supabaseRow.processing_error,
+            messageId: supabaseRow.message_id,
+            caption: supabaseRow.caption,
+            vendorUid: supabaseRow.vendor_uid,
+            purchaseDate: supabaseRow.purchase_date,
+            notes: supabaseRow.notes,
+            analyzedContent: JSON.stringify(supabaseRow.analyzed_content),
+            purchaseOrderUid: supabaseRow.purchase_order_uid,
+            defaultPublicUrl: supabaseRow.default_public_url
+          });
+          updated++;
+        } else {
+          // Create new Glide record
           const glideId = await telegramMediaTable.add({
             fileId: supabaseRow.file_id,
             fileUniqueId: supabaseRow.file_unique_id,
@@ -164,7 +188,7 @@ serve(async (req) => {
             defaultPublicUrl: supabaseRow.default_public_url
           });
 
-          // Update the Supabase record with the new Glide ID
+          // Update Supabase record with new Glide ID
           const { error: updateError } = await supabase
             .from('telegram_media')
             .update({ 
