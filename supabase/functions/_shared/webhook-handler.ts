@@ -6,6 +6,46 @@ import { updateExistingMedia, processNewMedia } from './media-processor.ts';
 import { handleProcessingError } from './error-handler.ts';
 import { MAX_RETRY_ATTEMPTS } from './constants.ts';
 
+async function checkForDuplicateMedia(supabase: any, mediaFile: any) {
+  const { data: existingMedia, error } = await supabase
+    .from('telegram_media')
+    .select('*')
+    .eq('file_unique_id', mediaFile.file_unique_id)
+    .single();
+
+  if (error && error.code !== 'PGRST116') { // PGRST116 is "not found" error
+    throw error;
+  }
+
+  return existingMedia;
+}
+
+async function updateMessageWithAnalyzedData(supabase: any, messageId: string, analyzedData: any) {
+  console.log('Updating message with analyzed data:', {
+    message_id: messageId,
+    analyzed_data: analyzedData
+  });
+
+  const { error } = await supabase
+    .from('messages')
+    .update({
+      caption: analyzedData.caption,
+      product_name: analyzedData.product_name,
+      product_code: analyzedData.product_code,
+      quantity: analyzedData.quantity,
+      vendor_uid: analyzedData.vendor_uid,
+      purchase_date: analyzedData.purchase_date,
+      notes: analyzedData.notes,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', messageId);
+
+  if (error) {
+    console.error('Error updating message with analyzed data:', error);
+    throw error;
+  }
+}
+
 export async function handleWebhookUpdate(
   update: TelegramUpdate,
   supabase: any,
@@ -49,41 +89,59 @@ export async function handleWebhookUpdate(
       }
     }
 
-    // Check for existing message
-    const { data: existingMessage, error: fetchError } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('chat_id', message.chat.id)
-      .eq('message_id', message.message_id)
-      .maybeSingle();
+    // Get media file info
+    const mediaTypes = ['photo', 'video', 'document', 'animation'] as const;
+    let mediaFile = null;
+    let mediaType = '';
 
-    if (fetchError) {
-      console.error('Error checking for existing message:', {
-        error: fetchError,
-        message_id: message.message_id,
-        chat_id: message.chat.id
-      });
-      throw fetchError;
+    for (const type of mediaTypes) {
+      if (message[type]) {
+        mediaFile = type === 'photo' 
+          ? message[type]![message[type]!.length - 1] 
+          : message[type];
+        mediaType = type;
+        break;
+      }
     }
 
-    let messageRecord = existingMessage;
-    let retryCount = existingMessage?.retry_count || 0;
+    if (!mediaFile) {
+      throw new Error('No media file found in message');
+    }
 
-    // If message doesn't exist, create it with product info
-    if (!existingMessage) {
+    // Check for existing media before processing
+    console.log('Checking for duplicate media:', mediaFile.file_unique_id);
+    const existingMedia = await checkForDuplicateMedia(supabase, mediaFile);
+
+    let messageRecord;
+    let retryCount = 0;
+
+    // Create or update message record with analyzed data
+    if (existingMedia) {
+      console.log('Found existing media, checking for message:', existingMedia.message_id);
+      const { data: existingMessage } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('id', existingMedia.message_id)
+        .single();
+
+      if (existingMessage) {
+        messageRecord = existingMessage;
+        // Update existing message with new analyzed data
+        await updateMessageWithAnalyzedData(supabase, existingMessage.id, {
+          ...productInfo,
+          caption: message.caption
+        });
+      }
+    }
+
+    // If no existing message, create new one
+    if (!messageRecord) {
       try {
-        // Include vendor_uid, purchase_date, and notes in the message creation
         const messageData = {
           ...message,
-          vendor_uid: productInfo?.vendor_uid,
-          purchase_date: productInfo?.purchase_date,
-          notes: productInfo?.notes,
-          product_name: productInfo?.product_name,
-          product_code: productInfo?.product_code,
-          quantity: productInfo?.quantity
+          ...productInfo
         };
-        
-        messageRecord = await createMessage(supabase, messageData, productInfo);
+        messageRecord = await createMessage(supabase, messageData);
         console.log('Created new message record:', {
           id: messageRecord.id,
           message_id: message.message_id,
@@ -91,7 +149,7 @@ export async function handleWebhookUpdate(
         });
       } catch (error) {
         if (error.message === 'Duplicate file_id found in message_data') {
-          console.log('Duplicate media detected, will update existing records');
+          console.log('Duplicate media detected, updating existing records');
           await supabase.from('failed_webhook_updates').insert({
             message_id: message.message_id,
             chat_id: message.chat.id,
@@ -111,24 +169,6 @@ export async function handleWebhookUpdate(
     // Process media with retry logic
     while (retryCount < MAX_RETRY_ATTEMPTS) {
       try {
-        const mediaTypes = ['photo', 'video', 'document', 'animation'] as const;
-        let mediaFile = null;
-        let mediaType = '';
-
-        for (const type of mediaTypes) {
-          if (message[type]) {
-            mediaFile = type === 'photo' 
-              ? message[type]![message[type]!.length - 1] 
-              : message[type];
-            mediaType = type;
-            break;
-          }
-        }
-
-        if (!mediaFile) {
-          throw new Error('No media file found in message');
-        }
-
         console.log('Processing media file:', {
           file_id: mediaFile.file_id,
           type: mediaType,
@@ -136,20 +176,9 @@ export async function handleWebhookUpdate(
           product_info: productInfo
         });
 
-        // Check for existing media
-        const { data: existingMedia, error: mediaCheckError } = await supabase
-          .from('telegram_media')
-          .select('*')
-          .eq('file_unique_id', mediaFile.file_unique_id)
-          .maybeSingle();
-
-        if (mediaCheckError) {
-          throw mediaCheckError;
-        }
-
         let result;
         if (existingMedia) {
-          console.log('Found existing media, updating records:', {
+          console.log('Updating existing media records:', {
             media_id: existingMedia.id,
             file_unique_id: mediaFile.file_unique_id,
             product_info: productInfo
@@ -172,19 +201,13 @@ export async function handleWebhookUpdate(
           );
         }
 
-        // Update message status to success and include product info
+        // Update message status to success
         const { error: statusError } = await supabase
           .from('messages')
           .update({
             status: 'success',
             processed_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            vendor_uid: productInfo?.vendor_uid,
-            purchase_date: productInfo?.purchase_date,
-            notes: productInfo?.notes,
-            product_name: productInfo?.product_name,
-            product_code: productInfo?.product_code,
-            quantity: productInfo?.quantity
+            updated_at: new Date().toISOString()
           })
           .eq('id', messageRecord.id);
 
