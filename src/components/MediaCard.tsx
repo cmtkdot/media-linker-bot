@@ -118,9 +118,8 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
           />
         )}
       </div>
-      {/* Non-hover info container */}
       <div className="p-4 bg-white border-t">
-        <p className="text-center font-medium text-lg mb-4">
+        <p className="text-center text-base mb-4">
           {item.caption || 'No caption'}
         </p>
         <div className="flex justify-between items-center text-sm text-gray-600">
