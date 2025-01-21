@@ -15,6 +15,7 @@ export type Database = {
           chat_id: number
           created_at: string
           id: string
+          last_retry_at: string | null
           media_group_id: string | null
           message_data: Json
           message_id: number
@@ -24,7 +25,9 @@ export type Database = {
           product_code: string | null
           product_name: string | null
           quantity: number | null
+          retry_count: number | null
           sender_info: Json
+          status: string | null
           updated_at: string
         }
         Insert: {
@@ -32,6 +35,7 @@ export type Database = {
           chat_id: number
           created_at?: string
           id?: string
+          last_retry_at?: string | null
           media_group_id?: string | null
           message_data?: Json
           message_id: number
@@ -41,7 +45,9 @@ export type Database = {
           product_code?: string | null
           product_name?: string | null
           quantity?: number | null
+          retry_count?: number | null
           sender_info?: Json
+          status?: string | null
           updated_at?: string
         }
         Update: {
@@ -49,6 +55,7 @@ export type Database = {
           chat_id?: number
           created_at?: string
           id?: string
+          last_retry_at?: string | null
           media_group_id?: string | null
           message_data?: Json
           message_id?: number
@@ -58,40 +65,9 @@ export type Database = {
           product_code?: string | null
           product_name?: string | null
           quantity?: number | null
+          retry_count?: number | null
           sender_info?: Json
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      pending_webhook_updates: {
-        Row: {
-          created_at: string
-          error_message: string | null
-          id: string
-          last_retry_at: string | null
-          retry_count: number | null
-          status: string | null
-          update_data: Json
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          error_message?: string | null
-          id?: string
-          last_retry_at?: string | null
-          retry_count?: number | null
           status?: string | null
-          update_data: Json
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          error_message?: string | null
-          id?: string
-          last_retry_at?: string | null
-          retry_count?: number | null
-          status?: string | null
-          update_data?: Json
           updated_at?: string
         }
         Relationships: []

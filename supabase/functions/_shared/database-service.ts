@@ -12,6 +12,8 @@ export async function createMessage(supabase: any, message: any, productInfo: an
       message_data: message,
       caption: message.caption,
       media_group_id: message.media_group_id,
+      status: 'pending',
+      retry_count: 0,
       ...(productInfo && {
         product_name: productInfo.product_name,
         product_code: productInfo.product_code,
