@@ -41,7 +41,7 @@ serve(async (req) => {
         const message = update.message || update.channel_post;
         
         if (!message) {
-          await markUpdateProcessed(supabase, pendingUpdate.id, 'No message in update');
+          await deletePendingUpdate(supabase, pendingUpdate.id);
           continue;
         }
 
@@ -67,7 +67,7 @@ serve(async (req) => {
         }
 
         if (!mediaFile) {
-          await markUpdateProcessed(supabase, pendingUpdate.id, 'No media to process');
+          await deletePendingUpdate(supabase, pendingUpdate.id);
           continue;
         }
 
@@ -81,7 +81,8 @@ serve(async (req) => {
           productInfo
         );
 
-        await markUpdateProcessed(supabase, pendingUpdate.id);
+        // Delete the pending update after successful processing
+        await deletePendingUpdate(supabase, pendingUpdate.id);
         results.push({ id: pendingUpdate.id, status: 'success' });
 
       } catch (error) {
@@ -119,16 +120,14 @@ serve(async (req) => {
   }
 });
 
-async function markUpdateProcessed(supabase: any, updateId: string, message?: string) {
+async function deletePendingUpdate(supabase: any, updateId: string) {
   const { error } = await supabase
     .from('pending_webhook_updates')
-    .update({
-      status: 'processed',
-      error_message: message || null
-    })
+    .delete()
     .eq('id', updateId);
 
   if (error) {
-    console.error('Error marking update as processed:', error);
+    console.error('Error deleting pending update:', error);
+    throw error;
   }
 }

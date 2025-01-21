@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders } from "../_shared/cors.ts"
 import { TelegramUpdate } from "../_shared/telegram-types.ts"
-import { analyzeCaption, getMessageType } from "../_shared/telegram-service.ts"
+import { analyzeCaption } from "../_shared/telegram-service.ts"
 import { createMessage, processMediaFile } from "../_shared/database-service.ts"
 
 serve(async (req) => {
@@ -41,67 +41,49 @@ serve(async (req) => {
         );
       }
 
-      let productInfo = null;
-      if (message.caption) {
-        productInfo = await analyzeCaption(message.caption, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-        console.log('AI-extracted product info:', productInfo);
-      }
-
-      const messageRecord = await createMessage(supabase, message, productInfo);
-      console.log('Created message record:', messageRecord);
-
-      const mediaTypes = ['photo', 'video', 'document', 'animation'] as const;
-      let mediaFile = null;
-      let mediaType = '';
-
-      for (const type of mediaTypes) {
-        if (message[type]) {
-          mediaFile = type === 'photo' 
-            ? message[type]![message[type]!.length - 1]
-            : message[type];
-          mediaType = type;
-          break;
-        }
-      }
-
-      if (!mediaFile) {
+      // Check if this is a media message
+      const hasMedia = message.photo || message.video || message.document || message.animation;
+      if (!hasMedia) {
         return new Response(
-          JSON.stringify({ message: 'Message processed (no media)' }),
+          JSON.stringify({ message: 'Not a media message, skipping' }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
         );
       }
 
-      await processMediaFile(
-        supabase,
-        mediaFile,
-        mediaType,
-        message,
-        messageRecord,
-        TELEGRAM_BOT_TOKEN,
-        productInfo
-      );
+      // Check for existing message to prevent duplicates
+      const { data: existingMessage } = await supabase
+        .from('messages')
+        .select('id')
+        .eq('chat_id', message.chat.id)
+        .eq('message_id', message.message_id)
+        .single();
+
+      if (existingMessage) {
+        return new Response(
+          JSON.stringify({ message: 'Message already processed' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+        );
+      }
+
+      // Store the update for processing
+      const { error: storageError } = await supabase
+        .from('pending_webhook_updates')
+        .insert({
+          update_data: update,
+          status: 'pending'
+        });
+
+      if (storageError) {
+        throw storageError;
+      }
 
       return new Response(
-        JSON.stringify({ message: 'Successfully processed message and media' }),
+        JSON.stringify({ message: 'Update queued for processing' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
       );
 
     } catch (processingError) {
       console.error('Error processing update:', processingError);
-      
-      // Store the failed update
-      const { error: storageError } = await supabase
-        .from('pending_webhook_updates')
-        .insert({
-          update_data: update,
-          error_message: processingError.message,
-          status: 'pending'
-        });
-
-      if (storageError) {
-        console.error('Error storing pending update:', storageError);
-      }
-
       throw processingError;
     }
 
