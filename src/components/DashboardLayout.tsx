@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useSupabaseClient } from "@supabase/auth-helpers-react";
 import GlideSync from "./GlideSync";
 
@@ -21,8 +21,10 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
       <header className="border-b">
         <div className="container flex h-16 items-center justify-between px-4">
           <div className="flex items-center gap-4">
-            <h1 className="text-xl font-semibold">Media Manager</h1>
-            <GlideSync />
+            <Link to="/" className="text-xl font-semibold">Media Manager</Link>
+            <Link to="/glide-sync" className="text-gray-600 hover:text-gray-900">
+              Glide Sync
+            </Link>
           </div>
           <Button onClick={handleSignOut} variant="outline">
             Sign Out
