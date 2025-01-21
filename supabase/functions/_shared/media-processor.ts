@@ -13,68 +13,14 @@ export async function processMediaFile(
   console.log(`Processing ${mediaType} file:`, mediaFile.file_id);
 
   try {
-    // Check for existing media to prevent duplicates - using file_unique_id which is guaranteed unique by Telegram
+    // Check for existing media using file_unique_id
     const { data: existingMedia } = await supabase
       .from('telegram_media')
-      .select('id, public_url, file_unique_id')
+      .select('*')
       .eq('file_unique_id', mediaFile.file_unique_id)
       .single();
 
-    if (existingMedia?.public_url) {
-      console.log('Media already exists:', existingMedia);
-      return existingMedia;
-    }
-
-    const { buffer, filePath } = await getAndDownloadTelegramFile(mediaFile.file_id, botToken);
-    
-    // Generate a unique filename using media type and file_unique_id
-    let fileExt = filePath.split('.').pop() || '';
-    if (mediaType === 'photo' && !fileExt) {
-      fileExt = 'jpg';
-    }
-
-    // Create a unique filename pattern
-    const uniqueFileName = generateSafeFileName(
-      `${mediaType}_${mediaFile.file_unique_id}`,
-      fileExt
-    );
-
-    console.log('Uploading file:', uniqueFileName);
-
-    // Check if file already exists in storage
-    const { data: existingFile } = await supabase.storage
-      .from('media')
-      .list('', {
-        search: uniqueFileName
-      });
-
-    if (existingFile && existingFile.length > 0) {
-      console.log('File already exists in storage:', uniqueFileName);
-      const { data: { publicUrl } } = await supabase.storage
-        .from('media')
-        .getPublicUrl(uniqueFileName);
-      return { public_url: publicUrl };
-    }
-
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('media')
-      .upload(uniqueFileName, buffer, {
-        contentType: mediaFile.mime_type || (mediaType === 'photo' ? 'image/jpeg' : 'application/octet-stream'),
-        upsert: false,
-        cacheControl: '3600'
-      });
-
-    if (uploadError) {
-      console.error('Upload error:', uploadError);
-      throw new Error(`Failed to upload file: ${uploadError.message}`);
-    }
-
-    // Get the public URL for the uploaded file
-    const { data: { publicUrl } } = await supabase.storage
-      .from('media')
-      .getPublicUrl(uniqueFileName);
-
-    // Prepare telegram data with proper caption handling for media groups
+    // Prepare telegram data with proper caption handling
     const telegramData = {
       message_id: message.message_id,
       chat_id: message.chat.id,
@@ -87,27 +33,91 @@ export async function processMediaFile(
       mime_type: mediaFile.mime_type || (mediaType === 'photo' ? 'image/jpeg' : 'application/octet-stream'),
       width: mediaFile.width ? BigInt(mediaFile.width).toString() : null,
       height: mediaFile.height ? BigInt(mediaFile.height).toString() : null,
-      duration: 'duration' in mediaFile ? BigInt(mediaFile.duration).toString() : null,
-      storage_path: uniqueFileName
+      duration: 'duration' in mediaFile ? BigInt(mediaFile.duration).toString() : null
     };
 
-    // For media groups, use the caption from the message record if available
-    const captionToUse = message.media_group_id ? messageRecord.caption : message.caption;
-    const productInfoToUse = message.media_group_id ? {
-      product_name: messageRecord.product_name,
-      product_code: messageRecord.product_code,
-      quantity: messageRecord.quantity
-    } : productInfo;
+    if (existingMedia) {
+      console.log('Media already exists, updating related records:', existingMedia);
 
-    console.log('Inserting media record with data:', {
-      file_id: mediaFile.file_id,
-      file_type: mediaType,
-      public_url: publicUrl,
-      message_id: messageRecord.id,
-      caption: captionToUse,
-      productInfo: productInfoToUse
-    });
+      // Update the existing telegram_media record with new message data
+      const { error: mediaUpdateError } = await supabase
+        .from('telegram_media')
+        .update({
+          telegram_data: {
+            ...existingMedia.telegram_data,
+            ...telegramData
+          },
+          caption: message.caption || messageRecord.caption,
+          product_name: messageRecord.product_name,
+          product_code: messageRecord.product_code,
+          quantity: messageRecord.quantity,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existingMedia.id);
 
+      if (mediaUpdateError) {
+        console.error('Error updating existing media:', mediaUpdateError);
+        throw mediaUpdateError;
+      }
+
+      // Update the message record with the existing media information
+      const { error: messageUpdateError } = await supabase
+        .from('messages')
+        .update({
+          message_data: {
+            ...messageRecord.message_data,
+            media_info: {
+              file_id: mediaFile.file_id,
+              file_unique_id: mediaFile.file_unique_id,
+              public_url: existingMedia.public_url
+            }
+          },
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', messageRecord.id);
+
+      if (messageUpdateError) {
+        console.error('Error updating message record:', messageUpdateError);
+        throw messageUpdateError;
+      }
+
+      return {
+        public_url: existingMedia.public_url,
+        reused: true
+      };
+    }
+
+    // If media doesn't exist, proceed with new upload
+    const { buffer, filePath } = await getAndDownloadTelegramFile(mediaFile.file_id, botToken);
+    
+    const fileExt = filePath.split('.').pop() || '';
+    const uniqueFileName = generateSafeFileName(
+      `${mediaType}_${mediaFile.file_unique_id}`,
+      fileExt
+    );
+
+    console.log('Uploading new file:', uniqueFileName);
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('media')
+      .upload(uniqueFileName, buffer, {
+        contentType: mediaFile.mime_type || 'application/octet-stream',
+        upsert: false,
+        cacheControl: '3600'
+      });
+
+    if (uploadError) {
+      console.error('Upload error:', uploadError);
+      throw new Error(`Failed to upload file: ${uploadError.message}`);
+    }
+
+    const { data: { publicUrl } } = await supabase.storage
+      .from('media')
+      .getPublicUrl(uniqueFileName);
+
+    // Add storage path to telegram data
+    telegramData['storage_path'] = uniqueFileName;
+
+    console.log('Inserting new media record');
     const { error: dbError } = await supabase
       .from('telegram_media')
       .insert({
@@ -117,12 +127,10 @@ export async function processMediaFile(
         telegram_data: telegramData,
         message_id: messageRecord.id,
         public_url: publicUrl,
-        caption: captionToUse,
-        ...(productInfoToUse && {
-          product_name: productInfoToUse.product_name,
-          product_code: productInfoToUse.product_code,
-          quantity: productInfoToUse.quantity ? BigInt(productInfoToUse.quantity).toString() : null
-        })
+        caption: message.caption || messageRecord.caption,
+        product_name: messageRecord.product_name,
+        product_code: messageRecord.product_code,
+        quantity: messageRecord.quantity
       });
 
     if (dbError) {
@@ -130,8 +138,29 @@ export async function processMediaFile(
       throw new Error(`Failed to insert into database: ${dbError.message}`);
     }
 
+    // Update message record with the new media information
+    const { error: messageUpdateError } = await supabase
+      .from('messages')
+      .update({
+        message_data: {
+          ...messageRecord.message_data,
+          media_info: {
+            file_id: mediaFile.file_id,
+            file_unique_id: mediaFile.file_unique_id,
+            public_url: publicUrl
+          }
+        },
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', messageRecord.id);
+
+    if (messageUpdateError) {
+      console.error('Error updating message record:', messageUpdateError);
+      throw messageUpdateError;
+    }
+
     console.log(`Successfully processed ${mediaType} file:`, uniqueFileName);
-    return { public_url: publicUrl };
+    return { public_url: publicUrl, reused: false };
   } catch (error) {
     console.error(`Error processing ${mediaType} file:`, error);
     throw error;
