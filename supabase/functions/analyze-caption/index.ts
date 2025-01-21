@@ -38,14 +38,15 @@ serve(async (req) => {
         messages: [
           {
             role: 'system',
-            content: `Extract product information from captions, it often follows the format: "{Product Name} #{PurchaseCode} x {Quantity}". 
-            The PurchaseCode consists of a VendorUID which is the text characters from the caption PurchaseCode followed by the Purchase Date in mmDDYY format.
+            content: `Extract product information from captions that follow the format: "{Product Name} #{PurchaseCode} x {Quantity}". 
+            The PurchaseCode consists of a VendorUID (first 4 characters) followed by the Purchase Date in mmDDYY format.
+            
             Return a JSON object with:
-            - product_name: which is the product name from the caption for the cannabis product
-            - product_code: which is the code from the caption that is started with # and followed by the PurchaseCode
-            - quantity: which is the quantity from the caption for the product often followed by the word "x"
-            - vendor_uid which is the vendor uid from the caption that are text characters from the PurchaseCode
-            - purchase_date (convert mmDDYY to MM/DD/YYYY format) which is the purchase date from the caption
+            - product_name: the product name from the caption
+            - product_code: the full code from the caption (started with #)
+            - quantity: the quantity from the caption (after x)
+            - vendor_uid: the first 4 characters of the product code
+            - purchase_date: convert the last 6 digits (mmDDYY) to MM/DD/YYYY format
             
             Example caption: "Cherry Blow Pop #FISH011625 x 3"
             Example response: {
@@ -55,7 +56,8 @@ serve(async (req) => {
               "vendor_uid": "FISH",
               "purchase_date": "01/16/2025"
             }
-            If any part is missing, set it to null.`
+            
+            If any part cannot be extracted, set it to null. Ensure the purchase_date is in MM/DD/YYYY format.`
           },
           {
             role: 'user',
@@ -67,9 +69,10 @@ serve(async (req) => {
     })
 
     const data = await response.json()
+    console.log('AI Analysis result:', data)
+    
     const result = JSON.parse(data.choices[0].message.content)
-
-    console.log('AI Analysis result:', result)
+    console.log('Parsed result:', result)
 
     // Initialize Supabase client
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
@@ -78,11 +81,17 @@ serve(async (req) => {
     let dbPurchaseDate = null
     if (result.purchase_date) {
       const [month, day, year] = result.purchase_date.split('/')
-      dbPurchaseDate = `${year}-${month}-${day}`
+      dbPurchaseDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
     }
 
     // Update all media items in the same group
     if (mediaGroupId) {
+      console.log('Updating media group:', mediaGroupId, 'with data:', {
+        caption,
+        ...result,
+        purchase_date: dbPurchaseDate
+      })
+
       const { error: updateError } = await supabase
         .from('telegram_media')
         .update({
