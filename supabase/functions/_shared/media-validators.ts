@@ -1,49 +1,14 @@
-export const getMimeType = (fileName: string, defaultType: string = 'application/octet-stream'): string => {
-  const extension = fileName.split('.').pop()?.toLowerCase();
-  
-  const mimeTypes: { [key: string]: string } = {
-    // Images
-    'jpg': 'image/jpeg',
-    'jpeg': 'image/jpeg',
-    'png': 'image/png',
-    'gif': 'image/gif',
-    'webp': 'image/webp',
-    'bmp': 'image/bmp',
-    'heic': 'image/heic',
-    'heif': 'image/heif',
-    'tiff': 'image/tiff',
-    'tif': 'image/tiff',
-    
-    // Videos
-    'mp4': 'video/mp4',
-    'mov': 'video/quicktime',
-    'webm': 'video/webm',
-    'avi': 'video/x-msvideo',
-    'mkv': 'video/x-matroska',
-    '3gp': 'video/3gpp',
-    'wmv': 'video/x-ms-wmv',
-    'ogv': 'video/ogg'
-  };
-
-  return extension ? mimeTypes[extension] || defaultType : defaultType;
-};
-
 export const validateMediaFile = async (mediaFile: any, mediaType: string) => {
-  if (!mediaFile) {
-    throw new Error('No media file provided');
+  if (!mediaFile?.file_id) {
+    throw new Error('Invalid media file: missing file_id');
   }
 
-  if (!mediaFile.file_id || !mediaFile.file_unique_id) {
-    throw new Error('Invalid media file: missing required fields');
+  // Validate file size if available
+  if (mediaFile.file_size && mediaFile.file_size > 100 * 1024 * 1024) { // 100MB limit
+    throw new Error('File size exceeds maximum allowed (100MB)');
   }
 
-  // Size validation (100MB limit)
-  const maxSize = 100 * 1024 * 1024; // 100MB in bytes
-  if (mediaFile.file_size && mediaFile.file_size > maxSize) {
-    throw new Error(`File size exceeds limit of ${maxSize} bytes`);
-  }
-
-  // Type-specific validation
+  // Validate media type specific requirements
   switch (mediaType) {
     case 'photo':
       if (!mediaFile.width || !mediaFile.height) {
@@ -56,26 +21,53 @@ export const validateMediaFile = async (mediaFile: any, mediaType: string) => {
       }
       break;
     case 'document':
-      if (!mediaFile.file_name) {
-        throw new Error('Invalid document: missing filename');
-      }
+      // Documents are more permissive, just ensure file_id exists
       break;
     case 'animation':
-      if (!mediaFile.duration || !mediaFile.width || !mediaFile.height) {
-        throw new Error('Invalid animation: missing required properties');
+      if (!mediaFile.duration) {
+        throw new Error('Invalid animation: missing duration');
       }
       break;
     default:
       throw new Error(`Unsupported media type: ${mediaType}`);
   }
-
-  return true;
 };
 
 export const getMediaType = (message: any): string | null => {
-  if (message.photo && message.photo.length > 0) return 'photo';
+  if (message.photo) return 'photo';
   if (message.video) return 'video';
   if (message.document) return 'document';
   if (message.animation) return 'animation';
   return null;
+};
+
+export const getMimeType = (filePath: string, defaultType: string = 'application/octet-stream'): string => {
+  const ext = filePath.split('.').pop()?.toLowerCase();
+  
+  const mimeTypes: { [key: string]: string } = {
+    // Images
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'png': 'image/png',
+    'gif': 'image/gif',
+    'webp': 'image/webp',
+    'bmp': 'image/bmp',
+    'heic': 'image/heic',
+    'heif': 'image/heif',
+    // Videos
+    'mp4': 'video/mp4',
+    'mov': 'video/quicktime',
+    'webm': 'video/webm',
+    'avi': 'video/x-msvideo',
+    'mkv': 'video/x-matroska',
+    '3gp': 'video/3gpp',
+    'wmv': 'video/x-ms-wmv',
+    'ogg': 'video/ogg',
+    // Documents
+    'pdf': 'application/pdf',
+    'doc': 'application/msword',
+    'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  };
+
+  return ext ? (mimeTypes[ext] || defaultType) : defaultType;
 };
