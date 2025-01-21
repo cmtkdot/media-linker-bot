@@ -34,7 +34,7 @@ const MediaViewer = ({ open, onOpenChange, media }: MediaViewerProps) => {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-6xl p-4">
         <DialogHeader className="w-full">
-          <DialogTitle className="text-right">{media.product_name || "Media Preview"}</DialogTitle>
+          <DialogTitle className="text-center">{media.product_name || "Media Preview"}</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col lg:flex-row gap-4">
           {/* Media Column */}
