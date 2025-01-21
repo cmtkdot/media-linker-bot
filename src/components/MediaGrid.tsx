@@ -61,7 +61,7 @@ const MediaGrid = () => {
     setIsSyncing(true);
     try {
       const { error } = await supabase
-        .rpc('sync_media_group_info', { 
+        .rpc('sync_media_group_info_rpc', { 
           media_id: editItem.id 
         });
 
