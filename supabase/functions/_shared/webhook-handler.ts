@@ -30,23 +30,30 @@ export async function handleWebhookUpdate(
     return { message: 'Not a media message, skipping' };
   }
 
-  // Check for existing message
-  const { data: existingMessage } = await supabase
+  // Check for existing message with same chat_id and message_id
+  const { data: existingMessage, error: fetchError } = await supabase
     .from('messages')
-    .select('id, retry_count, status')
+    .select('*')
     .eq('chat_id', message.chat.id)
     .eq('message_id', message.message_id)
     .maybeSingle();
 
-  if (existingMessage?.status === 'success') {
-    console.log('Message already processed successfully:', existingMessage);
-    return { message: 'Message already processed' };
+  if (fetchError) {
+    console.error('Error checking for existing message:', fetchError);
+    throw fetchError;
   }
 
-  let retryCount = existingMessage?.retry_count || 0;
-  let lastError = null;
+  // If message exists and was processed successfully, skip
+  if (existingMessage?.status === 'success') {
+    console.log('Message already processed successfully:', existingMessage);
+    return { message: 'Message already processed', id: existingMessage.id };
+  }
 
-  while (retryCount < MAX_RETRY_ATTEMPTS) {
+  let messageRecord = existingMessage;
+  let retryCount = existingMessage?.retry_count || 0;
+
+  // If no existing message, create new one
+  if (!existingMessage) {
     try {
       let productInfo = null;
       if (message.caption) {
@@ -57,24 +64,36 @@ export async function handleWebhookUpdate(
           Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
         );
       }
+      messageRecord = await createMessage(supabase, message, productInfo);
+      console.log('Created new message record:', messageRecord);
+    } catch (error) {
+      console.error('Error creating message:', error);
+      throw error;
+    }
+  }
 
-      let messageRecord;
-      if (existingMessage) {
-        const { data: updatedMessage } = await supabase
-          .from('messages')
-          .update({
-            retry_count: retryCount,
-            last_retry_at: new Date().toISOString(),
-            status: 'processing'
-          })
-          .eq('id', existingMessage.id)
-          .select()
-          .single();
-        messageRecord = updatedMessage;
-      } else {
-        messageRecord = await createMessage(supabase, message, productInfo);
-      }
+  // Update existing message status to processing
+  if (existingMessage) {
+    const { data: updatedMessage, error: updateError } = await supabase
+      .from('messages')
+      .update({
+        status: 'processing',
+        retry_count: retryCount,
+        last_retry_at: new Date().toISOString(),
+      })
+      .eq('id', existingMessage.id)
+      .select()
+      .single();
 
+    if (updateError) {
+      console.error('Error updating message status:', updateError);
+      throw updateError;
+    }
+    messageRecord = updatedMessage;
+  }
+
+  while (retryCount < MAX_RETRY_ATTEMPTS) {
+    try {
       const mediaTypes = ['photo', 'video', 'document', 'animation'] as const;
       let mediaFile = null;
       let mediaType = '';
@@ -82,7 +101,7 @@ export async function handleWebhookUpdate(
       for (const type of mediaTypes) {
         if (message[type]) {
           mediaFile = type === 'photo' 
-            ? message[type]![message[type]!.length - 1] // Get the highest quality photo
+            ? message[type]![message[type]!.length - 1] 
             : message[type];
           mediaType = type;
           break;
@@ -100,7 +119,7 @@ export async function handleWebhookUpdate(
         message,
         messageRecord,
         botToken,
-        productInfo
+        messageRecord.product_info
       );
 
       // Update message status to success
@@ -113,16 +132,16 @@ export async function handleWebhookUpdate(
         })
         .eq('id', messageRecord.id);
 
-      // If this is part of a media group, update all related media with the same caption
+      // If this is part of a media group, update all related media
       if (message.media_group_id) {
         console.log('Processing media group:', message.media_group_id);
         await supabase
           .from('telegram_media')
           .update({ 
             caption: message.caption,
-            product_name: productInfo?.product_name,
-            product_code: productInfo?.product_code,
-            quantity: productInfo?.quantity
+            product_name: messageRecord.product_name,
+            product_code: messageRecord.product_code,
+            quantity: messageRecord.quantity
           })
           .eq('telegram_data->media_group_id', message.media_group_id);
       }
@@ -135,41 +154,39 @@ export async function handleWebhookUpdate(
 
     } catch (error) {
       console.error(`Attempt ${retryCount + 1} failed:`, error);
-      lastError = error;
+      retryCount++;
 
-      // Update message status and retry information
-      await supabase
+      // Update message with retry information
+      const { error: updateError } = await supabase
         .from('messages')
         .update({
-          retry_count: retryCount + 1,
+          retry_count: retryCount,
           last_retry_at: new Date().toISOString(),
-          status: retryCount + 1 >= MAX_RETRY_ATTEMPTS ? 'failed' : 'pending',
+          status: retryCount >= MAX_RETRY_ATTEMPTS ? 'failed' : 'pending',
           processing_error: error.message,
           updated_at: new Date().toISOString()
         })
-        .eq('chat_id', message.chat.id)
-        .eq('message_id', message.message_id);
+        .eq('id', messageRecord.id);
 
-      // Check if it's a rate limit error
+      if (updateError) {
+        console.error('Error updating retry information:', updateError);
+        throw updateError;
+      }
+
       if (error.message?.includes('Too Many Requests') || error.code === 429) {
         const backoffDelay = calculateBackoffDelay(retryCount);
         console.log(`Rate limited. Waiting ${backoffDelay}ms before retry...`);
         await delay(backoffDelay);
+      } else if (retryCount < MAX_RETRY_ATTEMPTS) {
+        await delay(1000); // Small delay for non-rate-limit errors
       }
-
-      retryCount++;
 
       if (retryCount >= MAX_RETRY_ATTEMPTS) {
         console.error('Max retry attempts reached. Giving up.');
-        throw new Error(`Failed after ${MAX_RETRY_ATTEMPTS} attempts. Last error: ${lastError.message}`);
-      }
-
-      // For non-rate-limit errors, add a small delay before retry
-      if (!error.message?.includes('Too Many Requests') && error.code !== 429) {
-        await delay(1000);
+        throw new Error(`Failed after ${MAX_RETRY_ATTEMPTS} attempts. Last error: ${error.message}`);
       }
     }
   }
 
-  throw lastError;
+  throw new Error(`Processing failed after ${MAX_RETRY_ATTEMPTS} attempts`);
 }
