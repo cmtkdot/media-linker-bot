@@ -3,7 +3,15 @@ import { supabase } from "@/integrations/supabase/client";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { ArrowLeftRight, RefreshCw } from "lucide-react";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useState } from "react";
 
 interface GlideConfig {
   id: string;
@@ -13,10 +21,12 @@ interface GlideConfig {
   api_token: string;
   created_at: string;
   updated_at: string;
+  active: boolean;
 }
 
 const GlideSyncPage = () => {
   const { toast } = useToast();
+  const [selectedTable, setSelectedTable] = useState<string>("");
 
   const { data: configs, isLoading } = useQuery({
     queryKey: ['glide-configs'],
@@ -32,9 +42,18 @@ const GlideSyncPage = () => {
   });
 
   const handleSync = async () => {
+    if (!selectedTable) {
+      toast({
+        title: "No table selected",
+        description: "Please select a table to sync",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       const { data, error } = await supabase.functions.invoke('sync-glide-media-table', {
-        body: { operation: 'syncBidirectional' }
+        body: { operation: 'syncBidirectional', tableId: selectedTable }
       });
 
       if (error) throw error;
@@ -72,15 +91,35 @@ const GlideSyncPage = () => {
     );
   }
 
+  const activeConfigs = configs?.filter(config => config.active) || [];
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold">Glide Sync Settings</h1>
-          <Button onClick={handleSync} className="flex items-center gap-2">
-            <ArrowLeftRight className="w-4 h-4" />
-            Sync with Glide
-          </Button>
+          <div className="flex items-center gap-4">
+            <Select value={selectedTable} onValueChange={setSelectedTable}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Select a table" />
+              </SelectTrigger>
+              <SelectContent>
+                {activeConfigs.map((config) => (
+                  <SelectItem key={config.id} value={config.id}>
+                    {config.table_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button 
+              onClick={handleSync} 
+              className="flex items-center gap-2"
+              disabled={!selectedTable}
+            >
+              <ArrowLeftRight className="w-4 h-4" />
+              Sync with Glide
+            </Button>
+          </div>
         </div>
 
         <div className="grid gap-4">
@@ -99,8 +138,15 @@ const GlideSyncPage = () => {
                         Table ID: {config.table_id}
                       </p>
                     </div>
-                    <div className="text-sm text-muted-foreground">
-                      Last updated: {new Date(config.updated_at).toLocaleString()}
+                    <div className="flex items-center gap-4">
+                      <span className={`px-2 py-1 rounded-full text-xs ${
+                        config.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {config.active ? 'Active' : 'Inactive'}
+                      </span>
+                      <div className="text-sm text-muted-foreground">
+                        Last updated: {new Date(config.updated_at).toLocaleString()}
+                      </div>
                     </div>
                   </div>
                 ))}

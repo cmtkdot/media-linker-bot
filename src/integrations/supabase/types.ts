@@ -53,31 +53,34 @@ export type Database = {
       }
       glide_config: {
         Row: {
-          api_token: string
-          app_id: string
-          created_at: string
-          id: string
-          table_id: string
-          table_name: string
-          updated_at: string
+          id: string;
+          app_id: string;
+          table_id: string;
+          table_name: string;
+          api_token: string;
+          created_at: string;
+          updated_at: string;
+          active: boolean;
         }
         Insert: {
-          api_token: string
-          app_id: string
-          created_at?: string
-          id?: string
-          table_id: string
-          table_name: string
-          updated_at?: string
+          app_id: string;
+          table_id: string;
+          table_name: string;
+          api_token: string;
+          created_at?: string;
+          id?: string;
+          updated_at?: string;
+          active?: boolean;
         }
         Update: {
-          api_token?: string
-          app_id?: string
-          created_at?: string
-          id?: string
-          table_id?: string
-          table_name?: string
-          updated_at?: string
+          api_token?: string;
+          app_id?: string;
+          created_at?: string;
+          id?: string;
+          table_id?: string;
+          table_name?: string;
+          updated_at?: string;
+          active?: boolean;
         }
         Relationships: []
       }
@@ -335,7 +338,7 @@ export type Tables<
   TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
     ? keyof (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
         Database[PublicTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never,
 > = PublicTableNameOrOptions extends { schema: keyof Database }
   ? (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
       Database[PublicTableNameOrOptions["schema"]]["Views"])[TableName] extends {
