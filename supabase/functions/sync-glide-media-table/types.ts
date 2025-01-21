@@ -18,31 +18,20 @@ export interface GlideConfig {
 }
 
 export interface GlideTableSchema {
-  id: { type: "string"; name: "UkkMS" };
-  fileId: { type: "string"; name: "9Bod8" };
-  fileUniqueId: { type: "string"; name: "IYnip" };
-  fileType: { type: "string"; name: "hbjE4" };
-  publicUrl: { type: "uri"; name: "d8Di5" };
-  productName: { type: "string"; name: "xGGv3" };
-  productCode: { type: "string"; name: "xlfB9" };
-  quantity: { type: "number"; name: "TWRwx" };
-  telegramData: { type: "string"; name: "Wm1he" };
-  glideData: { type: "string"; name: "ZRV7Z" };
-  mediaMetadata: { type: "string"; name: "Eu9Zn" };
-  processed: { type: "boolean"; name: "oj7fP" };
-  processingError: { type: "string"; name: "A4sZX" };
-  lastSyncedAt: { type: "string"; name: "PWhCr" };
-  createdAt: { type: "string"; name: "Oa3L9" };
-  updatedAt: { type: "string"; name: "9xwrl" };
-  messageId: { type: "string"; name: "Uzkgt" };
-  caption: { type: "string"; name: "pRsjz" };
-  vendorUid: { type: "string"; name: "uxDo1" };
-  purchaseDate: { type: "date"; name: "AMWxJ" };
-  notes: { type: "string"; name: "BkUFO" };
-  analyzedContent: { type: "string"; name: "QhAgy" };
-  purchaseOrderUid: { type: "string"; name: "3y8Wt" };
-  defaultPublicUrl: { type: "uri"; name: "rCJK2" };
-  telegramMediaRowId: { type: "string"; name: "KmP9x" };
+  id: { type: "string"; name: "6u01A" };
+  fileType: { type: "string"; name: "kprTT" };
+  publicUrl: { type: "uri"; name: "OhnPo" };
+  productName: { type: "string"; name: "iCMpt" };
+  productCode: { type: "string"; name: "3enHP" };
+  quantity: { type: "number"; name: "JCd9X" };
+  lastSyncedAt: { type: "string"; name: "WHOJ6" };
+  caption: { type: "string"; name: "YlID9" };
+  vendorUid: { type: "string"; name: "0Z5ka" };
+  purchaseDate: { type: "date"; name: "Gfmqg" };
+  notes: { type: "string"; name: "4yF1H" };
+  analyzedContent: { type: "string"; name: "c2o7S" };
+  purchaseOrderUid: { type: "string"; name: "Ve1EB" };
+  defaultPublicUrl: { type: "uri"; name: "XIJQs" };
 }
 
 export interface GlideRecord {

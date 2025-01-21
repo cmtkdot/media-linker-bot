@@ -1,26 +1,14 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+import { mapSupabaseToGlide, mapGlideToSupabase } from './productMapper.ts';
+import type { GlideConfig, SyncResult } from './types.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface GlideConfig {
-  app_id: string;
-  table_id: string;
-  api_token: string;
-}
-
-interface SyncResult {
-  added: number;
-  updated: number;
-  deleted: number;
-  errors: string[];
-}
-
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -28,14 +16,9 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    const glideApiToken = Deno.env.get('GLIDE_API_TOKEN');
 
     if (!supabaseUrl || !supabaseServiceKey) {
       throw new Error('Missing Supabase configuration');
-    }
-
-    if (!glideApiToken) {
-      throw new Error('Missing Glide API token');
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -45,7 +28,6 @@ serve(async (req) => {
       throw new Error('Missing required parameters');
     }
 
-    // Get the glide config for the specified table
     const { data: config, error: configError } = await supabase
       .from('glide_config')
       .select('*')
@@ -54,6 +36,7 @@ serve(async (req) => {
 
     if (configError) throw configError;
     if (!config) throw new Error('Configuration not found');
+    if (!config.supabase_table_name) throw new Error('No Supabase table linked');
 
     console.log('Starting sync with config:', {
       table_name: config.table_name,
@@ -67,7 +50,7 @@ serve(async (req) => {
       errors: []
     };
 
-    // Process pending queue items
+    // Process queue items first
     const { data: queueItems, error: queueError } = await supabase
       .from('glide_sync_queue')
       .select('*')
@@ -79,7 +62,6 @@ serve(async (req) => {
 
     console.log(`Found ${queueItems?.length || 0} pending sync items`);
 
-    // Process each queue item
     for (const item of queueItems || []) {
       try {
         const response = await fetch('https://api.glideapp.io/api/function/mutateTables', {
@@ -96,17 +78,32 @@ serve(async (req) => {
                      'add-row-to-table',
               tableName: config.table_id,
               ...(item.operation !== 'DELETE' && {
-                columnValues: mapSupabaseToGlideColumns(
+                columnValues: mapSupabaseToGlide(
                   item.operation === 'UPDATE' ? item.new_data : item.old_data
                 )
               }),
-              ...(item.operation !== 'INSERT' && { rowID: item.record_id })
+              ...(item.operation !== 'INSERT' && { 
+                rowID: item.old_data?.telegram_media_row_id || item.new_data?.telegram_media_row_id 
+              })
             }]
           })
         });
 
         if (!response.ok) {
           throw new Error(`Glide API error: ${response.status} ${response.statusText}`);
+        }
+
+        const responseData = await response.json();
+        
+        // If this was an INSERT, store the Glide row ID
+        if (item.operation === 'INSERT' && responseData.rowIDs?.[0]) {
+          await supabase
+            .from(config.supabase_table_name)
+            .update({ 
+              telegram_media_row_id: responseData.rowIDs[0],
+              glide_data: item.new_data
+            })
+            .eq('id', item.new_data.id);
         }
 
         // Mark queue item as processed
@@ -142,6 +139,8 @@ serve(async (req) => {
       }
     }
 
+    console.log('Sync completed:', result);
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -173,33 +172,3 @@ serve(async (req) => {
     );
   }
 });
-
-function mapSupabaseToGlideColumns(data: any) {
-  return {
-    'UkkMS': data.id,
-    '9Bod8': data.file_id,
-    'IYnip': data.file_unique_id,
-    'hbjE4': data.file_type,
-    'd8Di5': data.public_url,
-    'xGGv3': data.product_name,
-    'xlfB9': data.product_code,
-    'TWRwx': data.quantity,
-    'Wm1he': JSON.stringify(data.telegram_data),
-    'ZRV7Z': JSON.stringify(data.glide_data),
-    'Eu9Zn': JSON.stringify(data.media_metadata),
-    'oj7fP': data.processed,
-    'A4sZX': data.processing_error,
-    'PWhCr': data.last_synced_at,
-    'Oa3L9': data.created_at,
-    '9xwrl': data.updated_at,
-    'Uzkgt': data.message_id,
-    'pRsjz': data.caption,
-    'uxDo1': data.vendor_uid,
-    'AMWxJ': data.purchase_date,
-    'BkUFO': data.notes,
-    'QhAgy': JSON.stringify(data.analyzed_content),
-    '3y8Wt': data.purchase_order_uid,
-    'rCJK2': data.default_public_url,
-    'KmP9x': data.telegram_media_row_id
-  };
-}
