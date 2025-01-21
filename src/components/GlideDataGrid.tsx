@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Pencil, Plus, Save, Sync, Trash2, X } from "lucide-react";
+import { Loader2, Pencil, Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -307,7 +307,7 @@ export function GlideDataGrid({ configs }: GlideDataGridProps) {
                 </>
               ) : (
                 <>
-                  <Sync className="w-4 h-4 mr-2" />
+                  <RefreshCw className="w-4 h-4 mr-2" />
                   Sync with Glide
                 </>
               )}
