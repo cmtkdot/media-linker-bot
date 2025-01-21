@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import type { Database } from "@/integrations/supabase/types";
 
 // Only include actual tables, not views
 type ValidTableName = "messages" | "failed_webhook_updates" | "glide_config" | "glide_sync_queue" | "telegram_media";
@@ -40,51 +41,51 @@ export function GlideDataGrid({ configs }: GlideDataGridProps) {
     return validTables.includes(tableName as ValidTableName);
   };
 
-  const getDefaultInsertData = (tableName: ValidTableName) => {
+  const getDefaultInsertData = (tableName: ValidTableName): Database['public']['Tables'][ValidTableName]['Insert'] => {
     const base = { created_at: new Date().toISOString() };
     
     switch (tableName) {
       case "telegram_media":
         return {
-          ...base,
           file_id: "",
           file_type: "photo",
           file_unique_id: "",
           telegram_data: {},
           glide_data: {},
-          media_metadata: {}
+          media_metadata: {},
+          ...base
         };
       case "messages":
         return {
-          ...base,
           message_id: 0,
           chat_id: 0,
           sender_info: {},
           message_type: "text",
-          message_data: {}
+          message_data: {},
+          ...base
         };
       case "failed_webhook_updates":
         return {
-          ...base,
-          error_message: "New record"
+          error_message: "New record",
+          ...base
         };
       case "glide_config":
         return {
-          ...base,
           app_id: "",
           table_id: "",
           table_name: "",
-          api_token: ""
+          api_token: "",
+          ...base
         };
       case "glide_sync_queue":
         return {
-          ...base,
           table_name: "",
           record_id: "",
-          operation: "INSERT"
+          operation: "INSERT",
+          ...base
         };
       default:
-        return base;
+        throw new Error(`Invalid table name: ${tableName}`);
     }
   };
 
