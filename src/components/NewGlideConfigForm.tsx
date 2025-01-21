@@ -40,11 +40,14 @@ export function NewGlideConfigForm({ onSuccess }: NewGlideConfigFormProps) {
     try {
       const { error } = await supabase
         .from('glide_config')
-        .insert([{
-          ...values,
+        .insert({
+          app_id: values.app_id,
+          table_id: values.table_id,
+          table_name: values.table_name,
+          api_token: values.api_token,
           active: false,
           supabase_table_name: null
-        }]);
+        });
 
       if (error) throw error;
 
