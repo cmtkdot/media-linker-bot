@@ -39,14 +39,15 @@ const MediaViewer = ({ open, onOpenChange, media }: MediaViewerProps) => {
         <div className="flex flex-col lg:flex-row gap-4">
           {/* Media Column */}
           <div className="flex-[1.5]">
-            <div className="relative bg-black/5 rounded-lg overflow-hidden" style={{ 
-              maxHeight: 'calc(90vh - 200px)',
+            <div className="relative bg-black/5 rounded-lg overflow-hidden flex items-center justify-center" style={{ 
+              height: '80vh',
+              maxHeight: 'calc(100vh - 200px)',
               minHeight: '500px'
             }}>
               {media.file_type === "video" ? (
                 <video
                   src={mediaUrl}
-                  className="w-full h-full object-contain"
+                  className="h-full w-full object-contain"
                   controls
                   autoPlay
                   onError={(e) => {
@@ -60,7 +61,7 @@ const MediaViewer = ({ open, onOpenChange, media }: MediaViewerProps) => {
                 <img
                   src={mediaUrl}
                   alt={media.caption || "Media preview"}
-                  className="w-full h-full object-contain"
+                  className="h-full w-full object-contain"
                   onError={(e) => {
                     const img = e.target as HTMLImageElement;
                     if (img.src !== media.default_public_url) {
