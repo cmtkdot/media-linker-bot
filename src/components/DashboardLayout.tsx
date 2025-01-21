@@ -1,8 +1,7 @@
-import React from "react";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
-import { useNavigate } from "react-router-dom";
-import { useToast } from "@/hooks/use-toast";
+import { useNavigate, Link } from "react-router-dom";
+import { useSupabaseClient } from "@supabase/auth-helpers-react";
+import GlideSync from "./GlideSync";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -10,41 +9,29 @@ interface DashboardLayoutProps {
 
 const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const navigate = useNavigate();
-  const { toast } = useToast();
+  const supabase = useSupabaseClient();
 
   const handleSignOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      toast({
-        title: "Error",
-        description: "Failed to sign out. Please try again.",
-        variant: "destructive",
-      });
-    } else {
-      navigate("/auth");
-      toast({
-        title: "Signed out",
-        description: "You have been successfully signed out.",
-      });
-    }
+    await supabase.auth.signOut();
+    navigate("/auth");
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-primary">Media Manager</h1>
-            <div className="flex items-center space-x-4">
-              <Button variant="outline" onClick={handleSignOut}>
-                Sign Out
-              </Button>
-            </div>
+    <div className="min-h-screen bg-background">
+      <header className="border-b">
+        <div className="container flex h-16 items-center justify-between px-4">
+          <div className="flex items-center gap-4">
+            <Link to="/" className="text-xl font-semibold">Media Manager</Link>
+            <Link to="/glide-sync" className="text-gray-600 hover:text-gray-900">
+              Glide Sync
+            </Link>
           </div>
+          <Button onClick={handleSignOut} variant="outline">
+            Sign Out
+          </Button>
         </div>
       </header>
-      
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto py-6 px-4">
         {children}
       </main>
     </div>

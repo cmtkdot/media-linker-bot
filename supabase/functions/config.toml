@@ -2,3 +2,6 @@ project_id = "kzfamethztziwqiocbwz"
 
 [functions.telegram-webhook]
 verify_jwt = false
+
+[functions.sync-glide-media-table]
+verify_jwt = false

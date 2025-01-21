@@ -51,6 +51,42 @@ export type Database = {
         }
         Relationships: []
       }
+      glide_config: {
+        Row: {
+          active: boolean | null
+          api_token: string
+          app_id: string
+          created_at: string
+          id: string
+          supabase_table_name: string | null
+          table_id: string
+          table_name: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean | null
+          api_token: string
+          app_id: string
+          created_at?: string
+          id?: string
+          supabase_table_name?: string | null
+          table_id: string
+          table_name: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean | null
+          api_token?: string
+          app_id?: string
+          created_at?: string
+          id?: string
+          supabase_table_name?: string | null
+          table_id?: string
+          table_name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           analyzed_content: Json | null
@@ -230,6 +266,12 @@ export type Database = {
       }
     }
     Functions: {
+      create_glide_sync_table: {
+        Args: {
+          table_name: string
+        }
+        Returns: undefined
+      }
       get_message_file_id: {
         Args: {
           message_data: Json
