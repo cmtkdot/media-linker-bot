@@ -39,6 +39,8 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const update = await req.json();
+    
+    // Log the incoming update with safe stringification of circular references
     console.log('Received Telegram update:', JSON.stringify({
       update_id: update.update_id,
       message_id: update.message?.message_id,
@@ -65,14 +67,19 @@ serve(async (req) => {
       console.error('Error processing update:', {
         error: processingError.message,
         stack: processingError.stack,
-        message_id: update.message?.message_id,
-        chat_id: update.message?.chat?.id
+        message_id: update.message?.message_id || 'undefined',
+        chat_id: update.message?.chat?.id || 'undefined',
+        retry_count: processingError.retryCount || 0
       });
       
+      // Return a 500 response with detailed error information
       return new Response(
         JSON.stringify({ 
           error: processingError.message,
-          details: processingError.stack
+          details: processingError.stack,
+          message_id: update.message?.message_id,
+          chat_id: update.message?.chat?.id,
+          retry_count: processingError.retryCount || 0
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
