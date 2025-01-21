@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Grid, List, Pencil } from "lucide-react";
 import MediaTable from "./MediaTable";
+import MediaViewer from "./MediaViewer";
 import {
   Dialog,
   DialogContent,
@@ -33,6 +34,7 @@ const MediaGrid = () => {
   const [view, setView] = useState<'grid' | 'table'>('grid');
   const [search, setSearch] = useState("");
   const [editItem, setEditItem] = useState<MediaItem | null>(null);
+  const [previewItem, setPreviewItem] = useState<MediaItem | null>(null);
   const { toast } = useToast();
 
   const { data: mediaItems, isLoading, error } = useQuery({
@@ -152,7 +154,7 @@ const MediaGrid = () => {
               </Button>
               <div 
                 className="aspect-square relative cursor-pointer" 
-                onClick={() => setEditItem(item)}
+                onClick={() => setPreviewItem(item)}
               >
                 {item.file_type === 'video' ? (
                   <video 
@@ -252,6 +254,12 @@ const MediaGrid = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <MediaViewer
+        open={!!previewItem}
+        onOpenChange={(open) => !open && setPreviewItem(null)}
+        media={previewItem}
+      />
     </div>
   );
 };
