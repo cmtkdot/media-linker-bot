@@ -42,6 +42,7 @@ export interface GlideTableSchema {
   analyzedContent: { type: "string"; name: "QhAgy" };
   purchaseOrderUid: { type: "string"; name: "3y8Wt" };
   defaultPublicUrl: { type: "uri"; name: "rCJK2" };
+  telegramMediaRowId: { type: "string"; name: "KmP9x" };
 }
 
 export interface GlideRecord {
