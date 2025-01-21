@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Grid, List } from "lucide-react";
+import { Grid, List, RefreshCw } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import MediaTable from "./MediaTable";
 import MediaGridItem from "./MediaGridItem";
@@ -14,6 +14,7 @@ const MediaGrid = () => {
   const [view, setView] = useState<'grid' | 'table'>('grid');
   const [search, setSearch] = useState("");
   const [editItem, setEditItem] = useState<MediaItem | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -34,6 +35,80 @@ const MediaGrid = () => {
       return data as MediaItem[];
     }
   });
+
+  const handleSync = async () => {
+    try {
+      setIsSyncing(true);
+      
+      // Get all unique media group IDs
+      const mediaGroups = new Set(
+        mediaItems
+          ?.filter(item => item.telegram_data?.media_group_id)
+          .map(item => item.telegram_data.media_group_id)
+      );
+
+      let syncCount = 0;
+      for (const groupId of mediaGroups) {
+        // Get the first item of each group to use as reference
+        const referenceItem = mediaItems?.find(
+          item => item.telegram_data?.media_group_id === groupId
+        );
+
+        if (referenceItem) {
+          // Update telegram_media table
+          const { error: mediaError } = await supabase
+            .from('telegram_media')
+            .update({
+              caption: referenceItem.caption,
+              product_name: referenceItem.product_name,
+              product_code: referenceItem.product_code,
+              quantity: referenceItem.quantity,
+              vendor_uid: referenceItem.vendor_uid,
+              purchase_date: referenceItem.purchase_date,
+              notes: referenceItem.notes
+            })
+            .eq('telegram_data->>media_group_id', groupId);
+
+          if (mediaError) throw mediaError;
+
+          // Update messages table for the same group
+          const { error: messagesError } = await supabase
+            .from('messages')
+            .update({
+              caption: referenceItem.caption,
+              product_name: referenceItem.product_name,
+              product_code: referenceItem.product_code,
+              quantity: referenceItem.quantity,
+              vendor_uid: referenceItem.vendor_uid,
+              purchase_date: referenceItem.purchase_date,
+              notes: referenceItem.notes
+            })
+            .eq('media_group_id', groupId);
+
+          if (messagesError) throw messagesError;
+
+          syncCount++;
+        }
+      }
+
+      toast({
+        title: "Sync completed",
+        description: `Successfully synced ${syncCount} media groups.`,
+      });
+
+      // Refresh the data
+      queryClient.invalidateQueries({ queryKey: ['telegram-media'] });
+    } catch (error) {
+      console.error('Error syncing media groups:', error);
+      toast({
+        title: "Sync failed",
+        description: "An error occurred while syncing media groups.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const handleDelete = async (item: MediaItem) => {
     try {
@@ -91,42 +166,6 @@ const MediaGrid = () => {
     }
   };
 
-  const handleEdit = async () => {
-    if (!editItem) return;
-
-    try {
-      const { error } = await supabase
-        .from('telegram_media')
-        .update({
-          caption: editItem.caption,
-          product_name: editItem.product_name,
-          product_code: editItem.product_code,
-          quantity: editItem.quantity,
-          vendor_uid: editItem.vendor_uid,
-          purchase_date: editItem.purchase_date,
-          notes: editItem.notes
-        })
-        .eq('id', editItem.id);
-
-      if (error) throw error;
-
-      toast({
-        title: "Changes saved",
-        description: "The media item has been updated successfully.",
-      });
-
-      setEditItem(null);
-      queryClient.invalidateQueries({ queryKey: ['telegram-media'] });
-    } catch (error) {
-      console.error('Error updating media:', error);
-      toast({
-        title: "Error",
-        description: "Failed to update media item.",
-        variant: "destructive",
-      });
-    }
-  };
-
   const formatDate = (dateString: string | null) => {
     if (!dateString) return null;
     const date = new Date(dateString);
@@ -159,6 +198,14 @@ const MediaGrid = () => {
           onChange={(e) => setSearch(e.target.value)}
         />
         <div className="flex space-x-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={handleSync}
+            disabled={isSyncing}
+          >
+            <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+          </Button>
           <Button
             variant={view === 'grid' ? "default" : "outline"}
             size="icon"
