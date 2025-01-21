@@ -42,21 +42,18 @@ export async function getAndDownloadTelegramFile(fileId: string, botToken: strin
   return { buffer, filePath };
 }
 
-export function getMessageType(message: any): string {
-  if (message.photo) return 'photo';
-  if (message.video) return 'video';
-  if (message.document) return 'document';
-  if (message.animation) return 'animation';
-  return 'text';
-}
-
 export function generateSafeFileName(
   productName: string = 'untitled',
   productCode: string = 'no_code',
   mediaType: string,
   extension: string
 ): string {
-  console.log('Generating safe filename with:', { productName, productCode, mediaType, extension });
+  console.log('Generating safe filename with:', { 
+    productName, 
+    productCode, 
+    mediaType, 
+    extension 
+  });
   
   const safeName = (productName || 'untitled')
     .toLowerCase()
@@ -81,5 +78,6 @@ export function generateSafeFileName(
   const timestamp = Date.now();
   const fileName = `${safeName}_${safeCode}_${safeMediaType}_${timestamp}`;
 
+  console.log('Generated filename:', `${fileName}.${safeExtension}`);
   return `${fileName}.${safeExtension}`;
 }

@@ -10,28 +10,31 @@ export async function processMediaFiles(
 ) {
   console.log('Processing media files for message:', {
     message_id: message.message_id,
-    media_group_id: message.media_group_id
+    media_group_id: message.media_group_id,
+    has_caption: !!message.caption
   });
 
   try {
     // If part of a media group, sync captions first
-    let syncedData = null;
     if (message.media_group_id) {
-      syncedData = await syncMediaGroupCaptions(message.media_group_id, supabase);
-      await delay(500);
+      await syncMediaGroupCaptions(message.media_group_id, supabase);
+      await delay(500); // Allow time for sync to complete
     }
 
-    // Get the most up-to-date message data
+    // Get the most up-to-date message data after sync
     const { data: updatedMessage } = await supabase
       .from('messages')
       .select('*')
       .eq('id', messageRecord.id)
       .single();
 
+    if (!updatedMessage) {
+      throw new Error('Failed to get updated message data');
+    }
+
     // Determine media files to process
     const mediaFiles = [];
     if (message.photo) {
-      // Get the highest quality photo
       mediaFiles.push({
         type: 'photo',
         file: message.photo[message.photo.length - 1]
@@ -41,14 +44,21 @@ export async function processMediaFiles(
     if (message.document) mediaFiles.push({ type: 'document', file: message.document });
     if (message.animation) mediaFiles.push({ type: 'animation', file: message.animation });
 
+    console.log('Processing media files:', {
+      count: mediaFiles.length,
+      types: mediaFiles.map(f => f.type)
+    });
+
     // Process each media file
     for (const { type, file } of mediaFiles) {
       const fileName = generateSafeFileName(
-        updatedMessage.product_name || syncedData?.product_name,
-        updatedMessage.product_code || syncedData?.product_code,
+        updatedMessage.product_name,
+        updatedMessage.product_code,
         type,
         getFileExtension(file, type)
       );
+
+      console.log('Generated filename:', fileName);
 
       // Download and upload file
       const { buffer, filePath } = await getAndDownloadTelegramFile(file.file_id, botToken);
@@ -57,16 +67,20 @@ export async function processMediaFiles(
         .from('media')
         .upload(fileName, buffer, {
           contentType: getContentType(type, filePath),
-          upsert: false
+          upsert: false,
+          cacheControl: '3600'
         });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        throw uploadError;
+      }
 
       const { data: { publicUrl } } = await supabase.storage
         .from('media')
         .getPublicUrl(fileName);
 
-      // Create media record
+      // Create media record with synchronized data
       const mediaRecord = {
         file_id: file.file_id,
         file_unique_id: file.file_unique_id,
@@ -93,9 +107,20 @@ export async function processMediaFiles(
         analyzed_content: updatedMessage.analyzed_content
       };
 
-      await supabase
+      const { error: insertError } = await supabase
         .from('telegram_media')
         .insert(mediaRecord);
+
+      if (insertError) {
+        console.error('Insert error:', insertError);
+        throw insertError;
+      }
+
+      console.log('Successfully processed media file:', {
+        type,
+        file_id: file.file_id,
+        public_url: publicUrl
+      });
 
       // Add delay between files
       await delay(1000);
