@@ -16,6 +16,7 @@ const MediaViewToggle = ({ view, onViewChange, onSync, isSyncing, canSync }: Med
       size="icon"
       onClick={onSync}
       disabled={!canSync || isSyncing}
+      title="Sync media group captions and data"
     >
       <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
     </Button>
@@ -23,6 +24,7 @@ const MediaViewToggle = ({ view, onViewChange, onSync, isSyncing, canSync }: Med
       variant={view === 'grid' ? "default" : "outline"}
       size="icon"
       onClick={() => onViewChange('grid')}
+      title="Grid view"
     >
       <Grid className="h-4 w-4" />
     </Button>
@@ -30,6 +32,7 @@ const MediaViewToggle = ({ view, onViewChange, onSync, isSyncing, canSync }: Med
       variant={view === 'table' ? "default" : "outline"}
       size="icon"
       onClick={() => onViewChange('table')}
+      title="Table view"
     >
       <List className="h-4 w-4" />
     </Button>
