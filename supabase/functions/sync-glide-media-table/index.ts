@@ -7,6 +7,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Max-Age': '86400',
+  'Content-Type': 'application/json'
 };
 
 serve(async (req) => {
@@ -186,12 +187,7 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ success: true, data: result }),
-      { 
-        headers: { 
-          ...corsHeaders,
-          'Content-Type': 'application/json'
-        }
-      }
+      { headers: corsHeaders }
     );
 
   } catch (error) {
@@ -204,10 +200,7 @@ serve(async (req) => {
       }),
       { 
         status: 500,
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json'
-        }
+        headers: corsHeaders
       }
     );
   }
