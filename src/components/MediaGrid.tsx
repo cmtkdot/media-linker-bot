@@ -1,10 +1,10 @@
 import React, { useState } from "react";
-import { Card } from "@/components/ui/card";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Grid, List, Pencil, Play } from "lucide-react";
+import { Grid, List } from "lucide-react";
+import MediaCard from "./MediaCard";
 import MediaTable from "./MediaTable";
 import MediaViewer from "./MediaViewer";
 import {
@@ -28,6 +28,13 @@ interface MediaItem {
   quantity?: number;
   vendor_uid?: string;
   purchase_date?: string;
+  notes?: string;
+  telegram_data?: {
+    chat?: {
+      type?: string;
+      title?: string;
+    };
+  };
   created_at: string;
 }
 
@@ -68,7 +75,8 @@ const MediaGrid = () => {
           product_code: editItem.product_code,
           quantity: editItem.quantity,
           vendor_uid: editItem.vendor_uid,
-          purchase_date: editItem.purchase_date
+          purchase_date: editItem.purchase_date,
+          notes: editItem.notes
         })
         .eq('id', editItem.id);
 
@@ -90,39 +98,13 @@ const MediaGrid = () => {
     }
   };
 
-  const checkImageExists = async (url: string): Promise<boolean> => {
-    try {
-      const response = await fetch(url, { method: 'HEAD' });
-      return response.ok;
-    } catch {
-      return false;
-    }
-  };
-
-  const getMediaUrl = async (item: MediaItem) => {
-    if (!item.public_url) return item.default_public_url;
-    const exists = await checkImageExists(item.public_url);
-    return exists ? item.public_url : item.default_public_url;
-  };
-
-  const handleVideoHover = (videoElement: HTMLVideoElement) => {
-    videoElement.play().catch(error => {
-      console.log("Autoplay prevented:", error);
-    });
-  };
-
-  const handleVideoLeave = (videoElement: HTMLVideoElement) => {
-    videoElement.pause();
-    videoElement.currentTime = 0;
-  };
-
-  const handlePlayClick = (e: React.MouseEvent<HTMLButtonElement>, video: HTMLVideoElement) => {
-    e.stopPropagation();
-    if (video.paused) {
-      video.play();
-    } else {
-      video.pause();
-    }
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return null;
+    const date = new Date(dateString);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
 
   if (isLoading) {
@@ -136,27 +118,6 @@ const MediaGrid = () => {
   if (!mediaItems?.length) {
     return <div className="text-center p-4">No media items found</div>;
   }
-
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return null;
-    const date = new Date(dateString);
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-
-  const handleVideoError = (video: HTMLVideoElement, defaultUrl: string) => {
-    if (video.src !== defaultUrl) {
-      video.src = defaultUrl;
-    }
-  };
-
-  const handleImageError = (img: HTMLImageElement, defaultUrl: string) => {
-    if (img.src !== defaultUrl) {
-      img.src = defaultUrl;
-    }
-  };
 
   return (
     <div className="space-y-4">
@@ -188,65 +149,12 @@ const MediaGrid = () => {
       {view === 'grid' ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {mediaItems.map((item) => (
-            <Card key={item.id} className="overflow-hidden group relative">
-              <Button
-                variant="outline"
-                size="icon"
-                className="absolute top-2 left-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setEditItem(item);
-                }}
-              >
-                <Pencil className="h-4 w-4" />
-              </Button>
-              <div 
-                className="aspect-square relative cursor-pointer" 
-                onClick={() => setPreviewItem(item)}
-              >
-                {item.file_type === 'video' ? (
-                  <div className="relative h-full">
-                    <video 
-                      src={item.public_url || item.default_public_url}
-                      className="object-cover w-full h-full"
-                      muted
-                      playsInline
-                      onMouseEnter={(e) => handleVideoHover(e.target as HTMLVideoElement)}
-                      onMouseLeave={(e) => handleVideoLeave(e.target as HTMLVideoElement)}
-                      onError={(e) => handleVideoError(e.target as HTMLVideoElement, item.default_public_url)}
-                    />
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="absolute bottom-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80"
-                      onClick={(e) => handlePlayClick(e, e.currentTarget.parentElement?.querySelector('video') as HTMLVideoElement)}
-                    >
-                      <Play className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ) : (
-                  <img
-                    src={item.public_url || item.default_public_url}
-                    alt={item.caption || "Media item"}
-                    className="object-cover w-full h-full"
-                    onError={(e) => handleImageError(e.target as HTMLImageElement, item.default_public_url)}
-                  />
-                )}
-              </div>
-              <div className="p-2 text-sm space-y-1">
-                <p className="font-medium truncate">{item.product_name || 'Untitled'}</p>
-                <p className="text-muted-foreground capitalize">{item.file_type}</p>
-                {item.quantity && (
-                  <p className="text-muted-foreground">Quantity: {item.quantity}</p>
-                )}
-                {item.vendor_uid && (
-                  <p className="text-muted-foreground">Vendor: {item.vendor_uid}</p>
-                )}
-                {item.purchase_date && (
-                  <p className="text-muted-foreground">Purchase Date: {new Date(item.purchase_date).toLocaleDateString()}</p>
-                )}
-              </div>
-            </Card>
+            <MediaCard
+              key={item.id}
+              item={item}
+              onEdit={setEditItem}
+              onPreview={setPreviewItem}
+            />
           ))}
         </div>
       ) : (
@@ -307,6 +215,14 @@ const MediaGrid = () => {
                 type="number"
                 value={editItem?.quantity || ''}
                 onChange={(e) => setEditItem(prev => prev ? {...prev, quantity: Number(e.target.value)} : null)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="notes">Notes</Label>
+              <Input
+                id="notes"
+                value={editItem?.notes || ''}
+                onChange={(e) => setEditItem(prev => prev ? {...prev, notes: e.target.value} : null)}
               />
             </div>
           </div>
