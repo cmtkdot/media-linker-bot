@@ -163,16 +163,6 @@ serve(async (req) => {
           }
         }
 
-        // Update last_synced_at for all synced records
-        const { error: syncTimeError } = await supabase
-          .from('telegram_media')
-          .update({ last_synced_at: new Date().toISOString() })
-          .in('id', [...supabaseMap.keys()]);
-
-        if (syncTimeError) {
-          console.error('Error updating last_synced_at:', syncTimeError);
-        }
-
         result = syncResult;
         break;
       }
