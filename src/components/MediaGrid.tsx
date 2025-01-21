@@ -8,7 +8,6 @@ import MediaGridView from "./media/MediaGridView";
 import MediaTable from "./MediaTable";
 import MediaEditDialog from "./media/MediaEditDialog";
 import { MediaItem } from "./media/types";
-import { PostgrestFilterBuilder } from "@supabase/supabase-js";
 
 const MediaGrid = () => {
   const [view, setView] = useState<'grid' | 'table'>('grid');
@@ -169,7 +168,7 @@ const MediaGrid = () => {
           onViewChange={setView}
           onSync={handleSync}
           isSyncing={isSyncing}
-          canSync={true} // Always enable sync button since it now works on all media groups
+          canSync={true}
         />
       </div>
 
