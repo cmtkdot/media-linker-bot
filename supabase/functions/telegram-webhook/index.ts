@@ -2,12 +2,12 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from "../_shared/cors.ts";
 import { handleWebhookUpdate } from "../_shared/webhook-handler.ts";
-import { validateWebhookUpdate } from "../_shared/webhook-validator.ts";
 
 serve(async (req) => {
-  console.log('[Webhook Start] Received webhook request');
+  console.log('Received webhook request:', req.method);
 
   if (req.method === 'OPTIONS') {
+    console.log('Handling CORS preflight request');
     return new Response(null, { headers: corsHeaders });
   }
 
@@ -18,13 +18,13 @@ serve(async (req) => {
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
     if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_WEBHOOK_SECRET || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      console.error('Missing required environment variables');
       throw new Error('Missing required environment variables');
     }
 
-    // Validate webhook secret
     const webhookSecret = req.headers.get('X-Telegram-Bot-Api-Secret-Token');
     if (webhookSecret !== TELEGRAM_WEBHOOK_SECRET) {
-      console.error('[Auth Error] Invalid webhook secret');
+      console.error('Invalid webhook secret received');
       return new Response(
         JSON.stringify({ error: 'Invalid webhook secret' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
@@ -34,16 +34,24 @@ serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const update = await req.json();
     
-    // Validate update structure
-    if (!validateWebhookUpdate(update)) {
-      console.error('[Validation Error] Invalid update structure:', update);
-      return new Response(
-        JSON.stringify({ error: 'Invalid update structure' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-      );
-    }
+    console.log('Processing Telegram update:', {
+      update_id: update.update_id,
+      message_id: update.message?.message_id,
+      chat_id: update.message?.chat?.id,
+      message_type: update.message?.photo ? 'photo' : 
+                   update.message?.video ? 'video' : 
+                   update.message?.document ? 'document' : 
+                   update.message?.animation ? 'animation' : 'unknown'
+    });
 
     const result = await handleWebhookUpdate(update, supabase, TELEGRAM_BOT_TOKEN);
+    
+    console.log('Successfully processed update:', {
+      update_id: update.update_id,
+      message_id: update.message?.message_id,
+      chat_id: update.message?.chat?.id,
+      result
+    });
     
     return new Response(
       JSON.stringify({ ok: true, result }),
@@ -51,7 +59,7 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('[Fatal Error]', {
+    console.error('Error in webhook handler:', {
       error: error.message,
       stack: error.stack
     });

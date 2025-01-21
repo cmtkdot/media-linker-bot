@@ -1,17 +1,14 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { getAndDownloadTelegramFile, generateSafeFileName } from './telegram-service.ts';
+import { getMessageType, getAndDownloadTelegramFile, generateSafeFileName } from './telegram-service.ts';
 import { getMimeType } from './media-validators.ts';
-import { handleProcessingError } from './error-handler.ts';
-import { MAX_RETRY_ATTEMPTS } from './constants.ts';
-import { syncMediaGroupCaptions, getMediaGroupInfo } from './media-group-manager.ts';
 
 export async function createMessage(supabase: any, message: any, productInfo: any = null) {
   if (!message?.message_id || !message?.chat?.id) {
-    console.error('[Message] Invalid data:', { message });
+    console.error('Invalid message data:', { message });
     throw new Error('Invalid message data: missing required fields');
   }
 
-  console.log('[Message] Creating:', { 
+  console.log('Creating message:', { 
     message_id: message.message_id, 
     chat_id: message.chat.id,
     product_info: productInfo 
@@ -39,245 +36,165 @@ export async function createMessage(supabase: any, message: any, productInfo: an
       })
     };
 
-    const { data: upsertedMessage, error: upsertError } = await supabase
+    const { data: existingMessage, error: checkError } = await supabase
       .from('messages')
-      .upsert(messageData, {
-        onConflict: 'message_id,chat_id',
-        returning: 'representation'
-      })
-      .select()
+      .select('*')
+      .eq('message_id', message.message_id)
+      .eq('chat_id', message.chat.id)
       .maybeSingle();
 
-    if (upsertError) throw upsertError;
-
-    // If this is part of a media group and has caption/product info, sync it
-    if (message.media_group_id && (message.caption || productInfo)) {
-      await syncMediaGroupCaptions(
-        supabase,
-        message.media_group_id,
-        productInfo,
-        message.caption
-      );
+    if (checkError) {
+      console.error('Error checking for existing message:', checkError);
+      throw checkError;
     }
 
-    return upsertedMessage;
+    if (existingMessage) {
+      console.log('Updating existing message:', existingMessage.id);
+      const { data: updatedMessage, error: updateError } = await supabase
+        .from('messages')
+        .update(messageData)
+        .eq('id', existingMessage.id)
+        .select()
+        .single();
+
+      if (updateError) {
+        console.error('Error updating message:', updateError);
+        throw updateError;
+      }
+      return updatedMessage;
+    }
+
+    console.log('Creating new message with data:', messageData);
+    const { data: newMessage, error: insertError } = await supabase
+      .from('messages')
+      .insert(messageData)
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error('Error creating message:', insertError);
+      throw insertError;
+    }
+
+    if (!newMessage) {
+      throw new Error('Failed to create message record: no data returned');
+    }
+
+    return newMessage;
   } catch (error) {
-    console.error('[Message] Creation error:', error);
+    console.error('Error in createMessage:', error);
     throw error;
   }
 }
 
-export async function processMedia(
+export async function processMediaFile(
   supabase: any,
+  mediaFile: any,
+  mediaType: string,
   message: any,
   messageRecord: any,
   botToken: string,
-  productInfo: any = null,
-  retryCount = 0
+  productInfo: any = null
 ) {
-  while (retryCount < MAX_RETRY_ATTEMPTS) {
-    try {
-      const mediaTypes = ['photo', 'video', 'document', 'animation'] as const;
-      let mediaFile = null;
-      let mediaType = '';
+  console.log(`Processing ${mediaType} file:`, {
+    file_id: mediaFile.file_id,
+    message_id: messageRecord?.id
+  });
 
-      // Find the media file in the message
-      for (const type of mediaTypes) {
-        if (message[type]) {
-          mediaFile = type === 'photo' 
-            ? message[type][message[type].length - 1] 
-            : message[type];
-          mediaType = type;
-          break;
-        }
+  try {
+    const { data: existingMedia } = await supabase
+      .from('telegram_media')
+      .select('id, public_url')
+      .eq('file_unique_id', mediaFile.file_unique_id)
+      .eq('telegram_data->chat_id', message.chat.id)
+      .eq('telegram_data->message_id', message.message_id)
+      .single();
+
+    if (existingMedia) {
+      console.log('Media already exists:', existingMedia);
+      return existingMedia;
+    }
+
+    const { buffer, filePath } = await getAndDownloadTelegramFile(mediaFile.file_id, botToken);
+    const fileExt = filePath.split('.').pop() || '';
+    const uniqueFileName = generateSafeFileName(
+      productInfo?.product_name,
+      productInfo?.product_code,
+      mediaType,
+      fileExt
+    );
+
+    // Determine proper MIME type
+    let mimeType = mediaFile.mime_type;
+    if (!mimeType || mimeType === 'application/octet-stream') {
+      if (mediaType === 'photo') {
+        mimeType = 'image/jpeg';
+      } else {
+        mimeType = getMimeType(filePath, mediaType === 'photo' ? 'image/jpeg' : 'application/octet-stream');
       }
+    }
 
-      if (!mediaFile) {
-        throw new Error('No media file found in message');
-      }
+    console.log('Using MIME type for upload:', mimeType);
 
-      console.log('[Media] Processing:', {
-        file_id: mediaFile.file_id,
-        type: mediaType,
-        retry_count: retryCount,
-        media_group_id: message.media_group_id
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('media')
+      .upload(uniqueFileName, buffer, {
+        contentType: mimeType,
+        upsert: false,
+        cacheControl: '3600'
       });
 
-      // Check for existing media
-      const { data: existingMedia, error: queryError } = await supabase
-        .from('telegram_media')
-        .select('*')
-        .eq('file_unique_id', mediaFile.file_unique_id)
-        .maybeSingle();
+    if (uploadError) throw new Error(`Failed to upload file: ${uploadError.message}`);
 
-      if (queryError) throw queryError;
+    const { data: { publicUrl } } = await supabase.storage
+      .from('media')
+      .getPublicUrl(uniqueFileName);
 
-      // If part of a media group, get group info before processing
-      if (message.media_group_id) {
-        const groupMedia = await getMediaGroupInfo(supabase, message.media_group_id);
-        if (groupMedia.length > 0) {
-          // Use the most complete item's info if available
-          const mostCompleteItem = groupMedia.reduce((prev, current) => {
-            const prevScore = (prev.caption ? 1 : 0) + (prev.analyzed_content ? 1 : 0);
-            const currentScore = (current.caption ? 1 : 0) + (current.analyzed_content ? 1 : 0);
-            return currentScore > prevScore ? current : prev;
-          });
+    const telegramData = {
+      message_id: message.message_id,
+      chat_id: message.chat.id,
+      sender_chat: message.sender_chat,
+      chat: message.chat,
+      date: message.date,
+      caption: message.caption,
+      media_group_id: message.media_group_id,
+      file_size: mediaFile.file_size,
+      mime_type: mimeType,
+      width: mediaFile.width,
+      height: mediaFile.height,
+      duration: 'duration' in mediaFile ? mediaFile.duration : null,
+      storage_path: uniqueFileName
+    };
 
-          productInfo = {
-            ...productInfo,
-            caption: mostCompleteItem.caption || productInfo?.caption,
-            product_name: mostCompleteItem.product_name || productInfo?.product_name,
-            product_code: mostCompleteItem.product_code || productInfo?.product_code,
-            quantity: mostCompleteItem.quantity || productInfo?.quantity,
-            vendor_uid: mostCompleteItem.vendor_uid || productInfo?.vendor_uid,
-            purchase_date: mostCompleteItem.purchase_date || productInfo?.purchase_date,
-            notes: mostCompleteItem.notes || productInfo?.notes,
-            analyzed_content: mostCompleteItem.analyzed_content || productInfo?.analyzed_content
-          };
-        }
-      }
+    const mediaRecord = {
+      file_id: mediaFile.file_id,
+      file_unique_id: mediaFile.file_unique_id,
+      file_type: mediaType,
+      telegram_data: telegramData,
+      message_id: messageRecord?.id,
+      public_url: publicUrl,
+      caption: message.caption,
+      ...(productInfo && {
+        product_name: productInfo.product_name,
+        product_code: productInfo.product_code,
+        quantity: productInfo.quantity,
+        vendor_uid: productInfo.vendor_uid,
+        purchase_date: productInfo.purchase_date,
+        notes: productInfo.notes,
+        analyzed_content: productInfo
+      })
+    };
 
-      let result;
-      if (existingMedia) {
-        // Update existing media
-        const { buffer, filePath } = await getAndDownloadTelegramFile(mediaFile.file_id, botToken);
-        const fileExt = filePath.split('.').pop() || '';
-        const uniqueFileName = generateSafeFileName(
-          productInfo?.product_name,
-          productInfo?.product_code,
-          mediaType,
-          fileExt,
-          message.media_group_id
-        );
+    const { data: mediaData, error: dbError } = await supabase
+      .from('telegram_media')
+      .insert(mediaRecord)
+      .select()
+      .single();
 
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('media')
-          .upload(uniqueFileName, buffer, {
-            contentType: getMimeType(filePath, mediaType === 'photo' ? 'image/jpeg' : 'application/octet-stream'),
-            upsert: true
-          });
-
-        if (uploadError) throw uploadError;
-
-        const { data: { publicUrl } } = await supabase.storage
-          .from('media')
-          .getPublicUrl(uniqueFileName);
-
-        const { data: updatedMedia, error: updateError } = await supabase
-          .from('telegram_media')
-          .update({
-            public_url: publicUrl,
-            caption: message.caption,
-            ...(productInfo && {
-              product_name: productInfo.product_name,
-              product_code: productInfo.product_code,
-              quantity: productInfo.quantity,
-              vendor_uid: productInfo.vendor_uid,
-              purchase_date: productInfo.purchase_date,
-              notes: productInfo.notes,
-              analyzed_content: productInfo
-            })
-          })
-          .eq('id', existingMedia.id)
-          .select()
-          .single();
-
-        if (updateError) throw updateError;
-        result = updatedMedia;
-      } else {
-        // Process new media
-        const { buffer, filePath } = await getAndDownloadTelegramFile(mediaFile.file_id, botToken);
-        const fileExt = filePath.split('.').pop() || '';
-        const uniqueFileName = generateSafeFileName(
-          productInfo?.product_name,
-          productInfo?.product_code,
-          mediaType,
-          fileExt,
-          message.media_group_id
-        );
-
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('media')
-          .upload(uniqueFileName, buffer, {
-            contentType: getMimeType(filePath, mediaType === 'photo' ? 'image/jpeg' : 'application/octet-stream'),
-            upsert: false
-          });
-
-        if (uploadError) throw uploadError;
-
-        const { data: { publicUrl } } = await supabase.storage
-          .from('media')
-          .getPublicUrl(uniqueFileName);
-
-        const telegramData = {
-          message_id: message.message_id,
-          chat_id: message.chat.id,
-          sender_chat: message.sender_chat,
-          chat: message.chat,
-          date: message.date,
-          caption: message.caption,
-          media_group_id: message.media_group_id,
-          file_size: mediaFile.file_size,
-          mime_type: mediaFile.mime_type,
-          width: mediaFile.width,
-          height: mediaFile.height,
-          duration: 'duration' in mediaFile ? mediaFile.duration : null,
-          storage_path: uniqueFileName
-        };
-
-        const mediaRecord = {
-          file_id: mediaFile.file_id,
-          file_unique_id: mediaFile.file_unique_id,
-          file_type: mediaType,
-          telegram_data: telegramData,
-          message_id: messageRecord?.id,
-          public_url: publicUrl,
-          caption: message.caption,
-          ...(productInfo && {
-            product_name: productInfo.product_name,
-            product_code: productInfo.product_code,
-            quantity: productInfo.quantity,
-            vendor_uid: productInfo.vendor_uid,
-            purchase_date: productInfo.purchase_date,
-            notes: productInfo.notes,
-            analyzed_content: productInfo
-          })
-        };
-
-        const { data: newMedia, error: insertError } = await supabase
-          .from('telegram_media')
-          .insert(mediaRecord)
-          .select()
-          .single();
-
-        if (insertError) throw insertError;
-        result = newMedia;
-      }
-
-      // After processing, sync media group if needed
-      if (message.media_group_id && (message.caption || productInfo)) {
-        await syncMediaGroupCaptions(
-          supabase,
-          message.media_group_id,
-          productInfo,
-          message.caption
-        );
-      }
-
-      return result;
-
-    } catch (error) {
-      retryCount++;
-      await handleProcessingError(supabase, error, messageRecord, retryCount);
-      
-      if (retryCount >= MAX_RETRY_ATTEMPTS) {
-        throw error;
-      }
-
-      const backoffDelay = Math.min(1000 * Math.pow(2, retryCount), 10000);
-      await new Promise(resolve => setTimeout(resolve, backoffDelay));
-    }
+    if (dbError) throw new Error(`Failed to insert into database: ${dbError.message}`);
+    return mediaData;
+  } catch (error) {
+    console.error(`Error processing ${mediaType} file:`, error);
+    throw error;
   }
-
-  throw new Error(`Processing failed after ${MAX_RETRY_ATTEMPTS} attempts`);
 }

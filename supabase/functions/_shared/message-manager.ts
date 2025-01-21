@@ -1,25 +1,33 @@
-import { syncMediaGroupCaptions } from './media-group-manager.ts';
+import { analyzeCaptionWithAI } from './caption-analyzer.ts';
 
-export async function createMessage(
+export async function handleMessageProcessing(
   supabase: any,
   message: any,
+  existingMessage: any,
   productInfo: any = null
 ) {
-  if (!message?.message_id || !message?.chat?.id) {
-    console.error('[Message] Invalid data:', { message });
-    throw new Error('Invalid message data: missing required fields');
-  }
-
-  console.log('[Message] Processing:', { 
+  console.log('Processing message:', { 
     message_id: message.message_id, 
     chat_id: message.chat.id,
-    media_group_id: message.media_group_id,
-    has_product_info: !!productInfo
+    product_info: productInfo,
+    existing_message: existingMessage?.id
   });
 
   try {
-    // Check for existing message
-    const { data: existingMessage, error: existingError } = await supabase
+    // Determine message type with proper validation
+    const messageType = determineMessageType(message);
+    if (!messageType) {
+      console.error('Invalid message type:', message);
+      return {
+        success: false,
+        error: 'Invalid message type'
+      };
+    }
+
+    console.log('Determined message type:', messageType);
+
+    // Try to get existing message using maybeSingle
+    const { data: existingRecord, error: existingError } = await supabase
       .from('messages')
       .select('*')
       .eq('message_id', message.message_id)
@@ -27,20 +35,24 @@ export async function createMessage(
       .maybeSingle();
 
     if (existingError) {
-      console.error('[Message] Error checking existing:', existingError);
-      throw existingError;
+      console.error('Error checking existing message:', existingError);
+      return {
+        success: false,
+        error: existingError.message
+      };
     }
 
+    // Prepare message data
     const messageData = {
       message_id: message.message_id,
       chat_id: message.chat.id,
       sender_info: message.from || message.sender_chat || {},
-      message_type: getMessageType(message),
+      message_type: messageType,
       message_data: message,
       caption: message.caption,
       media_group_id: message.media_group_id,
       status: 'pending',
-      retry_count: existingMessage?.retry_count || 0,
+      retry_count: existingRecord?.retry_count || 0,
       ...(productInfo && {
         product_name: productInfo.product_name,
         product_code: productInfo.product_code,
@@ -52,7 +64,7 @@ export async function createMessage(
       })
     };
 
-    // Insert or update message
+    // Use upsert to handle both insert and update cases
     const { data: messageRecord, error: upsertError } = await supabase
       .from('messages')
       .upsert(messageData, {
@@ -60,44 +72,42 @@ export async function createMessage(
         returning: 'representation'
       })
       .select()
-      .single();
+      .maybeSingle();
 
     if (upsertError) {
-      console.error('[Message] Upsert error:', upsertError);
-      throw upsertError;
+      console.error('Error upserting message:', upsertError);
+      return {
+        success: false,
+        error: upsertError.message
+      };
     }
 
-    if (!messageRecord) {
-      throw new Error('No message record returned after upsert');
-    }
-
-    // If part of a media group, sync information
-    if (message.media_group_id && (message.caption || productInfo)) {
-      await syncMediaGroupCaptions(
-        supabase,
-        message.media_group_id,
-        productInfo,
-        message.caption
-      );
-    }
-
-    return messageRecord;
+    return { 
+      success: true,
+      messageRecord,
+      retryCount: messageRecord?.retry_count || 0,
+      analyzedContent: productInfo 
+    };
 
   } catch (error) {
-    console.error('[Message] Processing error:', {
+    console.error('Error in handleMessageProcessing:', {
       error: error.message,
       stack: error.stack,
       message_id: message?.message_id,
       chat_id: message?.chat?.id
     });
-    throw error;
+    
+    return {
+      success: false,
+      error: error.message
+    };
   }
 }
 
-function getMessageType(message: any): string {
+function determineMessageType(message: any): string | null {
   if (message.photo && message.photo.length > 0) return 'photo';
   if (message.video) return 'video';
   if (message.document) return 'document';
   if (message.animation) return 'animation';
-  return 'text';
+  return null;
 }
