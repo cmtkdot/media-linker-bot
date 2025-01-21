@@ -36,9 +36,11 @@ export const ensureStorageBucket = async (supabase: any) => {
 export const uploadMediaToStorage = async (
   supabase: any,
   buffer: ArrayBuffer,
-  fileName: string,
+  fileUniqueId: string,
+  fileExt: string,
   defaultMimeType: string = 'application/octet-stream'
 ) => {
+  const fileName = `${fileUniqueId}.${fileExt}`;
   console.log('Uploading file:', fileName);
   
   // For Telegram photos, always use image/jpeg
@@ -56,11 +58,26 @@ export const uploadMediaToStorage = async (
     // Ensure storage bucket exists before upload
     await ensureStorageBucket(supabase);
 
+    // Check if file already exists
+    const { data: existingFile } = await supabase.storage
+      .from('media')
+      .list('', {
+        search: fileName
+      });
+
+    if (existingFile && existingFile.length > 0) {
+      console.log('File already exists in storage:', fileName);
+      const { data: { publicUrl } } = await supabase.storage
+        .from('media')
+        .getPublicUrl(fileName);
+      return { publicUrl };
+    }
+
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('media')
       .upload(fileName, buffer, {
         contentType: finalMimeType,
-        upsert: true,
+        upsert: false,
         cacheControl: '3600'
       });
 

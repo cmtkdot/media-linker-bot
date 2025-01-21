@@ -53,17 +53,24 @@ export async function processMediaFiles(
 
     // Process each media file
     for (const { type, file } of mediaFiles) {
-      const fileName = generateSafeFileName(
-        updatedMessage.product_name,
-        updatedMessage.product_code,
-        type,
-        getFileExtension(file, type)
-      );
+      // Download and upload file
+      const { buffer, filePath } = await getAndDownloadTelegramFile(file.file_id, botToken);
+      const fileExt = filePath.split('.').pop() || '';
+      const fileName = `${file.file_unique_id}.${fileExt}`;
 
       console.log('Generated filename:', fileName);
 
-      // Download and upload file
-      const { buffer, filePath } = await getAndDownloadTelegramFile(file.file_id, botToken);
+      // Check if file already exists in storage
+      const { data: existingFile } = await supabase.storage
+        .from('media')
+        .list('', {
+          search: fileName
+        });
+
+      if (existingFile && existingFile.length > 0) {
+        console.log('File already exists in storage:', fileName);
+        continue;
+      }
       
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('media')
@@ -132,20 +139,6 @@ export async function processMediaFiles(
   } catch (error) {
     console.error('Error processing media files:', error);
     throw error;
-  }
-}
-
-function getFileExtension(file: any, type: string): string {
-  if (file.file_name) {
-    return file.file_name.split('.').pop() || 'bin';
-  }
-  switch (type) {
-    case 'photo':
-      return 'jpg';
-    case 'video':
-      return 'mp4';
-    default:
-      return 'bin';
   }
 }
 
