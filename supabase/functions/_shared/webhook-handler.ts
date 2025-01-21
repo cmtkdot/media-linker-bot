@@ -2,6 +2,7 @@ import { processMessageBatch } from './message-processor.ts';
 import { processMediaFiles } from './media-processor.ts';
 import { delay } from './retry-utils.ts';
 import { analyzeCaptionWithAI } from './caption-analyzer.ts';
+import { syncMediaGroupCaptions } from './caption-sync.ts';
 
 export async function handleWebhookUpdate(update: any, supabase: any, botToken: string) {
   const message = update.message || update.channel_post;
@@ -19,7 +20,23 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
       has_caption: !!message.caption
     });
 
-    // Step 1: Analyze caption if present
+    // Step 1: If this is part of a media group, check for existing captions
+    let existingGroupData = null;
+    if (message.media_group_id) {
+      const { data: existingMedia } = await supabase
+        .from('telegram_media')
+        .select('caption, product_name, product_code, quantity, vendor_uid, purchase_date, notes, analyzed_content')
+        .eq('telegram_data->>media_group_id', message.media_group_id)
+        .order('created_at', { ascending: false })
+        .maybeSingle();
+
+      if (existingMedia) {
+        existingGroupData = existingMedia;
+        console.log('Found existing media group data:', existingGroupData);
+      }
+    }
+
+    // Step 2: Analyze caption if present or use existing group data
     let analyzedContent = null;
     if (message.caption) {
       try {
@@ -31,11 +48,14 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
         console.log('Caption analysis result:', analyzedContent);
       } catch (error) {
         console.error('Error analyzing caption:', error);
-        // Continue processing even if caption analysis fails
       }
+    } else if (existingGroupData?.analyzed_content) {
+      analyzedContent = existingGroupData.analyzed_content;
+      message.caption = existingGroupData.caption;
+      console.log('Using existing group caption and analysis');
     }
 
-    // Step 2: Process message with analyzed content
+    // Step 3: Process message with analyzed content
     try {
       await processMessageBatch([{
         ...message,
@@ -53,7 +73,7 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
 
     await delay(1000);
 
-    // Step 3: Get the created message record with validation
+    // Step 4: Get the created message record
     const { data: messageRecord, error: messageError } = await supabase
       .from('messages')
       .select('*')
@@ -78,7 +98,7 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
       throw new Error('Failed to create message record: Record not found after creation');
     }
 
-    // Step 4: Process media files if present
+    // Step 5: Process media files if present
     const hasMedia = message.photo || message.video || message.document || message.animation;
     if (hasMedia) {
       try {
@@ -97,7 +117,18 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
       }
     }
 
-    // Step 5: Update message status
+    // Step 6: If this message has a caption and is part of a media group,
+    // update other media in the group
+    if (message.caption && message.media_group_id) {
+      try {
+        await syncMediaGroupCaptions(message.media_group_id, supabase);
+        console.log('Successfully synced media group captions');
+      } catch (error) {
+        console.error('Error syncing media group captions:', error);
+      }
+    }
+
+    // Step 7: Update message status
     const { error: updateError } = await supabase
       .from('messages')
       .update({
