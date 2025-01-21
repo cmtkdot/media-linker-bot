@@ -53,8 +53,17 @@ serve(async (req) => {
       supabase_table_name: glideConfig.supabase_table_name
     });
 
-    // Initialize Glide table
+    // Initialize Glide table with proper configuration
     const table = new Table(glideConfig.api_token, glideConfig.table_id);
+    
+    // Test the connection by getting table info
+    try {
+      await table.getInfo();
+      console.log('Successfully connected to Glide table');
+    } catch (error) {
+      console.error('Failed to connect to Glide table:', error);
+      throw new Error(`Failed to connect to Glide table: ${error.message}`);
+    }
 
     let result: SyncResult;
     switch (operation) {
@@ -93,13 +102,17 @@ serve(async (req) => {
           try {
             const mappedRow = mapSupabaseToGlide(supabaseRow);
             if (!glideMap.has(id)) {
+              // For new rows, we need to create them in Glide
               await table.addRow(mappedRow);
               syncResult.added++;
+              console.log('Added new row to Glide:', id);
             } else {
               const glideRow = glideMap.get(id)!;
+              // Only update if Supabase has newer data
               if (new Date(supabaseRow.updated_at) > new Date(glideRow.updatedAt)) {
                 await table.updateRow(id, mappedRow);
                 syncResult.updated++;
+                console.log('Updated row in Glide:', id);
               }
             }
           } catch (error) {
@@ -112,7 +125,18 @@ serve(async (req) => {
         for (const [id, glideRow] of glideMap) {
           try {
             const supabaseRow = supabaseMap.get(id);
-            if (supabaseRow) {
+            if (!supabaseRow) {
+              // New row from Glide
+              const mappedRow = mapGlideToSupabase(glideRow);
+              const { error: insertError } = await supabase
+                .from(glideConfig.supabase_table_name)
+                .insert([mappedRow]);
+
+              if (insertError) throw insertError;
+              syncResult.added++;
+              console.log('Added new row to Supabase:', id);
+            } else {
+              // Update existing row if Glide has newer data
               const glideUpdatedAt = new Date(glideRow.updatedAt);
               const supabaseUpdatedAt = new Date(supabaseRow.updated_at);
 
@@ -125,6 +149,7 @@ serve(async (req) => {
 
                 if (updateError) throw updateError;
                 syncResult.updated++;
+                console.log('Updated row in Supabase:', id);
               }
             }
           } catch (error) {

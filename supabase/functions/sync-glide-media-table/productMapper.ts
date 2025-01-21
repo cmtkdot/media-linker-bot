@@ -2,6 +2,7 @@ import { GlideMediaRow, SupabaseMediaRow } from './types.ts';
 
 export function mapGlideToSupabase(glideRow: GlideMediaRow): Partial<SupabaseMediaRow> {
   return {
+    id: glideRow.id,
     file_id: glideRow.fileId,
     file_unique_id: glideRow.fileUniqueId,
     file_type: glideRow.fileType,
@@ -9,9 +10,9 @@ export function mapGlideToSupabase(glideRow: GlideMediaRow): Partial<SupabaseMed
     product_name: glideRow.productName,
     product_code: glideRow.productCode,
     quantity: glideRow.quantity,
-    telegram_data: JSON.parse(glideRow.telegramData || '{}'),
-    glide_data: JSON.parse(glideRow.glideData || '{}'),
-    media_metadata: JSON.parse(glideRow.mediaMetadata || '{}'),
+    telegram_data: JSON.parse(glideRow.telegramData),
+    glide_data: JSON.parse(glideRow.glideData),
+    media_metadata: JSON.parse(glideRow.mediaMetadata),
     processed: glideRow.processed,
     processing_error: glideRow.processingError,
     last_synced_at: glideRow.lastSyncedAt,

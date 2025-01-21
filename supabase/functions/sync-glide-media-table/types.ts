@@ -4,8 +4,10 @@ export interface GlideConfig {
   table_id: string;
   table_name: string;
   api_token: string;
-  supabase_table_name: string | null;
+  created_at: string;
+  updated_at: string;
   active: boolean;
+  supabase_table_name: string;
 }
 
 export interface GlideMediaRow {
@@ -50,5 +52,5 @@ export interface SyncResult {
   added: number;
   updated: number;
   deleted: number;
-  errors?: string[];
+  errors: string[];
 }
