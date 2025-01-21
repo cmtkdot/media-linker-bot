@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Loader2, CheckCircle, XCircle } from "lucide-react";
+import { Loader2, CheckCircle, XCircle, Plus } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
@@ -11,6 +11,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { NewGlideConfigForm } from "./NewGlideConfigForm";
+import { TableLinkDialog } from "./TableLinkDialog";
 
 interface GlideConfig {
   id: string;
@@ -27,9 +30,10 @@ interface GlideConfig {
 const GlideSync = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [selectedTableId, setSelectedTableId] = useState<string>("");
+  const [selectedConfig, setSelectedConfig] = useState<GlideConfig | null>(null);
   const { toast } = useToast();
 
-  const { data: configs, isLoading } = useQuery({
+  const { data: configs, isLoading, refetch } = useQuery({
     queryKey: ['glide-configs'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -126,6 +130,20 @@ const GlideSync = () => {
               'Sync with Glide'
             )}
           </Button>
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Plus className="w-4 h-4 mr-2" />
+                Add Glide Table
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add New Glide Configuration</DialogTitle>
+              </DialogHeader>
+              <NewGlideConfigForm onSuccess={refetch} />
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
@@ -137,7 +155,8 @@ const GlideSync = () => {
               {configs?.map((config) => (
                 <div
                   key={config.id}
-                  className="flex items-center justify-between p-4 rounded-lg border bg-background"
+                  className="flex items-center justify-between p-4 rounded-lg border bg-background hover:bg-accent/50 cursor-pointer transition-colors"
+                  onClick={() => setSelectedConfig(config)}
                 >
                   <div>
                     <h3 className="font-medium">{config.table_name}</h3>
@@ -145,7 +164,7 @@ const GlideSync = () => {
                       Table ID: {config.table_id}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      Syncs with: {config.supabase_table_name}
+                      Syncs with: {config.supabase_table_name || 'Not linked'}
                     </p>
                   </div>
                   <div className="flex items-center gap-4">
@@ -176,6 +195,15 @@ const GlideSync = () => {
           </div>
         </div>
       </div>
+
+      <TableLinkDialog 
+        config={selectedConfig} 
+        onClose={() => setSelectedConfig(null)}
+        onSuccess={() => {
+          setSelectedConfig(null);
+          refetch();
+        }}
+      />
     </div>
   );
 };

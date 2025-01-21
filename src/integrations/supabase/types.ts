@@ -266,6 +266,12 @@ export type Database = {
       }
     }
     Functions: {
+      create_glide_sync_table: {
+        Args: {
+          table_name: string
+        }
+        Returns: undefined
+      }
       get_message_file_id: {
         Args: {
           message_data: Json
