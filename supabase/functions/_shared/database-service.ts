@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { getMessageType, getAndDownloadTelegramFile, generateSafeFileName } from './telegram-service.ts';
+import { getMessageType, getAndDownloadTelegramFile } from './telegram-service.ts';
 import { getMimeType } from './media-validators.ts';
 
 export async function createMessage(supabase: any, message: any, productInfo: any = null) {
@@ -97,18 +97,28 @@ export async function processMediaFile(
   // Download and process the file
   const { buffer, filePath } = await getAndDownloadTelegramFile(mediaFile.file_id, botToken);
   const fileExt = filePath.split('.').pop() || '';
-  const uniqueFileName = generateSafeFileName(
-    productInfo?.product_name,
-    productInfo?.product_code,
-    mediaType,
-    fileExt
-  );
+  const uniqueFileName = `${mediaFile.file_unique_id}.${fileExt}`;
 
   // Determine MIME type
   const mimeType = mediaFile.mime_type || 
     (mediaType === 'photo' ? 'image/jpeg' : getMimeType(filePath, 'application/octet-stream'));
 
   console.log('Uploading file with MIME type:', mimeType);
+
+  // Check if file already exists in storage
+  const { data: existingFile } = await supabase.storage
+    .from('media')
+    .list('', {
+      search: uniqueFileName
+    });
+
+  if (existingFile && existingFile.length > 0) {
+    console.log('File already exists in storage:', uniqueFileName);
+    const { data: { publicUrl } } = await supabase.storage
+      .from('media')
+      .getPublicUrl(uniqueFileName);
+    return { public_url: publicUrl };
+  }
 
   // Upload to storage
   const { data: uploadData, error: uploadError } = await supabase.storage
