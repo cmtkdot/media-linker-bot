@@ -47,6 +47,11 @@ const MediaTable = ({ data, onEdit }: MediaTableProps) => {
     }
   };
 
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return '-';
+    return new Date(dateString).toLocaleDateString();
+  };
+
   return (
     <div className="rounded-md border">
       <Table>
@@ -56,6 +61,8 @@ const MediaTable = ({ data, onEdit }: MediaTableProps) => {
             <TableHead>Caption</TableHead>
             <TableHead>Product Name</TableHead>
             <TableHead>Product Code</TableHead>
+            <TableHead>Vendor UID</TableHead>
+            <TableHead>Purchase Date</TableHead>
             <TableHead>Quantity</TableHead>
             <TableHead>Type</TableHead>
             <TableHead>Actions</TableHead>
@@ -81,6 +88,8 @@ const MediaTable = ({ data, onEdit }: MediaTableProps) => {
               <TableCell>{item.caption || '-'}</TableCell>
               <TableCell>{item.product_name || '-'}</TableCell>
               <TableCell>{item.product_code || '-'}</TableCell>
+              <TableCell>{item.vendor_uid || '-'}</TableCell>
+              <TableCell>{formatDate(item.purchase_date)}</TableCell>
               <TableCell>{item.quantity || '-'}</TableCell>
               <TableCell>{item.file_type}</TableCell>
               <TableCell>

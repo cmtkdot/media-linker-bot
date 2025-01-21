@@ -24,6 +24,8 @@ interface MediaItem {
   product_code?: string;
   product_name?: string;
   quantity?: number;
+  vendor_uid?: string;
+  purchase_date?: string;
   created_at: string;
 }
 
@@ -42,7 +44,7 @@ const MediaGrid = () => {
         .order('created_at', { ascending: false });
 
       if (search) {
-        query = query.or(`caption.ilike.%${search}%,product_name.ilike.%${search}%,product_code.ilike.%${search}%`);
+        query = query.or(`caption.ilike.%${search}%,product_name.ilike.%${search}%,product_code.ilike.%${search}%,vendor_uid.ilike.%${search}%`);
       }
 
       const { data, error } = await query;
@@ -61,7 +63,9 @@ const MediaGrid = () => {
           caption: editItem.caption,
           product_name: editItem.product_name,
           product_code: editItem.product_code,
-          quantity: editItem.quantity
+          quantity: editItem.quantity,
+          vendor_uid: editItem.vendor_uid,
+          purchase_date: editItem.purchase_date
         })
         .eq('id', editItem.id);
 
@@ -95,12 +99,21 @@ const MediaGrid = () => {
     return <div className="text-center p-4">No media items found</div>;
   }
 
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return null;
+    const date = new Date(dateString);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <Input
           className="max-w-sm"
-          placeholder="Search by caption, product name, or code..."
+          placeholder="Search by caption, product name, code, or vendor..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -125,7 +138,7 @@ const MediaGrid = () => {
       {view === 'grid' ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {mediaItems.map((item) => (
-            <Card key={item.id} className="overflow-hidden group cursor-pointer hover:shadow-lg transition-shadow">
+            <Card key={item.id} className="overflow-hidden group cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setEditItem(item)}>
               <div className="aspect-square relative">
                 {item.file_type === 'video' ? (
                   <video 
@@ -145,6 +158,8 @@ const MediaGrid = () => {
                     {item.caption && <p className="font-medium mb-2">{item.caption}</p>}
                     {item.product_name && <p className="text-sm">{item.product_name}</p>}
                     {item.product_code && <p className="text-sm">#{item.product_code}</p>}
+                    {item.vendor_uid && <p className="text-sm">Vendor: {item.vendor_uid}</p>}
+                    {item.purchase_date && <p className="text-sm">Purchased: {new Date(item.purchase_date).toLocaleDateString()}</p>}
                     {item.quantity && <p className="text-sm">Quantity: {item.quantity}</p>}
                   </div>
                 </div>
@@ -184,6 +199,23 @@ const MediaGrid = () => {
                 id="product_code"
                 value={editItem?.product_code || ''}
                 onChange={(e) => setEditItem(prev => prev ? {...prev, product_code: e.target.value} : null)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="vendor_uid">Vendor UID</Label>
+              <Input
+                id="vendor_uid"
+                value={editItem?.vendor_uid || ''}
+                onChange={(e) => setEditItem(prev => prev ? {...prev, vendor_uid: e.target.value} : null)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="purchase_date">Purchase Date</Label>
+              <Input
+                id="purchase_date"
+                type="date"
+                value={formatDate(editItem?.purchase_date || null) || ''}
+                onChange={(e) => setEditItem(prev => prev ? {...prev, purchase_date: e.target.value} : null)}
               />
             </div>
             <div>

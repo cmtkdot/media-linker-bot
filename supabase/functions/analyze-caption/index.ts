@@ -55,7 +55,13 @@ serve(async (req) => {
               "vendor_uid": "FISH",
               "purchase_date": "01/16/2025"
             }
-            If any part is missing, set it to null.`
+            If any part is missing, set it to null.
+            
+            Important: For the purchase_date, extract the date components from positions 5-10 of the product_code:
+            - Month: positions 5-6
+            - Day: positions 7-8
+            - Year: positions 9-10 (prefix with "20" for full year)
+            Then format as MM/DD/YYYY.`
           },
           {
             role: 'user',
@@ -101,8 +107,6 @@ serve(async (req) => {
       }
 
       console.log('Successfully updated all media in group:', mediaGroupId)
-    } else {
-      console.log('No media group ID provided, skipping update')
     }
 
     return new Response(
