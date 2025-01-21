@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { getMessageType } from './telegram-service.ts';
 
 export async function createMessage(supabase: any, message: any, productInfo: any = null) {
   const { data: messageData, error: messageError } = await supabase
