@@ -54,9 +54,16 @@ export function generateSafeFileName(
   productName: string = 'untitled',
   productCode: string = 'no_code',
   mediaType: string,
-  extension: string
+  extension: string,
+  mediaGroupId?: string
 ): string {
-  console.log('Generating safe filename with:', { productName, productCode, mediaType, extension });
+  console.log('Generating safe filename with:', { 
+    productName, 
+    productCode, 
+    mediaType, 
+    extension,
+    mediaGroupId 
+  });
   
   const safeName = (productName || 'untitled')
     .toLowerCase()
@@ -79,7 +86,8 @@ export function generateSafeFileName(
     .replace(/[^a-z0-9]/g, '');
 
   const timestamp = Date.now();
-  const fileName = `${safeName}_${safeCode}_${safeMediaType}_${timestamp}`;
+  const groupSuffix = mediaGroupId ? `_group_${mediaGroupId.replace(/[^a-z0-9]/g, '')}` : '';
+  const fileName = `${safeName}_${safeCode}${groupSuffix}_${safeMediaType}_${timestamp}`;
 
   return `${fileName}.${safeExtension}`;
 }

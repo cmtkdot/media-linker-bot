@@ -38,7 +38,6 @@ export async function createMessage(supabase: any, message: any, productInfo: an
       })
     };
 
-    // Use upsert with conflict resolution to handle potential duplicates efficiently
     const { data: upsertedMessage, error: upsertError } = await supabase
       .from('messages')
       .upsert(messageData, {
@@ -91,10 +90,10 @@ export async function processMedia(
       console.log('[Media Processing] Starting:', {
         file_id: mediaFile.file_id,
         type: mediaType,
-        retry_count: retryCount
+        retry_count: retryCount,
+        media_group_id: message.media_group_id
       });
 
-      // Check for existing media with timeout handling
       const { data: existingMedia, error: queryError } = await Promise.race([
         supabase
           .from('telegram_media')
@@ -108,6 +107,30 @@ export async function processMedia(
 
       if (queryError) throw queryError;
 
+      if (message.media_group_id) {
+        console.log('[Media Group] Syncing captions for group:', message.media_group_id);
+        const { data: groupMedia, error: groupError } = await supabase
+          .from('telegram_media')
+          .select('*')
+          .eq('telegram_data->>media_group_id', message.media_group_id)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (!groupError && groupMedia?.length > 0) {
+          const latestGroupItem = groupMedia[0];
+          productInfo = {
+            ...productInfo,
+            caption: latestGroupItem.caption || productInfo?.caption,
+            product_name: latestGroupItem.product_name || productInfo?.product_name,
+            product_code: latestGroupItem.product_code || productInfo?.product_code,
+            quantity: latestGroupItem.quantity || productInfo?.quantity,
+            vendor_uid: latestGroupItem.vendor_uid || productInfo?.vendor_uid,
+            purchase_date: latestGroupItem.purchase_date || productInfo?.purchase_date,
+            notes: latestGroupItem.notes || productInfo?.notes
+          };
+        }
+      }
+
       let result;
       if (existingMedia) {
         console.log('[Media Processing] Updating existing media:', existingMedia.id);
@@ -117,10 +140,10 @@ export async function processMedia(
           productInfo?.product_name,
           productInfo?.product_code,
           mediaType,
-          fileExt
+          fileExt,
+          message.media_group_id
         );
 
-        // Upload with timeout handling
         const uploadPromise = supabase.storage
           .from('media')
           .upload(uniqueFileName, buffer, {
@@ -141,7 +164,6 @@ export async function processMedia(
           .from('media')
           .getPublicUrl(uniqueFileName);
 
-        // Update with timeout handling
         const updatePromise = supabase
           .from('telegram_media')
           .update({
@@ -178,10 +200,10 @@ export async function processMedia(
           productInfo?.product_name,
           productInfo?.product_code,
           mediaType,
-          fileExt
+          fileExt,
+          message.media_group_id
         );
 
-        // Upload with timeout handling
         const uploadPromise = supabase.storage
           .from('media')
           .upload(uniqueFileName, buffer, {
@@ -237,7 +259,6 @@ export async function processMedia(
           })
         };
 
-        // Insert with timeout handling
         const insertPromise = supabase
           .from('telegram_media')
           .insert(mediaRecord)
@@ -265,7 +286,6 @@ export async function processMedia(
         throw error;
       }
 
-      // Add exponential backoff for retries
       const backoffDelay = Math.min(1000 * Math.pow(2, retryCount), 10000);
       await new Promise(resolve => setTimeout(resolve, backoffDelay));
     }
