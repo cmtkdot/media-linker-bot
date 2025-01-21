@@ -1,5 +1,5 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { Database } from '../../../src/integrations/supabase/types';
-import { createClient } from '@supabase/supabase-js';
 
 export async function syncMediaGroupInfo(
   supabase: ReturnType<typeof createClient<Database>>,
