@@ -9,4 +9,8 @@ export interface MediaItem {
   vendor_uid?: string;
   purchase_date?: string;
   created_at: string;
+  telegram_data?: {
+    media_group_id?: string;
+    [key: string]: any;
+  };
 }
