@@ -43,10 +43,10 @@ export async function handleWebhookUpdate(
     throw fetchError;
   }
 
-  // If message exists and was processed successfully or failed, skip
-  if (existingMessage?.status === 'success' || existingMessage?.status === 'failed') {
-    console.log('Message already processed or failed:', existingMessage);
-    return { message: 'Message already processed or failed', id: existingMessage.id };
+  // If message exists and was processed successfully, skip
+  if (existingMessage?.status === 'success') {
+    console.log('Message already processed successfully:', existingMessage);
+    return { message: 'Message already processed', id: existingMessage.id };
   }
 
   let messageRecord = existingMessage;
@@ -132,6 +132,20 @@ export async function handleWebhookUpdate(
         })
         .eq('id', messageRecord.id);
 
+      // If this is part of a media group, update all related media
+      if (message.media_group_id) {
+        console.log('Processing media group:', message.media_group_id);
+        await supabase
+          .from('telegram_media')
+          .update({ 
+            caption: message.caption,
+            product_name: messageRecord.product_name,
+            product_code: messageRecord.product_code,
+            quantity: messageRecord.quantity
+          })
+          .eq('telegram_data->media_group_id', message.media_group_id);
+      }
+
       return { 
         message: 'Media processed successfully', 
         messageId: messageRecord.id, 
@@ -142,16 +156,13 @@ export async function handleWebhookUpdate(
       console.error(`Attempt ${retryCount + 1} failed:`, error);
       retryCount++;
 
-      const newStatus = retryCount >= MAX_RETRY_ATTEMPTS ? 'failed' : 'pending';
-      console.log(`Updating message status to ${newStatus} after attempt ${retryCount}`);
-
-      // Update message with retry information and set status to failed if max attempts reached
+      // Update message with retry information
       const { error: updateError } = await supabase
         .from('messages')
         .update({
           retry_count: retryCount,
           last_retry_at: new Date().toISOString(),
-          status: newStatus,
+          status: retryCount >= MAX_RETRY_ATTEMPTS ? 'failed' : 'pending',
           processing_error: error.message,
           updated_at: new Date().toISOString()
         })
@@ -171,8 +182,8 @@ export async function handleWebhookUpdate(
       }
 
       if (retryCount >= MAX_RETRY_ATTEMPTS) {
-        console.error('Max retry attempts reached. Message marked as failed.');
-        throw new Error(`Processing failed after ${MAX_RETRY_ATTEMPTS} attempts. Last error: ${error.message}`);
+        console.error('Max retry attempts reached. Giving up.');
+        throw new Error(`Failed after ${MAX_RETRY_ATTEMPTS} attempts. Last error: ${error.message}`);
       }
     }
   }
