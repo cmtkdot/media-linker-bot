@@ -59,6 +59,7 @@ export async function processMediaFile(
       fileExt
     );
 
+    console.log('Uploading file:', uniqueFileName);
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('media')
       .upload(uniqueFileName, buffer, {
@@ -68,6 +69,7 @@ export async function processMediaFile(
       });
 
     if (uploadError) {
+      console.error('Upload error:', uploadError);
       throw new Error(`Failed to upload file: ${uploadError.message}`);
     }
 
@@ -76,6 +78,7 @@ export async function processMediaFile(
       .from('media')
       .getPublicUrl(uniqueFileName);
 
+    // Ensure numeric values are properly handled
     const telegramData = {
       message_id: message.message_id,
       chat_id: message.chat.id,
@@ -84,13 +87,20 @@ export async function processMediaFile(
       date: message.date,
       caption: message.caption,
       media_group_id: message.media_group_id,
-      file_size: mediaFile.file_size,
+      file_size: mediaFile.file_size ? BigInt(mediaFile.file_size).toString() : null,
       mime_type: mediaFile.mime_type,
-      width: mediaFile.width,
-      height: mediaFile.height,
-      duration: 'duration' in mediaFile ? mediaFile.duration : null,
+      width: mediaFile.width ? BigInt(mediaFile.width).toString() : null,
+      height: mediaFile.height ? BigInt(mediaFile.height).toString() : null,
+      duration: 'duration' in mediaFile ? BigInt(mediaFile.duration).toString() : null,
       storage_path: uniqueFileName
     };
+
+    console.log('Inserting media record with data:', {
+      file_id: mediaFile.file_id,
+      file_type: mediaType,
+      public_url: publicUrl,
+      message_id: messageRecord.id
+    });
 
     const { error: dbError } = await supabase
       .from('telegram_media')
@@ -105,11 +115,12 @@ export async function processMediaFile(
         ...(productInfo && {
           product_name: productInfo.product_name,
           product_code: productInfo.product_code,
-          quantity: productInfo.quantity
+          quantity: productInfo.quantity ? BigInt(productInfo.quantity).toString() : null
         })
       });
 
     if (dbError) {
+      console.error('Database error:', dbError);
       throw new Error(`Failed to insert into database: ${dbError.message}`);
     }
 
