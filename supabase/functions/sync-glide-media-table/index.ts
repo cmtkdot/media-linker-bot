@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
-import { Table } from 'https://esm.sh/@glideapps/tables@1.0.5';
 import { GlideConfig, SyncResult } from './types.ts';
 import { mapGlideToSupabase, mapSupabaseToGlide } from './productMapper.ts';
 
@@ -68,17 +67,11 @@ serve(async (req) => {
       supabase_table_name: glideConfig.supabase_table_name
     });
 
-    // Initialize Glide table
-    const table = new Table(glideConfig.api_token, glideConfig.table_id);
-    
-    // Test the connection
-    try {
-      await table.getInfo();
-      console.log('Successfully connected to Glide table');
-    } catch (error) {
-      console.error('Failed to connect to Glide table:', error);
-      throw new Error(`Failed to connect to Glide table: ${error.message}`);
-    }
+    // Initialize Glide API client
+    const glideHeaders = {
+      'Authorization': `Bearer ${glideConfig.api_token}`,
+      'Content-Type': 'application/json',
+    };
 
     let result: SyncResult = {
       added: 0,
@@ -90,11 +83,22 @@ serve(async (req) => {
     if (operation === 'syncBidirectional') {
       console.log('Starting bidirectional sync');
       
-      // Get all rows from both systems
-      const [glideRows, { data: supabaseRows, error: supabaseError }] = await Promise.all([
-        table.getRows(),
-        supabase.from(glideConfig.supabase_table_name).select('*')
-      ]);
+      // Get all rows from Glide
+      const glideResponse = await fetch(
+        `https://api.glideapp.io/api/tables/${glideConfig.table_id}/rows`,
+        { headers: glideHeaders }
+      );
+
+      if (!glideResponse.ok) {
+        throw new Error(`Failed to fetch Glide data: ${await glideResponse.text()}`);
+      }
+
+      const glideRows = await glideResponse.json();
+      
+      // Get all rows from Supabase
+      const { data: supabaseRows, error: supabaseError } = await supabase
+        .from(glideConfig.supabase_table_name)
+        .select('*');
 
       if (supabaseError) {
         console.error('Failed to fetch Supabase rows:', supabaseError);
@@ -114,14 +118,41 @@ serve(async (req) => {
       for (const [id, supabaseRow] of supabaseMap) {
         try {
           const mappedRow = mapSupabaseToGlide(supabaseRow);
+          
           if (!glideMap.has(id)) {
-            await table.addRow(mappedRow);
+            // Create new row in Glide
+            const response = await fetch(
+              `https://api.glideapp.io/api/tables/${glideConfig.table_id}/rows`,
+              {
+                method: 'POST',
+                headers: glideHeaders,
+                body: JSON.stringify(mappedRow)
+              }
+            );
+            
+            if (!response.ok) {
+              throw new Error(`Failed to create Glide row: ${await response.text()}`);
+            }
+            
             result.added++;
             console.log('Added new row to Glide:', id);
           } else {
             const glideRow = glideMap.get(id)!;
             if (new Date(supabaseRow.updated_at) > new Date(glideRow.updatedAt)) {
-              await table.updateRow(id, mappedRow);
+              // Update existing row in Glide
+              const response = await fetch(
+                `https://api.glideapp.io/api/tables/${glideConfig.table_id}/rows/${id}`,
+                {
+                  method: 'PATCH',
+                  headers: glideHeaders,
+                  body: JSON.stringify(mappedRow)
+                }
+              );
+              
+              if (!response.ok) {
+                throw new Error(`Failed to update Glide row: ${await response.text()}`);
+              }
+              
               result.updated++;
               console.log('Updated row in Glide:', id);
             }
@@ -136,8 +167,9 @@ serve(async (req) => {
       for (const [id, glideRow] of glideMap) {
         try {
           const supabaseRow = supabaseMap.get(id);
+          const mappedRow = mapGlideToSupabase(glideRow);
+          
           if (!supabaseRow) {
-            const mappedRow = mapGlideToSupabase(glideRow);
             const { error: insertError } = await supabase
               .from(glideConfig.supabase_table_name)
               .insert([mappedRow]);
@@ -150,7 +182,6 @@ serve(async (req) => {
             const supabaseUpdatedAt = new Date(supabaseRow.updated_at);
 
             if (glideUpdatedAt > supabaseUpdatedAt) {
-              const mappedRow = mapGlideToSupabase(glideRow);
               const { error: updateError } = await supabase
                 .from(glideConfig.supabase_table_name)
                 .update(mappedRow)
