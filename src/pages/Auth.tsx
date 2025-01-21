@@ -15,6 +15,9 @@ const Auth = () => {
     if (error instanceof AuthApiError) {
       switch (error.status) {
         case 400:
+          if (error.message.includes("refresh_token_not_found")) {
+            return "Your session has expired. Please sign in again.";
+          }
           if (error.message.includes("missing email")) {
             return "Please enter your email address";
           }
@@ -31,6 +34,22 @@ const Auth = () => {
   };
 
   useEffect(() => {
+    // Check for existing session on mount
+    const checkSession = async () => {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (session) {
+        navigate("/");
+      } else if (error) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: getErrorMessage(error),
+        });
+      }
+    };
+    
+    checkSession();
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (event === "SIGNED_IN" && session) {
@@ -39,6 +58,11 @@ const Auth = () => {
             title: "Welcome!",
             description: "You have successfully signed in.",
           });
+        } else if (event === "SIGNED_OUT") {
+          navigate("/auth");
+        } else if (event === "TOKEN_REFRESHED" && session) {
+          // Handle successful token refresh
+          navigate("/");
         } else if (event === "USER_UPDATED") {
           const { error } = await supabase.auth.getSession();
           if (error) {
