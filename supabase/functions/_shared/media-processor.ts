@@ -1,5 +1,4 @@
 import { getMessageType, getAndDownloadTelegramFile, generateSafeFileName } from './telegram-service.ts';
-import { handleMediaGroup } from './media-group-handler.ts';
 
 export async function processNewMedia(
   supabase: any,
@@ -12,13 +11,20 @@ export async function processNewMedia(
 ) {
   console.log(`Processing new ${mediaType} file:`, {
     file_id: mediaFile.file_id,
-    product_info: productInfo
+    product_info: productInfo,
+    message_record: {
+      vendor_uid: messageRecord.vendor_uid,
+      purchase_date: messageRecord.purchase_date,
+      product_name: messageRecord.product_name,
+      product_code: messageRecord.product_code,
+      quantity: messageRecord.quantity
+    }
   });
 
   try {
     const { buffer, filePath } = await getAndDownloadTelegramFile(mediaFile.file_id, botToken);
     
-    const fileExt = filePath.split('.').pop() || '';
+    const fileExt = filePath.split('.').pop()?.toLowerCase() || '';
     const uniqueFileName = generateSafeFileName(
       `${mediaType}_${mediaFile.file_unique_id}_${Date.now()}`,
       fileExt
@@ -40,13 +46,14 @@ export async function processNewMedia(
         'mov': 'video/quicktime',
         'pdf': 'application/pdf'
       };
-      contentType = mimeTypes[fileExt.toLowerCase()] || contentType;
+      contentType = mimeTypes[fileExt] || contentType;
     }
 
     console.log('Uploading file:', {
       fileName: uniqueFileName,
       contentType: contentType,
-      mediaType: mediaType
+      mediaType: mediaType,
+      fileExt: fileExt
     });
 
     const { data: uploadData, error: uploadError } = await supabase.storage
@@ -62,11 +69,11 @@ export async function processNewMedia(
       throw new Error(`Failed to upload file: ${uploadError.message}`);
     }
 
-    // Get the public URL for the uploaded file
     const { data: { publicUrl } } = await supabase.storage
       .from('media')
       .getPublicUrl(uniqueFileName);
 
+    // Ensure numeric values are properly handled
     const telegramData = {
       message_id: message.message_id,
       chat_id: message.chat.id,
@@ -83,14 +90,15 @@ export async function processNewMedia(
       storage_path: uniqueFileName
     };
 
-    // Prepare product info from messageRecord
+    // Get product info from messageRecord if not provided
     const mediaProductInfo = {
       caption: message.caption,
       product_name: messageRecord.product_name,
       product_code: messageRecord.product_code,
       quantity: messageRecord.quantity,
       vendor_uid: messageRecord.vendor_uid,
-      purchase_date: messageRecord.purchase_date
+      purchase_date: messageRecord.purchase_date,
+      notes: messageRecord.notes
     };
 
     console.log('Inserting media record with data:', {
@@ -110,7 +118,13 @@ export async function processNewMedia(
         telegram_data: telegramData,
         message_id: messageRecord.id,
         public_url: publicUrl,
-        ...mediaProductInfo
+        caption: message.caption,
+        product_name: mediaProductInfo.product_name,
+        product_code: mediaProductInfo.product_code,
+        quantity: mediaProductInfo.quantity,
+        vendor_uid: mediaProductInfo.vendor_uid,
+        purchase_date: mediaProductInfo.purchase_date,
+        notes: mediaProductInfo.notes
       });
 
     if (dbError) {
@@ -118,10 +132,10 @@ export async function processNewMedia(
       throw new Error(`Failed to insert into database: ${dbError.message}`);
     }
 
-    // Handle media group updates if needed
-    if (message.media_group_id) {
-      await handleMediaGroup(supabase, message, messageRecord);
-    }
+    console.log(`Successfully processed ${mediaType} file:`, {
+      fileName: uniqueFileName,
+      product_info: mediaProductInfo
+    });
 
     return { public_url: publicUrl };
   } catch (error) {
@@ -139,12 +153,12 @@ export async function updateExistingMedia(supabase: any, mediaFile: any, message
       product_code: messageRecord.product_code,
       quantity: messageRecord.quantity,
       vendor_uid: messageRecord.vendor_uid,
-      purchase_date: messageRecord.purchase_date
+      purchase_date: messageRecord.purchase_date,
+      notes: messageRecord.notes
     }
   });
   
   try {
-    // Get existing media record
     const { data: existingMedia, error: mediaFetchError } = await supabase
       .from('telegram_media')
       .select('*')
@@ -166,7 +180,6 @@ export async function updateExistingMedia(supabase: any, mediaFile: any, message
       throw new Error('Existing media record not found');
     }
 
-    // Prepare telegram data with updated message info
     const telegramData = {
       ...existingMedia.telegram_data,
       message_id: message.message_id,
@@ -185,7 +198,8 @@ export async function updateExistingMedia(supabase: any, mediaFile: any, message
       product_code: messageRecord.product_code,
       quantity: messageRecord.quantity,
       vendor_uid: messageRecord.vendor_uid,
-      purchase_date: messageRecord.purchase_date
+      purchase_date: messageRecord.purchase_date,
+      notes: messageRecord.notes
     };
 
     console.log('Updating telegram_media record with new data:', {
@@ -193,7 +207,6 @@ export async function updateExistingMedia(supabase: any, mediaFile: any, message
       ...productInfo
     });
 
-    // Update telegram_media record with all fields
     const { error: mediaError } = await supabase
       .from('telegram_media')
       .update({
@@ -209,37 +222,6 @@ export async function updateExistingMedia(supabase: any, mediaFile: any, message
         media_id: existingMedia.id
       });
       throw mediaError;
-    }
-
-    console.log('Updating message record:', {
-      id: messageRecord.id,
-      message_id: message.message_id,
-      product_info: productInfo
-    });
-
-    // Update message record with all fields
-    const { error: messageError } = await supabase
-      .from('messages')
-      .update({
-        message_data: message,
-        ...productInfo,
-        updated_at: new Date().toISOString(),
-        status: 'success',
-        processed_at: new Date().toISOString()
-      })
-      .eq('id', messageRecord.id);
-
-    if (messageError) {
-      console.error('Error updating message:', {
-        error: messageError,
-        message_id: messageRecord.id
-      });
-      throw messageError;
-    }
-
-    // Handle media group updates if needed
-    if (message.media_group_id) {
-      await handleMediaGroup(supabase, message, messageRecord);
     }
 
     return existingMedia;
