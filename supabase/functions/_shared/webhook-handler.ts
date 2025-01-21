@@ -1,246 +1,61 @@
-import { TelegramUpdate } from './telegram-types.ts';
-import { analyzeCaptionWithAI } from './caption-analyzer.ts';
-import { handleMessageProcessing } from './message-manager.ts';
-import { processMedia } from './media-handler.ts';
-import { cleanupFailedRecords } from './cleanup-manager.ts';
-import { handleProcessingError } from './error-handler.ts';
+import { processMessageBatch } from './message-processor.ts';
+import { processMediaFiles } from './media-processor.ts';
 import { delay } from './retry-utils.ts';
 
-export async function handleWebhookUpdate(
-  update: TelegramUpdate,
-  supabase: any,
-  botToken: string
-) {
+export async function handleWebhookUpdate(update: any, supabase: any, botToken: string) {
   const message = update.message || update.channel_post;
   if (!message) {
     console.log('No message in update');
     return { message: 'No message in update' };
   }
 
-  const hasMedia = message.photo || message.video || message.document || message.animation;
-  if (!hasMedia) {
-    console.log('Not a media message, skipping');
-    return { message: 'Not a media message, skipping' };
-  }
-
-  console.log('Processing message:', {
-    message_id: message.message_id,
-    chat_id: message.chat.id,
-    media_type: message.photo ? 'photo' : 
-                message.video ? 'video' : 
-                message.document ? 'document' : 
-                message.animation ? 'animation' : 'unknown',
-    media_group_id: message.media_group_id
-  });
-
-  let messageRecord = null;
-  let productInfo = null;
-  let mediaResult = null;
-
   try {
-    // Step 1: Initial delay to ensure database is ready
-    await delay(500);
-
-    // Step 2: Analyze caption if present
-    if (message.caption) {
-      try {
-        console.log('Starting caption analysis...');
-        productInfo = await analyzeCaptionWithAI(
-          message.caption,
-          Deno.env.get('SUPABASE_URL') || '',
-          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
-        );
-        console.log('Caption analysis completed:', productInfo);
-        await delay(1000); // Delay after caption analysis
-      } catch (error) {
-        console.error('Caption analysis error:', error);
-      }
-    }
-
-    // Step 3: Create/update message record
-    try {
-      console.log('Creating/updating message record...');
-      const messageResult = await handleMessageProcessing(
-        supabase,
-        message,
-        null,
-        productInfo
-      );
-      
-      if (messageResult.success) {
-        messageRecord = messageResult.messageRecord;
-        console.log('Message record created/updated:', messageRecord?.id);
-        await delay(1500); // Longer delay after message creation
-      } else {
-        if (messageResult.error?.includes('duplicate')) {
-          console.log('Duplicate message detected, retrieving existing record...');
-          
-          const { data: existingMessage } = await supabase
-            .from('messages')
-            .select('*')
-            .eq('message_id', message.message_id)
-            .eq('chat_id', message.chat.id)
-            .maybeSingle();
-          
-          if (existingMessage) {
-            messageRecord = existingMessage;
-            console.log('Retrieved existing message record:', messageRecord.id);
-            await delay(1000); // Delay after retrieving existing message
-          } else {
-            console.log('Logging duplicate message in failed_webhook_updates...');
-            await supabase.from('failed_webhook_updates').insert({
-              message_id: message.message_id,
-              chat_id: message.chat.id,
-              error_message: 'Duplicate message upload detected',
-              message_data: message,
-              status: 'duplicate'
-            });
-            
-            return {
-              success: false,
-              error: 'Duplicate message detected',
-              messageId: null
-            };
-          }
-        } else {
-          console.error('Message processing error:', messageResult.error);
-          throw new Error(messageResult.error);
-        }
-      }
-    } catch (error) {
-      console.error('Error in message processing:', error);
-      throw error;
-    }
-
-    // Step 4: Process media with gathered data
-    if (messageRecord) {
-      try {
-        console.log('Starting media processing...');
-        await delay(2000); // Significant delay before media processing
-        
-        mediaResult = await processMedia(
-          supabase,
-          message,
-          messageRecord,
-          botToken,
-          productInfo,
-          0
-        );
-
-        console.log('Media processing completed:', mediaResult);
-        await delay(1500); // Delay after media processing
-
-        // Step 5: Handle media group synchronization
-        if (message.media_group_id) {
-          console.log('Handling media group synchronization...');
-          await delay(2000); // Longer delay before group sync
-          
-          const { error: groupUpdateError } = await supabase
-            .from('telegram_media')
-            .update({
-              message_id: messageRecord.id,
-              caption: message.caption || null,
-              ...(productInfo && {
-                product_name: productInfo.product_name,
-                product_code: productInfo.product_code,
-                quantity: productInfo.quantity,
-                vendor_uid: productInfo.vendor_uid,
-                purchase_date: productInfo.purchase_date,
-                notes: productInfo.notes,
-                analyzed_content: productInfo
-              })
-            })
-            .eq('telegram_data->media_group_id', message.media_group_id);
-
-          if (groupUpdateError) {
-            console.error('Error updating media group:', groupUpdateError);
-          } else {
-            console.log('Media group sync completed');
-            await delay(1000); // Delay after group sync
-          }
-        }
-
-        // Step 6: Final message status update
-        console.log('Updating final message status...');
-        await delay(1000); // Delay before final status update
-        
-        const { error: messageUpdateError } = await supabase
-          .from('messages')
-          .update({
-            status: 'success',
-            processed_at: new Date().toISOString(),
-            ...(productInfo && {
-              product_name: productInfo.product_name,
-              product_code: productInfo.product_code,
-              quantity: productInfo.quantity,
-              vendor_uid: productInfo.vendor_uid,
-              purchase_date: productInfo.purchase_date,
-              notes: productInfo.notes,
-              analyzed_content: productInfo
-            })
-          })
-          .eq('id', messageRecord.id);
-
-        if (messageUpdateError) {
-          console.error('Error updating message status:', messageUpdateError);
-        } else {
-          console.log('Message status updated successfully');
-        }
-      } catch (error) {
-        console.error('Error processing media:', error);
-        throw error;
-      }
-    }
-
-    // Step 7: Clean up old failed records
-    try {
-      await cleanupFailedRecords(supabase);
-    } catch (error) {
-      console.error('Error cleaning up failed records:', error);
-    }
-
-    console.log('Successfully processed update:', {
+    console.log('Processing webhook update:', {
       update_id: update.update_id,
       message_id: message.message_id,
       chat_id: message.chat.id,
-      media_result: mediaResult?.id,
-      message_record: messageRecord?.id,
       media_group_id: message.media_group_id
     });
 
-    return { 
+    // Step 1: Process message first
+    await processMessageBatch([message], supabase);
+    await delay(1000);
+
+    // Step 2: Get the created message record
+    const { data: messageRecord } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('message_id', message.message_id)
+      .eq('chat_id', message.chat.id)
+      .single();
+
+    if (!messageRecord) {
+      throw new Error('Failed to create message record');
+    }
+
+    // Step 3: Process media files if present
+    const hasMedia = message.photo || message.video || message.document || message.animation;
+    if (hasMedia) {
+      await processMediaFiles(message, messageRecord, supabase, botToken);
+    }
+
+    // Step 4: Update message status
+    await supabase
+      .from('messages')
+      .update({
+        status: 'success',
+        processed_at: new Date().toISOString()
+      })
+      .eq('id', messageRecord.id);
+
+    return {
       success: true,
-      message: 'Processing completed',
-      messageId: messageRecord?.id,
-      mediaResult,
-      productInfo
+      message: 'Update processed successfully',
+      messageId: messageRecord.id
     };
 
   } catch (error) {
-    console.error('Error in handleWebhookUpdate:', {
-      error: error.message,
-      stack: error.stack,
-      update_id: update.update_id,
-      message_id: message?.message_id,
-      chat_id: message?.chat?.id
-    });
-
-    if (messageRecord) {
-      await handleProcessingError(
-        supabase,
-        error,
-        messageRecord,
-        0,
-        false
-      );
-    }
-
-    return {
-      success: false,
-      error: error.message,
-      partial_success: !!mediaResult,
-      mediaResult,
-      messageId: messageRecord?.id
-    };
+    console.error('Error in webhook handler:', error);
+    throw error;
   }
 }
