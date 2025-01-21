@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import { Table } from 'https://esm.sh/@glideapps/tables@1.0.5';
+import { mapGlideToSupabase, mapSupabaseToGlide } from './productMapper.ts';
+import type { GlideConfig, SyncResult } from './types.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,12 +14,7 @@ const corsHeaders = {
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { 
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'application/json'
-      }
-    });
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
@@ -60,7 +57,7 @@ serve(async (req) => {
     // Initialize Glide table with the configuration
     const table = new Table(glideConfig.api_token, glideConfig.table_id);
 
-    let result;
+    let result: SyncResult;
     switch (operation) {
       case 'syncBidirectional': {
         console.log('Starting bidirectional sync');
@@ -95,62 +92,14 @@ serve(async (req) => {
         // Sync Supabase -> Glide
         for (const [id, supabaseRow] of supabaseMap) {
           try {
+            const mappedRow = mapSupabaseToGlide(supabaseRow);
             if (!glideMap.has(id)) {
-              // New row in Supabase
-              await table.addRow({
-                id,
-                file_id: supabaseRow.file_id,
-                file_unique_id: supabaseRow.file_unique_id,
-                file_type: supabaseRow.file_type,
-                public_url: supabaseRow.public_url,
-                caption: supabaseRow.caption,
-                product_name: supabaseRow.product_name,
-                product_code: supabaseRow.product_code,
-                quantity: supabaseRow.quantity,
-                vendor_uid: supabaseRow.vendor_uid,
-                purchase_date: supabaseRow.purchase_date,
-                notes: supabaseRow.notes,
-                telegram_data: JSON.stringify(supabaseRow.telegram_data),
-                glide_data: JSON.stringify(supabaseRow.glide_data),
-                media_metadata: JSON.stringify(supabaseRow.media_metadata),
-                processed: supabaseRow.processed,
-                processing_error: supabaseRow.processing_error,
-                last_synced_at: supabaseRow.last_synced_at,
-                created_at: supabaseRow.created_at,
-                updated_at: supabaseRow.updated_at,
-                message_id: supabaseRow.message_id,
-                analyzed_content: JSON.stringify(supabaseRow.analyzed_content),
-                purchase_order_uid: supabaseRow.purchase_order_uid,
-                default_public_url: supabaseRow.default_public_url
-              });
+              await table.addRow(mappedRow);
               syncResult.added++;
             } else {
-              // Update existing row
               const glideRow = glideMap.get(id)!;
-              if (new Date(supabaseRow.updated_at) > new Date(glideRow.updated_at)) {
-                await table.updateRow(glideRow.id, {
-                  file_id: supabaseRow.file_id,
-                  file_unique_id: supabaseRow.file_unique_id,
-                  file_type: supabaseRow.file_type,
-                  public_url: supabaseRow.public_url,
-                  caption: supabaseRow.caption,
-                  product_name: supabaseRow.product_name,
-                  product_code: supabaseRow.product_code,
-                  quantity: supabaseRow.quantity,
-                  vendor_uid: supabaseRow.vendor_uid,
-                  purchase_date: supabaseRow.purchase_date,
-                  notes: supabaseRow.notes,
-                  telegram_data: JSON.stringify(supabaseRow.telegram_data),
-                  glide_data: JSON.stringify(supabaseRow.glide_data),
-                  media_metadata: JSON.stringify(supabaseRow.media_metadata),
-                  processed: supabaseRow.processed,
-                  processing_error: supabaseRow.processing_error,
-                  last_synced_at: supabaseRow.last_synced_at,
-                  updated_at: supabaseRow.updated_at,
-                  analyzed_content: JSON.stringify(supabaseRow.analyzed_content),
-                  purchase_order_uid: supabaseRow.purchase_order_uid,
-                  default_public_url: supabaseRow.default_public_url
-                });
+              if (new Date(supabaseRow.updated_at) > new Date(glideRow.updatedAt)) {
+                await table.updateRow(id, mappedRow);
                 syncResult.updated++;
               }
             }
@@ -160,30 +109,19 @@ serve(async (req) => {
           }
         }
 
-        // Sync Glide -> Supabase (only update existing records)
+        // Sync Glide -> Supabase
         for (const [id, glideRow] of glideMap) {
           try {
             const supabaseRow = supabaseMap.get(id);
             if (supabaseRow) {
-              const glideUpdatedAt = new Date(glideRow.updated_at);
+              const glideUpdatedAt = new Date(glideRow.updatedAt);
               const supabaseUpdatedAt = new Date(supabaseRow.updated_at);
 
               if (glideUpdatedAt > supabaseUpdatedAt) {
+                const mappedRow = mapGlideToSupabase(glideRow);
                 const { error: updateError } = await supabase
                   .from(glideConfig.supabase_table_name)
-                  .update({
-                    caption: glideRow.caption,
-                    product_name: glideRow.product_name,
-                    product_code: glideRow.product_code,
-                    quantity: glideRow.quantity,
-                    vendor_uid: glideRow.vendor_uid,
-                    purchase_date: glideRow.purchase_date,
-                    notes: glideRow.notes,
-                    updated_at: glideRow.updated_at,
-                    analyzed_content: JSON.parse(glideRow.analyzed_content || '{}'),
-                    purchase_order_uid: glideRow.purchase_order_uid,
-                    default_public_url: glideRow.default_public_url
-                  })
+                  .update(mappedRow)
                   .eq('id', id);
 
                 if (updateError) throw updateError;
@@ -221,7 +159,8 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message
+        error: error.message,
+        stack: error.stack
       }),
       { 
         status: 500,

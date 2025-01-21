@@ -65,5 +65,5 @@ export interface SyncResult {
   added: number;
   updated: number;
   deleted: number;
-  errors?: Error[];
+  errors?: string[];
 }
