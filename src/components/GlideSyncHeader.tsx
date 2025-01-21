@@ -26,6 +26,7 @@ interface GlideSyncHeaderProps {
 
 export function GlideSyncHeader({ configs, isLoading }: GlideSyncHeaderProps) {
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isCheckingMissing, setIsCheckingMissing] = useState(false);
   const [selectedTableId, setSelectedTableId] = useState<string>("");
   const { toast } = useToast();
 
@@ -72,6 +73,29 @@ export function GlideSyncHeader({ configs, isLoading }: GlideSyncHeaderProps) {
     }
   };
 
+  const handleCheckMissing = async () => {
+    setIsCheckingMissing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-missing-rows-to-glide');
+
+      if (error) throw error;
+
+      toast({
+        title: "Check Completed",
+        description: data.message,
+      });
+    } catch (error) {
+      console.error('Check missing rows error:', error);
+      toast({
+        title: "Check Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsCheckingMissing(false);
+    }
+  };
+
   const activeConfigs = configs?.filter(config => config.active) || [];
 
   return (
@@ -107,6 +131,21 @@ export function GlideSyncHeader({ configs, isLoading }: GlideSyncHeaderProps) {
             </>
           ) : (
             'Sync with Glide'
+          )}
+        </Button>
+        <Button
+          onClick={handleCheckMissing}
+          className="flex items-center gap-2"
+          disabled={isCheckingMissing}
+          variant="outline"
+        >
+          {isCheckingMissing ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Checking...
+            </>
+          ) : (
+            'Check Missing Records'
           )}
         </Button>
       </div>
