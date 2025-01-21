@@ -57,10 +57,9 @@ export async function createMessage(supabase: any, message: any, productInfo: an
       .from('messages')
       .upsert(messageData, {
         onConflict: 'message_id,chat_id',
-        returning: 'representation'
+        returning: true
       })
-      .select()
-      .single();
+      .maybeSingle();
 
     if (upsertError) {
       console.error('[Message] Upsert error:', upsertError);
