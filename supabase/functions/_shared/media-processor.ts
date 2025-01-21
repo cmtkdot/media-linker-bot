@@ -1,4 +1,4 @@
-import { generateSafeFileName } from './telegram-service.ts';
+import { generateSafeFileName, getAndDownloadTelegramFile } from './telegram-service.ts';
 import { delay } from './retry-utils.ts';
 import { syncMediaGroupCaptions } from './caption-sync.ts';
 
