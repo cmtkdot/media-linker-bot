@@ -35,15 +35,20 @@ export async function handleWebhookUpdate(
     // First, analyze caption if present
     let productInfo = null;
     if (message.caption) {
-      productInfo = await analyzeCaptionWithAI(
-        message.caption,
-        Deno.env.get('SUPABASE_URL') || '',
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
-      );
-      console.log('Caption analysis result:', productInfo);
+      try {
+        productInfo = await analyzeCaptionWithAI(
+          message.caption,
+          Deno.env.get('SUPABASE_URL') || '',
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+        );
+        console.log('Caption analysis result:', productInfo);
+      } catch (error) {
+        console.error('Error analyzing caption:', error);
+        // Continue processing even if caption analysis fails
+      }
     }
 
-    // Start a transaction for message and media processing
+    // Check for existing message
     const { data: existingMessage, error: fetchError } = await supabase
       .from('messages')
       .select('*')
@@ -57,23 +62,10 @@ export async function handleWebhookUpdate(
         message_id: message.message_id,
         chat_id: message.chat.id
       });
-      
-      await supabase.from('failed_webhook_updates').insert({
-        message_id: message.message_id,
-        chat_id: message.chat.id,
-        error_message: fetchError.message,
-        error_stack: fetchError.stack,
-        message_data: message,
-        status: 'failed'
-      });
-      
-      return { 
-        error: 'Failed to check for existing message',
-        details: fetchError.message
-      };
+      throw fetchError;
     }
 
-    // Process message and media within transaction
+    // Process message and get updated record
     const { messageRecord, retryCount } = await handleMessageProcessing(
       supabase,
       message,
@@ -81,10 +73,8 @@ export async function handleWebhookUpdate(
       productInfo
     );
 
-    // Clean up old failed records
-    await cleanupFailedRecords(supabase);
-
-    return await processMedia(
+    // Process media within transaction
+    const result = await processMedia(
       supabase,
       message,
       messageRecord,
@@ -93,6 +83,38 @@ export async function handleWebhookUpdate(
       retryCount
     );
 
+    // Update message status on success
+    const { error: statusError } = await supabase
+      .from('messages')
+      .update({
+        status: 'success',
+        processed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        analyzed_content: productInfo
+      })
+      .eq('id', messageRecord.id);
+
+    if (statusError) {
+      console.error('Error updating message status:', statusError);
+      throw statusError;
+    }
+
+    // Clean up old failed records
+    await cleanupFailedRecords(supabase);
+
+    console.log('Successfully processed update:', {
+      update_id: update.update_id,
+      message_id: message.message_id,
+      chat_id: message.chat.id,
+      result
+    });
+
+    return { 
+      message: 'Media processed successfully', 
+      messageId: messageRecord.id, 
+      ...result 
+    };
+
   } catch (error) {
     console.error('Error in handleWebhookUpdate:', {
       error: error.message,
@@ -100,16 +122,28 @@ export async function handleWebhookUpdate(
       message_id: message?.message_id,
       chat_id: message?.chat?.id
     });
-    
-    await supabase.from('failed_webhook_updates').insert({
-      message_id: message?.message_id,
-      chat_id: message?.chat?.id,
-      error_message: error.message,
-      error_stack: error.stack,
-      message_data: message,
-      status: 'failed'
-    });
-    
+
+    // Log to failed_webhook_updates table
+    try {
+      const { error: logError } = await supabase
+        .from('failed_webhook_updates')
+        .insert({
+          message_id: message?.message_id,
+          chat_id: message?.chat?.id,
+          error_message: error.message,
+          error_stack: error.stack,
+          message_data: message,
+          status: 'failed',
+          retry_count: error.retryCount || 0
+        });
+
+      if (logError) {
+        console.error('Error logging failed webhook:', logError);
+      }
+    } catch (logError) {
+      console.error('Error logging to failed_webhook_updates:', logError);
+    }
+
     throw error;
   }
 }

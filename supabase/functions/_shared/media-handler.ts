@@ -19,7 +19,7 @@ export async function processMedia(
       for (const type of mediaTypes) {
         if (message[type]) {
           mediaFile = type === 'photo' 
-            ? message[type]![message[type]!.length - 1] 
+            ? message[type][message[type].length - 1] 
             : message[type];
           mediaType = type;
           break;
@@ -36,7 +36,7 @@ export async function processMedia(
         retry_count: retryCount
       });
 
-      // Check for existing media within transaction
+      // Check for existing media
       const { data: existingMedia, error: mediaCheckError } = await supabase
         .from('telegram_media')
         .select('*')
@@ -65,6 +65,7 @@ export async function processMedia(
             vendor_uid: productInfo?.vendor_uid,
             purchase_date: productInfo?.purchase_date,
             notes: productInfo?.notes,
+            analyzed_content: productInfo,
             updated_at: new Date().toISOString()
           })
           .eq('id', existingMedia.id);
@@ -92,25 +93,6 @@ export async function processMedia(
         );
       }
 
-      // Update message status
-      const { error: statusError } = await supabase
-        .from('messages')
-        .update({
-          status: 'success',
-          processed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', messageRecord.id);
-
-      if (statusError) {
-        throw statusError;
-      }
-
-      console.log('Successfully processed message:', {
-        message_id: messageRecord.id,
-        media_type: mediaType
-      });
-
       return { 
         message: 'Media processed successfully', 
         messageId: messageRecord.id, 
@@ -120,6 +102,10 @@ export async function processMedia(
     } catch (error) {
       retryCount++;
       await handleProcessingError(supabase, error, messageRecord, retryCount);
+      
+      if (retryCount >= MAX_RETRY_ATTEMPTS) {
+        throw error;
+      }
     }
   }
 

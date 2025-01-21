@@ -10,12 +10,13 @@ export async function updateExistingMessage(supabase: any, message: any, message
     .from('messages')
     .update({
       caption: message.caption,
-      product_name: productInfo.product_name,
-      product_code: productInfo.product_code,
-      quantity: productInfo.quantity,
-      vendor_uid: productInfo.vendor_uid,
-      purchase_date: productInfo.purchase_date,
-      notes: productInfo.notes,
+      product_name: productInfo?.product_name,
+      product_code: productInfo?.product_code,
+      quantity: productInfo?.quantity,
+      vendor_uid: productInfo?.vendor_uid,
+      purchase_date: productInfo?.purchase_date,
+      notes: productInfo?.notes,
+      analyzed_content: productInfo,
       updated_at: new Date().toISOString()
     })
     .eq('id', messageId);
@@ -32,12 +33,13 @@ export async function updateMediaGroup(supabase: any, message: any, productInfo:
     .from('telegram_media')
     .update({
       caption: message.caption,
-      product_name: productInfo.product_name,
-      product_code: productInfo.product_code,
-      quantity: productInfo.quantity,
-      vendor_uid: productInfo.vendor_uid,
-      purchase_date: productInfo.purchase_date,
-      notes: productInfo.notes,
+      product_name: productInfo?.product_name,
+      product_code: productInfo?.product_code,
+      quantity: productInfo?.quantity,
+      vendor_uid: productInfo?.vendor_uid,
+      purchase_date: productInfo?.purchase_date,
+      notes: productInfo?.notes,
+      analyzed_content: productInfo,
       updated_at: new Date().toISOString()
     })
     .eq('telegram_data->media_group_id', message.media_group_id);
@@ -59,8 +61,10 @@ export async function handleMessageProcessing(
   if (existingMessage && productInfo) {
     try {
       await updateExistingMessage(supabase, message, existingMessage.id, productInfo);
+      messageRecord = existingMessage;
     } catch (error) {
       console.error('Error updating existing message:', error);
+      throw error;
     }
   } else if (!existingMessage) {
     try {
