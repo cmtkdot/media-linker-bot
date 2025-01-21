@@ -11,11 +11,10 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Pencil, Plus, Save, Trash2, X } from "lucide-react";
+import { Loader2, Pencil, Plus, Save, Sync, Trash2, X } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import type { Database } from "@/integrations/supabase/types";
 
-// Only include actual tables, not views
 type ValidTableName = "messages" | "failed_webhook_updates" | "glide_config" | "glide_sync_queue" | "telegram_media";
 
 interface GlideConfig {
@@ -33,6 +32,7 @@ export function GlideDataGrid({ configs }: GlideDataGridProps) {
   const [selectedConfig, setSelectedConfig] = useState<string>("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editData, setEditData] = useState<any>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -131,6 +131,52 @@ export function GlideDataGrid({ configs }: GlideDataGridProps) {
       supabase.removeChannel(channel);
     };
   }, [selectedConfig, queryClient]);
+
+  const handleSync = async () => {
+    if (!selectedConfig) {
+      toast({
+        title: "No table selected",
+        description: "Please select a table to sync",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-glide-media-table', {
+        body: { operation: 'syncBidirectional', tableId: selectedConfig }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Sync Completed",
+        description: `Added: ${data.added}, Updated: ${data.updated}, Deleted: ${data.deleted}`,
+      });
+
+      if (data.errors?.length > 0) {
+        console.error('Sync errors:', data.errors);
+        toast({
+          title: "Sync Completed with Errors",
+          description: "Check console for details",
+          variant: "destructive",
+        });
+      }
+
+      // Refresh the table data after sync
+      queryClient.invalidateQueries({ queryKey: ['table-data', selectedConfig] });
+    } catch (error) {
+      console.error('Sync error:', error);
+      toast({
+        title: "Sync Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const handleEdit = (row: any) => {
     setEditingId(row.id);
@@ -244,10 +290,29 @@ export function GlideDataGrid({ configs }: GlideDataGridProps) {
           ))}
         </select>
         {selectedConfig && (
-          <Button onClick={handleAdd}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Record
-          </Button>
+          <>
+            <Button onClick={handleAdd}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Record
+            </Button>
+            <Button 
+              onClick={handleSync}
+              disabled={isSyncing}
+              className="flex items-center gap-2"
+            >
+              {isSyncing ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Syncing...
+                </>
+              ) : (
+                <>
+                  <Sync className="w-4 h-4 mr-2" />
+                  Sync with Glide
+                </>
+              )}
+            </Button>
+          </>
         )}
       </div>
 
