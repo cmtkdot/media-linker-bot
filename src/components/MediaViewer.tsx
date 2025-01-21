@@ -22,6 +22,13 @@ interface MediaViewerProps {
     quantity?: number;
     vendor_uid?: string;
     purchase_date?: string;
+    notes?: string;
+    telegram_data?: {
+      chat?: {
+        type?: string;
+        title?: string;
+      };
+    };
   } | null;
 }
 
@@ -29,6 +36,8 @@ const MediaViewer = ({ open, onOpenChange, media }: MediaViewerProps) => {
   if (!media) return null;
 
   const mediaUrl = media.public_url || media.default_public_url;
+  const telegramType = media.telegram_data?.chat?.type;
+  const telegramTitle = media.telegram_data?.chat?.title;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -79,6 +88,18 @@ const MediaViewer = ({ open, onOpenChange, media }: MediaViewerProps) => {
               <p className="text-muted-foreground">{media.caption}</p>
             )}
             <div className="grid gap-3">
+              {telegramType && (
+                <div>
+                  <span className="font-medium">Type: </span>
+                  {telegramType.charAt(0).toUpperCase() + telegramType.slice(1)}
+                </div>
+              )}
+              {telegramTitle && (
+                <div>
+                  <span className="font-medium">Title: </span>
+                  {telegramTitle}
+                </div>
+              )}
               {media.product_name && (
                 <div>
                   <span className="font-medium">Product: </span>
@@ -113,6 +134,12 @@ const MediaViewer = ({ open, onOpenChange, media }: MediaViewerProps) => {
                 <div>
                   <span className="font-medium">Purchase Date: </span>
                   {new Date(media.purchase_date).toLocaleDateString()}
+                </div>
+              )}
+              {media.notes && (
+                <div>
+                  <span className="font-medium">Notes: </span>
+                  {media.notes}
                 </div>
               )}
             </div>
