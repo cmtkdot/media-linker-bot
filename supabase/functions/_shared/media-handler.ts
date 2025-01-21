@@ -11,6 +11,13 @@ export async function processMedia(
   retryCount: number,
   existingMedia: any = null
 ) {
+  console.log('Starting media processing:', {
+    message_id: message?.message_id,
+    chat_id: message?.chat?.id,
+    retry_count: retryCount,
+    has_existing_media: !!existingMedia
+  });
+
   while (retryCount < MAX_RETRY_ATTEMPTS) {
     try {
       const mediaTypes = ['photo', 'video', 'document', 'animation'] as const;
@@ -31,85 +38,52 @@ export async function processMedia(
         throw new Error('No media file found in message');
       }
 
-      console.log('Processing media file:', {
+      // Process the media file
+      const result = await processMediaFile(
+        supabase,
+        mediaFile,
+        mediaType,
+        message,
+        messageRecord,
+        botToken,
+        productInfo
+      );
+
+      console.log('Media processing completed successfully:', {
         file_id: mediaFile.file_id,
-        type: mediaType,
-        retry_count: retryCount,
-        existing: !!existingMedia,
-        message_record: messageRecord?.id || 'none'
+        media_type: mediaType,
+        result_id: result?.id
       });
 
-      let result;
-      if (existingMedia) {
-        console.log('Checking existing media:', {
-          media_id: existingMedia.id,
-          file_unique_id: mediaFile.file_unique_id
-        });
-        
-        // Always process media if it hasn't been processed successfully
-        const needsProcessing = !existingMedia.processed || 
-                              !existingMedia.public_url || 
-                              existingMedia.processing_error ||
-                              (productInfo && (
-                                productInfo.product_name !== existingMedia.product_name ||
-                                productInfo.product_code !== existingMedia.product_code ||
-                                productInfo.quantity !== existingMedia.quantity ||
-                                productInfo.vendor_uid !== existingMedia.vendor_uid ||
-                                productInfo.purchase_date !== existingMedia.purchase_date
-                              ));
-
-        if (needsProcessing) {
-          result = await processMediaFile(
-            supabase,
-            mediaFile,
-            mediaType,
-            message,
-            messageRecord,
-            botToken,
-            productInfo
-          );
-        } else {
-          result = existingMedia;
-        }
-      } else {
-        console.log('Processing new media file:', {
-          file_id: mediaFile.file_id,
-          type: mediaType
-        });
-        
-        result = await processMediaFile(
-          supabase,
-          mediaFile,
-          mediaType,
-          message,
-          messageRecord,
-          botToken,
-          productInfo
-        );
-      }
-
-      return { 
-        message: 'Media processed successfully', 
-        messageId: messageRecord?.id || 'none',
-        ...result 
-      };
+      return result;
 
     } catch (error) {
+      console.error('Error in processMedia:', {
+        error: error.message,
+        retry_count: retryCount,
+        message_id: messageRecord?.id
+      });
+
       retryCount++;
       
-      // Only handle processing error if we have a message record
       if (messageRecord) {
-        await handleProcessingError(supabase, error, messageRecord, retryCount);
-      } else {
-        console.error('Processing error without message record:', {
-          error: error.message,
-          retry_count: retryCount
-        });
-      }
-      
-      if (retryCount >= MAX_RETRY_ATTEMPTS) {
+        const errorResult = await handleProcessingError(
+          supabase, 
+          error, 
+          messageRecord, 
+          retryCount,
+          retryCount >= MAX_RETRY_ATTEMPTS
+        );
+
+        if (!errorResult.shouldContinue) {
+          throw error;
+        }
+      } else if (retryCount >= MAX_RETRY_ATTEMPTS) {
         throw error;
       }
+
+      // Add delay before retry
+      await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
     }
   }
 
