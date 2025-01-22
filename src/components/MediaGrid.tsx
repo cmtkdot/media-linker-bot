@@ -11,17 +11,26 @@ import { MediaItem } from "@/types/media";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Loader2, AlertCircle } from "lucide-react";
 
-interface ChannelData {
-  telegram_data: {
-    chat: {
-      title: string;
-    };
+interface TelegramData {
+  chat: {
+    id?: number;
+    type?: string;
+    title?: string;
   };
+  message_id?: number;
+  chat_id?: number;
+  storage_path?: string;
+  media_group_id?: string;
+  date?: number;
 }
 
 interface FilterOptions {
   channels: string[];
   vendors: string[];
+}
+
+interface TelegramMediaResponse {
+  telegram_data: TelegramData;
 }
 
 const MediaGrid = () => {
@@ -40,7 +49,7 @@ const MediaGrid = () => {
       const [channelsResult, vendorsResult] = await Promise.all([
         supabase
           .from('telegram_media')
-          .select('telegram_data->chat->title')
+          .select('telegram_data')
           .not('telegram_data->chat->title', 'is', null),
         supabase
           .from('telegram_media')
@@ -48,8 +57,12 @@ const MediaGrid = () => {
           .not('vendor_uid', 'is', null)
       ]);
 
-      const channels = [...new Set((channelsResult.data || []).map(item => 
-        (item as unknown as ChannelData).telegram_data.chat.title).filter(Boolean))];
+      const channels = [...new Set((channelsResult.data || [])
+        .map(item => {
+          const response = item as unknown as TelegramMediaResponse;
+          return response.telegram_data.chat?.title;
+        })
+        .filter(Boolean))];
       
       const vendors = [...new Set(vendorsResult.data?.map(item => 
         item.vendor_uid).filter(Boolean) || [])];
@@ -161,23 +174,19 @@ const MediaGrid = () => {
 
   if (isLoading) {
     return (
-      <Alert 
-        variant="default" 
-        className="flex items-center justify-center h-[50vh]"
-        icon={<Loader2 className="h-4 w-4 animate-spin" />}
-      >
-        <AlertDescription>Loading media...</AlertDescription>
-      </Alert>
+      <div className="flex items-center justify-center h-[50vh]">
+        <div className="flex items-center gap-2">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span>Loading media...</span>
+        </div>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <Alert 
-        variant="error"
-        className="m-4"
-        icon={<AlertCircle className="h-4 w-4" />}
-      >
+      <Alert variant="destructive" className="m-4">
+        <AlertCircle className="h-4 w-4" />
         <AlertTitle>Error loading media</AlertTitle>
         <AlertDescription>{error.message}</AlertDescription>
       </Alert>
@@ -186,10 +195,7 @@ const MediaGrid = () => {
 
   if (!mediaItems?.length) {
     return (
-      <Alert 
-        variant="info"
-        className="m-4"
-      >
+      <Alert variant="default" className="m-4">
         <AlertDescription>No media items found</AlertDescription>
       </Alert>
     );

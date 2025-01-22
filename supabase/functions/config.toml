@@ -1,4 +1,16 @@
 project_id = "kzfamethztziwqiocbwz"
 
+[functions.create-ayd-session]
+verify_jwt = false
+
+[functions.telegram-webhook]
+verify_jwt = false
+
+[functions.analyze-caption]
+verify_jwt = false
+
+[functions.set-webhook]
+verify_jwt = false
+
 [functions.sync-glide-media-table]
 verify_jwt = false
