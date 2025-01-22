@@ -144,38 +144,38 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
         )}
       </div>
 
-      <div className="p-3 bg-card">
-        <p className="font-medium text-foreground truncate">
+      {/* Static content - always visible */}
+      <div className="p-4 bg-card">
+        <h3 className="font-semibold text-lg text-foreground truncate mb-2">
           {item.product_name || 'Untitled Product'}
-        </p>
-        <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
+        </h3>
+        <p className="text-sm text-muted-foreground line-clamp-2">
           {item.caption || 'No caption'}
         </p>
       </div>
 
+      {/* Hover content - only visible on hover */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-        <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
-          <div className="flex justify-between items-center">
-            <div>
-              <p className="text-sm font-medium">
-                {item.telegram_data?.chat?.title || 'Unknown Channel'}
-              </p>
-              <p className="text-xs opacity-80">
-                {item.purchase_date ? new Date(item.purchase_date).toLocaleDateString() : '-'}
-              </p>
-            </div>
-            <Button
-              variant="outline"
-              size="icon"
-              className="bg-white/90 hover:bg-white shrink-0"
-              onClick={(e) => {
-                e.stopPropagation();
-                onEdit(item);
-              }}
-            >
-              <Pencil className="h-4 w-4 text-black" />
-            </Button>
-          </div>
+        <div className="absolute top-4 right-4">
+          <Button
+            variant="outline"
+            size="icon"
+            className="bg-white/90 hover:bg-white shrink-0"
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit(item);
+            }}
+          >
+            <Pencil className="h-4 w-4 text-black" />
+          </Button>
+        </div>
+        <div className="absolute bottom-4 left-4 text-white">
+          <p className="text-sm font-medium">
+            {item.telegram_data?.chat?.title || 'Unknown Channel'}
+          </p>
+          <p className="text-xs opacity-80">
+            {item.purchase_date ? new Date(item.purchase_date).toLocaleDateString() : '-'}
+          </p>
         </div>
       </div>
     </Card>
