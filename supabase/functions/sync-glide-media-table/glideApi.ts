@@ -1,5 +1,5 @@
-import type { GlideMutation, GlideApiRequest } from '../_shared/types.ts';
-import { SupabaseClient } from '@supabase/supabase-js';
+import { GlideMutation, GlideApiRequest } from '../_shared/types.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 
 class GlideApiError extends Error {
   constructor(
@@ -13,12 +13,17 @@ class GlideApiError extends Error {
 }
 
 export class GlideAPI {
+  private supabase;
+
   constructor(
     private appId: string,
     private tableId: string,
-    private apiToken: string,
-    private supabase: SupabaseClient
-  ) {}
+    private apiToken: string
+  ) {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    this.supabase = createClient(supabaseUrl, supabaseKey);
+  }
 
   private async makeRequest(method: string, mutation: GlideMutation) {
     console.log('Making Glide API request:', { method, mutation });
@@ -86,7 +91,7 @@ export class GlideAPI {
     return data;
   }
 
-  async addRow(data: GlideMutation['columnValues'], recordId: string) {
+  async addRow(data: Record<string, any>, recordId: string) {
     const response = await this.makeRequest('POST', {
       kind: 'add-row-to-table',
       tableName: this.tableId,
@@ -121,7 +126,7 @@ export class GlideAPI {
     return response;
   }
 
-  async updateRow(rowId: string, data: GlideMutation['columnValues']) {
+  async updateRow(rowId: string, data: Record<string, any>) {
     if (!rowId) {
       throw new GlideApiError('rowId is required for update operation');
     }
