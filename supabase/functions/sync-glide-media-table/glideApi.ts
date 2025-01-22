@@ -1,4 +1,4 @@
-import type { GlideMutation, GlideApiRequest } from '../_shared/types.ts';
+import type { GlideMutation, GlideApiRequest, GlideApiResponse } from '../_shared/types.ts';
 import { SupabaseClient } from '@supabase/supabase-js';
 
 class GlideApiError extends Error {
@@ -86,6 +86,19 @@ export class GlideAPI {
     return data;
   }
 
+  private extractRowId(response: GlideApiResponse): string {
+    // Check both possible response formats
+    const rowId = response.rowID || response.Row_ID || response.Row_Id || response.row_id;
+    if (!rowId) {
+      throw new GlideApiError(
+        'Glide API did not return a rowID',
+        undefined,
+        JSON.stringify(response)
+      );
+    }
+    return rowId;
+  }
+
   async addRow(data: GlideMutation['columnValues'], recordId: string) {
     const response = await this.makeRequest('POST', {
       kind: 'add-row-to-table',
@@ -93,20 +106,13 @@ export class GlideAPI {
       columnValues: data
     });
 
-    // Validate response
-    if (!response || !response.rowID) {
-      throw new GlideApiError(
-        'Glide API did not return a rowID',
-        undefined,
-        JSON.stringify(response)
-      );
-    }
+    const rowId = this.extractRowId(response);
 
     // Update telegram_media_row_id in Supabase
     try {
       const { error } = await this.supabase
         .from('telegram_media')
-        .update({ telegram_media_row_id: response.rowID })
+        .update({ telegram_media_row_id: rowId })
         .eq('id', recordId);
 
       if (error) {

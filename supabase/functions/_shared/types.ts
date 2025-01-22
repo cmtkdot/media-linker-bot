@@ -158,3 +158,11 @@ export const GlideTableSchema: GlideTableSchemaType = {
   default_public_url: { name: 'rCJK2', type: 'string' },
   media_json: { name: 'NL5gM', type: 'json' }
 };
+
+export interface GlideApiResponse {
+  rowID?: string;
+  Row_ID?: string;
+  Row_Id?: string;
+  row_id?: string;
+  [key: string]: unknown;
+}

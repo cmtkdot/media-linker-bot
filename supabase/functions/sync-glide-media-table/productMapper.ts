@@ -29,9 +29,8 @@ export function mapSupabaseToGlide(supabaseRow: TelegramMedia): Record<string, a
   mappedData[schema.analyzed_content.name] = JSON.stringify(supabaseRow.analyzed_content);
   mappedData[schema.purchase_order_uid.name] = supabaseRow.purchase_order_uid;
   mappedData[schema.default_public_url.name] = supabaseRow.default_public_url;
-  mappedData[schema.telegram_media_row_id.name] = supabaseRow.telegram_media_row_id;
   
-  // Create media_json from the new_data in glide sync queue
+  // Create media_json from the data
   mappedData[schema.media_json.name] = JSON.stringify({
     telegram_data: supabaseRow.telegram_data,
     media_metadata: supabaseRow.media_metadata,
@@ -70,6 +69,6 @@ export function mapGlideToSupabase(glideData: Record<string, any>, rowID?: strin
     analyzed_content: JSON.parse(glideData[schema.analyzed_content.name] || '{}'),
     purchase_order_uid: glideData[schema.purchase_order_uid.name],
     default_public_url: glideData[schema.default_public_url.name],
-    telegram_media_row_id: rowID || glideData[schema.telegram_media_row_id.name]
+    telegram_media_row_id: rowID
   };
 }
