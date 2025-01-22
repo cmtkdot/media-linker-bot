@@ -9,6 +9,14 @@ import MediaSearchBar from "./MediaSearchBar";
 import MediaEditDialog from "./MediaEditDialog";
 import { MediaItem } from "@/types/media";
 
+interface ChannelData {
+  telegram_data: {
+    chat: {
+      title: string;
+    };
+  };
+}
+
 interface FilterOptions {
   channels: string[];
   vendors: string[];
@@ -39,8 +47,8 @@ const MediaGrid = () => {
           .not('vendor_uid', 'is', null)
       ]);
 
-      const channels = [...new Set(channelsResult.data?.map(item => 
-        item.telegram_data?.chat?.title as string).filter(Boolean) || [])];
+      const channels = [...new Set((channelsResult.data as ChannelData[])?.map(item => 
+        item.telegram_data.chat.title).filter(Boolean) || [])];
       
       const vendors = [...new Set(vendorsResult.data?.map(item => 
         item.vendor_uid).filter(Boolean) || [])];
@@ -49,7 +57,6 @@ const MediaGrid = () => {
     }
   });
 
-  // Query to fetch media items with filters
   const { data: mediaItems, isLoading, error, refetch } = useQuery({
     queryKey: ['telegram-media', search, selectedChannel, selectedType, selectedVendor],
     queryFn: async () => {
@@ -81,7 +88,6 @@ const MediaGrid = () => {
     }
   });
 
-  // Subscribe to real-time updates
   useEffect(() => {
     const channel = supabase
       .channel('schema-db-changes')
