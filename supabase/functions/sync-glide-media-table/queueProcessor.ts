@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
-import { GlideSyncQueueItem, SyncResult } from './types.ts';
+import { GlideSyncQueueItem, SyncResult } from '../_shared/types.ts';
 import { GlideAPI } from './glideApi.ts';
 import { mapSupabaseToGlide, mapGlideToSupabase } from './productMapper.ts';
 
