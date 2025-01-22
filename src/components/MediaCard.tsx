@@ -22,6 +22,7 @@ interface MediaCardProps {
         title?: string;
       };
     };
+    thumbnail_url?: string;
   };
   onEdit: (item: any) => void;
   onPreview: (item: any) => void;
@@ -29,32 +30,31 @@ interface MediaCardProps {
 
 const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
   const [isPlaying, setIsPlaying] = React.useState(false);
-  const [thumbnailLoaded, setThumbnailLoaded] = React.useState(false);
+  const [isLoaded, setIsLoaded] = React.useState(false);
   const videoRef = React.useRef<HTMLVideoElement>(null);
 
-  // Initialize video thumbnail
+  // Initialize video
   React.useEffect(() => {
     if (item.file_type === 'video' && videoRef.current) {
-      // Set poster image
-      videoRef.current.poster = item.default_public_url;
+      // Set initial thumbnail
+      videoRef.current.poster = item.thumbnail_url || item.default_public_url;
       
-      // Load metadata to get thumbnail
-      const loadMetadata = async () => {
+      const loadVideo = async () => {
         try {
           if (videoRef.current) {
-            videoRef.current.currentTime = 0.1;
+            videoRef.current.src = item.public_url || item.default_public_url;
             await videoRef.current.load();
-            setThumbnailLoaded(true);
+            setIsLoaded(true);
           }
         } catch (error) {
-          console.error("Error loading video metadata:", error);
+          console.error("Error loading video:", error);
+          setIsLoaded(false);
         }
       };
       
-      loadMetadata();
+      loadVideo();
     }
     
-    // Cleanup
     return () => {
       if (videoRef.current) {
         videoRef.current.pause();
@@ -62,20 +62,17 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
         videoRef.current.load();
       }
     };
-  }, [item.file_type, item.default_public_url]);
+  }, [item.file_type, item.public_url, item.default_public_url, item.thumbnail_url]);
 
   const handleVideoClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!videoRef.current) return;
+    if (!videoRef.current || !isLoaded) return;
 
     try {
       if (isPlaying) {
-        videoRef.current.pause();
+        await videoRef.current.pause();
         videoRef.current.currentTime = 0;
       } else {
-        if (!videoRef.current.src) {
-          videoRef.current.src = item.public_url || item.default_public_url;
-        }
         const playPromise = videoRef.current.play();
         if (playPromise !== undefined) {
           await playPromise;
@@ -106,8 +103,8 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
             />
             {!isPlaying && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors">
-                <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <Play className="h-6 w-6 text-black" />
+                <div className={`w-12 h-12 rounded-full ${isLoaded ? 'bg-white/90' : 'bg-white/60'} flex items-center justify-center group-hover:scale-110 transition-transform`}>
+                  <Play className={`h-6 w-6 ${isLoaded ? 'text-black' : 'text-black/60'}`} />
                 </div>
               </div>
             )}
