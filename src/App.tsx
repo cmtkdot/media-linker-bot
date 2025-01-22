@@ -9,6 +9,7 @@ import Auth from "./pages/Auth";
 import GlideSync from "./pages/GlideSync";
 import GlideConnections from "./pages/GlideConnections";
 import DatabaseChat from "./pages/DatabaseChat";
+import DashboardLayout from "@/components/DashboardLayout";
 import { supabase } from "@/integrations/supabase/client";
 
 const queryClient = new QueryClient();
@@ -24,7 +25,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     return <Navigate to="/auth" replace />;
   }
 
-  return <>{children}</>;
+  return <DashboardLayout>{children}</DashboardLayout>;
 };
 
 const App = () => (
