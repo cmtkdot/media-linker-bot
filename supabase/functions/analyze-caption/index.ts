@@ -9,7 +9,6 @@ const corsHeaders = {
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    console.log('Handling CORS preflight request');
     return new Response(null, { headers: corsHeaders });
   }
 
@@ -19,12 +18,19 @@ serve(async (req) => {
       throw new Error('OpenAI API key is not configured');
     }
 
+    // Initialize Supabase client with environment variables
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error('Supabase configuration is missing');
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
     const { caption, messageId, mediaGroupId, telegramData } = await req.json();
     
     console.log('Analyzing data:', { messageId, mediaGroupId, caption });
 
-    const isAnalysisOnly = !messageId && !mediaGroupId;
-    
     if (!caption) {
       console.log('No caption provided, returning null result');
       return new Response(
@@ -88,23 +94,7 @@ serve(async (req) => {
       const result = JSON.parse(data.choices[0].message.content.trim());
       console.log('Parsed result:', result);
 
-      if (isAnalysisOnly) {
-        return new Response(
-          JSON.stringify(result),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      const supabaseUrl = Deno.env.get('SUPABASE_URL');
-      const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-      
-      if (!supabaseUrl || !supabaseServiceKey) {
-        throw new Error('Missing Supabase configuration');
-      }
-      
-      const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-      // Update telegram_media table with analyzed content
+      // Update the telegram_media table with the analyzed content
       if (messageId) {
         const { error: updateError } = await supabase
           .from('telegram_media')
@@ -115,8 +105,7 @@ serve(async (req) => {
             quantity: result.quantity,
             vendor_uid: result.vendor_uid,
             purchase_date: result.purchase_date,
-            notes: result.notes,
-            caption: caption
+            notes: result.notes
           })
           .eq('id', messageId);
 
@@ -137,8 +126,7 @@ serve(async (req) => {
             quantity: result.quantity,
             vendor_uid: result.vendor_uid,
             purchase_date: result.purchase_date,
-            notes: result.notes,
-            caption: caption
+            notes: result.notes
           })
           .eq('telegram_data->>media_group_id', mediaGroupId);
 
@@ -161,7 +149,7 @@ serve(async (req) => {
     console.error('Error in analyze-caption function:', error);
     return new Response(
       JSON.stringify({ 
-        error: error.message,
+        error: `Failed to parse OpenAI response: ${error.message}`,
         details: error.stack
       }),
       { 
