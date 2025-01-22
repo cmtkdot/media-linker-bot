@@ -87,6 +87,27 @@ export type Database = {
         }
         Relationships: []
       }
+      glide_products: {
+        Row: {
+          created_at: string
+          glide_data: Json
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          glide_data?: Json
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          glide_data?: Json
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       glide_sync_queue: {
         Row: {
           created_at: string | null

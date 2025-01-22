@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
@@ -16,7 +16,7 @@ const MediaGrid = () => {
   const [previewItem, setPreviewItem] = useState<MediaItem | null>(null);
   const { toast } = useToast();
 
-  const { data: mediaItems, isLoading, error } = useQuery({
+  const { data: mediaItems, isLoading, error, refetch } = useQuery({
     queryKey: ['telegram-media', search],
     queryFn: async () => {
       try {
@@ -49,6 +49,42 @@ const MediaGrid = () => {
     },
     retry: 1
   });
+
+  // Subscribe to real-time changes
+  useEffect(() => {
+    const channel = supabase
+      .channel('schema-db-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
+          schema: 'public',
+          table: 'telegram_media'
+        },
+        (payload) => {
+          console.log('Real-time update:', payload);
+          // Refetch data when changes occur
+          refetch();
+          
+          // Show toast notification for changes
+          const eventMessages = {
+            INSERT: 'New media item added',
+            UPDATE: 'Media item updated',
+            DELETE: 'Media item deleted'
+          };
+          
+          toast({
+            title: eventMessages[payload.eventType as keyof typeof eventMessages],
+            description: "The media list has been updated.",
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [refetch, toast]);
 
   const handleEdit = async () => {
     if (!editItem) return;
