@@ -7,16 +7,28 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { X } from "lucide-react";
+import { X, ChevronLeft, ChevronRight } from "lucide-react";
 import { MediaItem } from "@/types/media";
 
 interface MediaViewerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   media: MediaItem | null;
+  onPrevious?: () => void;
+  onNext?: () => void;
+  hasPrevious?: boolean;
+  hasNext?: boolean;
 }
 
-const MediaViewer = ({ open, onOpenChange, media }: MediaViewerProps) => {
+const MediaViewer = ({ 
+  open, 
+  onOpenChange, 
+  media,
+  onPrevious,
+  onNext,
+  hasPrevious = false,
+  hasNext = false 
+}: MediaViewerProps) => {
   if (!media) return null;
 
   const mediaUrl = media.public_url || media.default_public_url;
@@ -37,7 +49,7 @@ const MediaViewer = ({ open, onOpenChange, media }: MediaViewerProps) => {
         
         <div className="flex flex-col lg:flex-row gap-4">
           {/* Media Column */}
-          <div className="flex-[1.5] min-h-0">
+          <div className="flex-[1.5] min-h-0 relative">
             <div className="relative bg-black/5 rounded-lg overflow-hidden flex items-center justify-center" style={{ 
               height: '50vh',
               maxHeight: 'calc(100vh - 300px)',
@@ -57,6 +69,34 @@ const MediaViewer = ({ open, onOpenChange, media }: MediaViewerProps) => {
                   alt={media.caption || "Media preview"}
                   className="h-full w-full object-contain"
                 />
+              )}
+            </div>
+            
+            {/* Navigation Buttons */}
+            <div className="absolute inset-y-0 left-0 right-0 flex items-center justify-between pointer-events-none">
+              {hasPrevious && (
+                <Button
+                  onClick={onPrevious}
+                  className="relative ps-12 ml-4 pointer-events-auto"
+                  variant="secondary"
+                >
+                  Previous
+                  <span className="pointer-events-none absolute inset-y-0 start-0 flex w-9 items-center justify-center bg-primary-foreground/15">
+                    <ChevronLeft className="opacity-60" size={16} strokeWidth={2} aria-hidden="true" />
+                  </span>
+                </Button>
+              )}
+              {hasNext && (
+                <Button
+                  onClick={onNext}
+                  className="relative pe-12 mr-4 pointer-events-auto"
+                  variant="secondary"
+                >
+                  Next
+                  <span className="pointer-events-none absolute inset-y-0 end-0 flex w-9 items-center justify-center bg-primary-foreground/15">
+                    <ChevronRight className="opacity-60" size={16} strokeWidth={2} aria-hidden="true" />
+                  </span>
+                </Button>
               )}
             </div>
           </div>

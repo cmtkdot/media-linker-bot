@@ -1,74 +1,91 @@
+import { useState } from "react";
 import { MediaItem } from "@/types/media";
-import MediaViewer from "./MediaViewer";
 import MediaCard from "./MediaCard";
-import { Alert, AlertDescription } from "./ui/alert";
-import { Loader2 } from "lucide-react";
-import { Dispatch, SetStateAction } from "react";
+import MediaViewer from "./MediaViewer";
+import MediaEditDialog from "./MediaEditDialog";
 
 interface MediaGridContentProps {
+  items: MediaItem[];
   view: 'grid' | 'table';
-  isLoading: boolean;
-  error: Error | null;
-  mediaItems: MediaItem[] | undefined;
-  previewItem: MediaItem | null;
-  onPreviewChange: (open: boolean) => void;
-  onEdit: Dispatch<SetStateAction<MediaItem | null>>;
-  onPreview: (item: MediaItem) => void;
+  onMediaUpdate: () => Promise<void>;
 }
 
-const MediaGridContent = ({
-  view,
-  isLoading,
-  error,
-  mediaItems,
-  previewItem,
-  onPreviewChange,
-  onEdit,
-  onPreview,
-}: MediaGridContentProps) => {
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-[50vh]">
-        <div className="flex items-center gap-2">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          <span>Loading media...</span>
-        </div>
-      </div>
-    );
-  }
+const MediaGridContent = ({ items, view, onMediaUpdate }: MediaGridContentProps) => {
+  const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
+  const [editItem, setEditItem] = useState<MediaItem | null>(null);
+  const [viewerOpen, setViewerOpen] = useState(false);
 
-  if (error) {
-    return (
-      <Alert variant="destructive" className="m-4">
-        <AlertDescription>{error.message}</AlertDescription>
-      </Alert>
-    );
-  }
+  const handleView = (item: MediaItem) => {
+    setSelectedMedia(item);
+    setViewerOpen(true);
+  };
 
-  if (!mediaItems?.length) {
-    return (
-      <Alert variant="default" className="m-4">
-        <AlertDescription>No media items found</AlertDescription>
-      </Alert>
-    );
-  }
+  const handleEdit = (item: MediaItem) => {
+    setEditItem(item);
+  };
+
+  const handlePrevious = () => {
+    if (!selectedMedia) return;
+    const currentIndex = items.findIndex(item => item.id === selectedMedia.id);
+    if (currentIndex > 0) {
+      setSelectedMedia(items[currentIndex - 1]);
+    }
+  };
+
+  const handleNext = () => {
+    if (!selectedMedia) return;
+    const currentIndex = items.findIndex(item => item.id === selectedMedia.id);
+    if (currentIndex < items.length - 1) {
+      setSelectedMedia(items[currentIndex + 1]);
+    }
+  };
+
+  const getCurrentIndex = () => {
+    if (!selectedMedia) return -1;
+    return items.findIndex(item => item.id === selectedMedia.id);
+  };
 
   return (
     <>
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        {mediaItems.map((item) => (
+      <div className={
+        view === 'grid' 
+          ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" 
+          : "space-y-4"
+      }>
+        {items.map((item) => (
           <MediaCard
             key={item.id}
             item={item}
-            onPreview={() => onPreview(item)}
-            onEdit={onEdit}
+            view={view}
+            onView={handleView}
+            onEdit={handleEdit}
           />
         ))}
       </div>
+
       <MediaViewer
-        open={!!previewItem}
-        onOpenChange={onPreviewChange}
-        media={previewItem}
+        open={viewerOpen}
+        onOpenChange={setViewerOpen}
+        media={selectedMedia}
+        onPrevious={handlePrevious}
+        onNext={handleNext}
+        hasPrevious={getCurrentIndex() > 0}
+        hasNext={getCurrentIndex() < items.length - 1}
+      />
+
+      <MediaEditDialog
+        editItem={editItem}
+        onClose={() => setEditItem(null)}
+        onSave={onMediaUpdate}
+        onItemChange={(field, value) => {
+          if (editItem) {
+            setEditItem({ ...editItem, [field]: value });
+          }
+        }}
+        formatDate={(date) => {
+          if (!date) return null;
+          return new Date(date).toISOString().split('T')[0];
+        }}
       />
     </>
   );
