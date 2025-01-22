@@ -71,7 +71,7 @@ const MediaGrid = () => {
       const { data, error: queryError } = await query;
       if (queryError) throw queryError;
 
-      const items = (data || []).map((item: SupabaseMediaItem): MediaItem => ({
+      return (data || []).map((item: SupabaseMediaItem): MediaItem => ({
         ...item,
         file_type: item.file_type as MediaFileType,
         telegram_data: item.telegram_data as any,
@@ -81,8 +81,6 @@ const MediaGrid = () => {
           objects: item.analyzed_content.objects as string[]
         } : undefined
       }));
-
-      return items;
     }
   });
 
@@ -181,6 +179,11 @@ const MediaGrid = () => {
     );
   }
 
+  const formatDate = (date: string | null) => {
+    if (!date) return null;
+    return date.split('T')[0];
+  };
+
   return (
     <div className="space-y-4 px-4 py-4">
       <MediaSearchBar 
@@ -212,11 +215,11 @@ const MediaGrid = () => {
       )}
 
       <MediaEditDialog 
-        open={!!editItem}
-        onOpenChange={(open) => !open && setEditItem(null)}
         editItem={editItem}
+        onClose={() => setEditItem(null)}
         onItemChange={(field, value) => setEditItem(prev => prev ? {...prev, [field]: value} : null)}
         onSave={handleEdit}
+        formatDate={formatDate}
       />
     </div>
   );

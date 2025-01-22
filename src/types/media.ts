@@ -56,6 +56,14 @@ export interface SupabaseMediaItem extends Omit<MediaItem, 'telegram_data' | 'fi
   analyzed_content: Record<string, any> | null;
 }
 
+export interface MediaEditDialogProps {
+  editItem: MediaItem | null;
+  onClose: () => void;
+  onSave: () => Promise<void>;
+  onItemChange: (field: keyof MediaItem, value: MediaItemValue) => void;
+  formatDate: (date: string | null) => string | null;
+}
+
 export interface MediaSearchBarProps {
   search: string;
   onSearchChange: (value: string) => void;
@@ -80,12 +88,4 @@ export interface MediaViewerProps {
 export interface MediaTableProps {
   data: MediaItem[];
   onEdit: (item: MediaItem) => void;
-}
-
-export interface MediaEditDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  editItem: MediaItem | null;
-  onItemChange: (field: keyof MediaItem, value: MediaItemValue) => void;
-  onSave: () => Promise<void>;
 }

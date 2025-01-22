@@ -1,7 +1,7 @@
 import { format } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ImageSwiper } from "@/components/ui/image-swiper";
-import { MediaItem, MediaFileType, SupabaseMediaItem, TelegramData } from "@/types/media";
+import { MediaItem, MediaFileType, SupabaseMediaItem } from "@/types/media";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -16,11 +16,10 @@ const Products = () => {
 
       if (error) throw error;
 
-      // Convert the raw Supabase data to our MediaItem type
-      return (data || []).map((item: SupabaseMediaItem) => ({
+      return (data || []).map((item: SupabaseMediaItem): MediaItem => ({
         ...item,
         file_type: item.file_type as MediaFileType,
-        telegram_data: item.telegram_data as TelegramData,
+        telegram_data: item.telegram_data as any,
         analyzed_content: item.analyzed_content ? {
           text: item.analyzed_content.text as string,
           labels: item.analyzed_content.labels as string[],
