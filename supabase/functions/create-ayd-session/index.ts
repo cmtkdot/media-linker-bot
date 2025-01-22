@@ -1,4 +1,4 @@
-import { serve } from 'https://deno.fresh.dev/std@0.168.0/http/server.ts'
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -46,6 +46,7 @@ serve(async (req) => {
       },
     )
   } catch (error) {
+    console.error('Error in create-ayd-session:', error)
     return new Response(
       JSON.stringify({ error: error.message }),
       {

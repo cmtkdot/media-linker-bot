@@ -54,7 +54,7 @@ serve(async (req) => {
             role: 'system',
             content: `Extract product information from captions following these strict rules:
             1. product_name: Everything before the # symbol, trimmed
-            2. product_code: Text between # and x, excluding any parentheses content
+            2. product_code: Text between #and x, excluding any parentheses content
                - If vendor_uid is found, it should be part of product_code
             3. quantity: ONLY the number after "x" and before any parentheses
                - Example: "x 3 (20 behind)" should extract just 3
