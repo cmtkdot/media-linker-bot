@@ -37,6 +37,8 @@ interface MediaViewerProps {
 
 const MediaViewer = ({ open, onOpenChange, media }: MediaViewerProps) => {
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   
   if (!media) return null;
@@ -50,18 +52,43 @@ const MediaViewer = ({ open, onOpenChange, media }: MediaViewerProps) => {
 
     try {
       if (isPlaying) {
-        videoRef.current.pause();
+        await videoRef.current.pause();
+        setIsPlaying(false);
       } else {
+        setIsLoading(true);
+        videoRef.current.src = mediaUrl;
+        await videoRef.current.load();
         const playPromise = videoRef.current.play();
         if (playPromise !== undefined) {
           await playPromise;
+          setIsPlaying(true);
         }
       }
-      setIsPlaying(!isPlaying);
     } catch (error) {
       console.error("Video playback error:", error);
+      setError("Failed to play video");
       setIsPlaying(false);
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
+    const video = e.target as HTMLVideoElement;
+    console.error("Video error:", video.error);
+    setError("Error loading video");
+    setIsLoading(false);
+    
+    // Try fallback URL if current URL fails
+    if (video.src === media.public_url && media.default_public_url) {
+      video.src = media.default_public_url;
+      video.load();
+    }
+  };
+
+  const handleVideoLoadedData = () => {
+    setIsLoading(false);
+    setError(null);
   };
 
   return (

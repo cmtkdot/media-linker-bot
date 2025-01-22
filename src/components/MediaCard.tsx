@@ -43,9 +43,8 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
         setIsPlaying(false);
       } else {
         setIsLoading(true);
-        if (!videoRef.current.src) {
-          videoRef.current.src = item.public_url || item.default_public_url;
-        }
+        videoRef.current.src = item.public_url || item.default_public_url;
+        await videoRef.current.load();
         await videoRef.current.play();
         setIsPlaying(true);
       }
@@ -63,8 +62,11 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
     console.error("Video error:", video.error);
     setError("Error loading video");
     setIsLoading(false);
-    if (video.src !== item.default_public_url) {
+    
+    // Try fallback URL if current URL fails
+    if (video.src === item.public_url && item.default_public_url) {
       video.src = item.default_public_url;
+      video.load();
     }
   };
 
@@ -77,7 +79,7 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
     return () => {
       if (videoRef.current) {
         videoRef.current.pause();
-        videoRef.current.src = "";
+        videoRef.current.removeAttribute('src');
         videoRef.current.load();
       }
     };
@@ -95,8 +97,9 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
               ref={videoRef}
               className="object-cover w-full h-full"
               poster={item.default_public_url}
-              muted
               playsInline
+              muted
+              preload="metadata"
               onLoadedData={handleVideoLoadedData}
               onEnded={() => setIsPlaying(false)}
               onError={handleVideoError}
