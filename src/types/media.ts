@@ -1,5 +1,9 @@
 import { Json } from "@/integrations/supabase/types";
 
+export type MediaFileType = 'video' | 'photo' | 'document';
+
+export type MediaItemValue = string | number | Date | null;
+
 export interface TelegramChat {
   id?: number;
   type?: string;
@@ -15,10 +19,6 @@ export interface TelegramData {
   media_group_id?: string;
   date?: number;
 }
-
-export type MediaFileType = 'video' | 'photo' | 'document';
-
-export type MediaItemValue = string | number | Date | null;
 
 export interface AnalyzedContent {
   text?: string;
