@@ -60,6 +60,7 @@ const MediaGridContent = ({
             item={item}
             onPreview={() => {
               onPreviewChange(true);
+              // Set the preview item without triggering edit
               onEdit(item);
             }}
             onEdit={onEdit}
