@@ -1,7 +1,7 @@
 import React from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Pencil, Play, Pause } from "lucide-react";
+import { Pencil, Play } from "lucide-react";
 
 interface MediaCardProps {
   item: {
@@ -16,7 +16,6 @@ interface MediaCardProps {
     vendor_uid?: string;
     purchase_date?: string;
     notes?: string;
-    thumbnail_url?: string;
     telegram_data?: {
       chat?: {
         type?: string;
@@ -30,53 +29,32 @@ interface MediaCardProps {
 
 const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
   const [isPlaying, setIsPlaying] = React.useState(false);
-  const [isLoading, setIsLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(null);
+  const [thumbnailLoaded, setThumbnailLoaded] = React.useState(false);
   const videoRef = React.useRef<HTMLVideoElement>(null);
 
-  const handleVideoClick = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!videoRef.current) return;
-
-    try {
-      if (isPlaying) {
-        await videoRef.current.pause();
-        setIsPlaying(false);
-      } else {
-        setIsLoading(true);
-        videoRef.current.src = item.public_url || item.default_public_url;
-        await videoRef.current.load();
-        await videoRef.current.play();
-        setIsPlaying(true);
-      }
-    } catch (error) {
-      console.error("Video playback error:", error);
-      setError("Failed to play video");
-      setIsPlaying(false);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
-    const video = e.target as HTMLVideoElement;
-    console.error("Video error:", video.error);
-    setError("Error loading video");
-    setIsLoading(false);
-    
-    // Try fallback URL if current URL fails
-    if (video.src === item.public_url && item.default_public_url) {
-      video.src = item.default_public_url;
-      video.load();
-    }
-  };
-
-  const handleVideoLoadedData = () => {
-    setIsLoading(false);
-    setError(null);
-  };
-
+  // Initialize video thumbnail
   React.useEffect(() => {
+    if (item.file_type === 'video' && videoRef.current) {
+      // Set poster image
+      videoRef.current.poster = item.default_public_url;
+      
+      // Load metadata to get thumbnail
+      const loadMetadata = async () => {
+        try {
+          if (videoRef.current) {
+            videoRef.current.currentTime = 0.1;
+            await videoRef.current.load();
+            setThumbnailLoaded(true);
+          }
+        } catch (error) {
+          console.error("Error loading video metadata:", error);
+        }
+      };
+      
+      loadMetadata();
+    }
+    
+    // Cleanup
     return () => {
       if (videoRef.current) {
         videoRef.current.pause();
@@ -84,72 +62,91 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
         videoRef.current.load();
       }
     };
-  }, []);
+  }, [item.file_type, item.default_public_url]);
+
+  const handleVideoClick = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!videoRef.current) return;
+
+    try {
+      if (isPlaying) {
+        videoRef.current.pause();
+        videoRef.current.currentTime = 0;
+      } else {
+        if (!videoRef.current.src) {
+          videoRef.current.src = item.public_url || item.default_public_url;
+        }
+        const playPromise = videoRef.current.play();
+        if (playPromise !== undefined) {
+          await playPromise;
+        }
+      }
+      setIsPlaying(!isPlaying);
+    } catch (error) {
+      console.error("Video playback error:", error);
+      setIsPlaying(false);
+    }
+  };
 
   return (
     <Card 
-      className="group relative overflow-hidden bg-card hover:shadow-lg transition-all duration-300 rounded-xl border-0 flex flex-col h-full cursor-pointer" 
+      className="group relative overflow-hidden bg-card hover:shadow-lg transition-all duration-300 rounded-xl border-0 flex flex-col h-full" 
       onClick={() => onPreview(item)}
     >
+      {/* Media Section */}
       <div className="aspect-square relative">
         {item.file_type === 'video' ? (
-          <div className="relative h-full" onClick={handleVideoClick}>
+          <div className="relative h-full cursor-pointer group" onClick={handleVideoClick}>
             <video
               ref={videoRef}
               className="object-cover w-full h-full"
-              poster={item.thumbnail_url || item.default_public_url}
-              playsInline
               muted
+              playsInline
               preload="metadata"
-              onLoadedData={handleVideoLoadedData}
-              onEnded={() => setIsPlaying(false)}
-              onError={handleVideoError}
             />
-            <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors">
-              {error ? (
-                <p className="text-white bg-red-500/80 px-3 py-1 rounded-md text-sm">
-                  {error}
-                </p>
-              ) : (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="w-12 h-12 rounded-full bg-white/90 hover:bg-white group-hover:scale-110 transition-transform"
-                  onClick={handleVideoClick}
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <div className="h-6 w-6 border-2 border-black/20 border-t-black rounded-full animate-spin" />
-                  ) : isPlaying ? (
-                    <Pause className="h-6 w-6 text-black" />
-                  ) : (
-                    <Play className="h-6 w-6 text-black" />
-                  )}
-                </Button>
-              )}
-            </div>
+            {!isPlaying && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors">
+                <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Play className="h-6 w-6 text-black" />
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <img
             src={item.public_url || item.default_public_url}
             alt={item.caption || "Media item"}
             className="object-cover w-full h-full"
-            onError={(e) => {
-              const img = e.target as HTMLImageElement;
-              if (img.src !== item.default_public_url) {
-                img.src = item.default_public_url;
-              }
-            }}
           />
         )}
+      </div>
 
-        {/* Hover overlay - always present but only visible on hover */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
-          <div className="absolute top-4 right-4 pointer-events-auto">
+      {/* Static Info Section */}
+      <div className="p-3 bg-card">
+        <p className="font-medium text-foreground truncate">
+          {item.product_name || 'Untitled Product'}
+        </p>
+        <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
+          {item.caption || 'No caption'}
+        </p>
+      </div>
+
+      {/* Hover Info Section - Channel, Date, Edit */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+        <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
+          <div className="flex justify-between items-center">
+            <div>
+              <p className="text-sm font-medium">
+                {item.telegram_data?.chat?.title || 'Unknown Channel'}
+              </p>
+              <p className="text-xs opacity-80">
+                {item.purchase_date ? new Date(item.purchase_date).toLocaleDateString() : '-'}
+              </p>
+            </div>
             <Button
               variant="outline"
               size="icon"
-              className="bg-white/90 hover:bg-white"
+              className="bg-white/90 hover:bg-white shrink-0"
               onClick={(e) => {
                 e.stopPropagation();
                 onEdit(item);
@@ -158,25 +155,7 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
               <Pencil className="h-4 w-4 text-black" />
             </Button>
           </div>
-          <div className="absolute bottom-4 left-4 text-white">
-            <p className="text-sm font-medium">
-              {item.telegram_data?.chat?.title || 'Unknown Channel'}
-            </p>
-            <p className="text-xs opacity-80">
-              {item.purchase_date ? new Date(item.purchase_date).toLocaleDateString() : '-'}
-            </p>
-          </div>
         </div>
-      </div>
-
-      {/* Static content - always visible */}
-      <div className="p-4 bg-card">
-        <h3 className="font-semibold text-lg text-foreground truncate mb-2">
-          {item.product_name || 'Untitled Product'}
-        </h3>
-        <p className="text-sm text-muted-foreground line-clamp-2">
-          {item.caption || 'No caption'}
-        </p>
       </div>
     </Card>
   );

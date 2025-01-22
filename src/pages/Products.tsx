@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSupabaseClient } from "@supabase/auth-helpers-react";
 import { format } from "date-fns";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ImageSwiper } from "@/components/ui/image-swiper";
 import { MediaItem } from "@/types/media";
 
@@ -49,40 +49,32 @@ const Products = () => {
         {productGroups.map((group, index) => {
           const mainProduct = group[0];
           const images = group.map(item => item.public_url || item.default_public_url).filter(Boolean) as string[];
-          const quantity = mainProduct.quantity || 0;
-          const remaining = mainProduct.analyzed_content?.remaining || 0;
-          const quantityText = quantity > 0 ? `${quantity} × 1 (${remaining} behind)` : "";
           
           return (
-            <Card key={index} className="overflow-hidden bg-white dark:bg-gray-800 rounded-xl shadow-lg">
-              <div className="aspect-square">
-                <ImageSwiper images={images} className="w-full h-full object-cover" />
-              </div>
-              <div className="p-6 space-y-4">
-                <h2 className="text-2xl font-bold">
+            <Card key={index} className="overflow-hidden">
+              <CardContent className="p-0">
+                <ImageSwiper images={images} className="aspect-square" />
+              </CardContent>
+              <CardHeader className="space-y-4">
+                <CardTitle className="text-2xl font-bold">
                   {mainProduct.product_name || "Untitled Product"}
-                </h2>
-                {quantityText && (
-                  <p className="text-lg text-gray-600 dark:text-gray-300">
-                    {quantityText}
-                  </p>
-                )}
-                {mainProduct.product_code && (
-                  <p className="text-gray-500 dark:text-gray-400">
-                    #{mainProduct.product_code}
+                </CardTitle>
+                {mainProduct.caption && (
+                  <p className="text-lg text-muted-foreground mt-4">
+                    {mainProduct.caption}
                   </p>
                 )}
                 {mainProduct.purchase_date && (
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                  <p className="text-sm text-muted-foreground mt-2">
                     Purchase Date: {format(new Date(mainProduct.purchase_date), "MM/dd/yyyy")}
                   </p>
                 )}
                 {mainProduct.product_code && (
-                  <p className="text-sky-500 dark:text-sky-400">
+                  <p className="text-sm font-medium text-sky-500 dark:text-sky-400">
                     Product Code: {mainProduct.product_code}
                   </p>
                 )}
-              </div>
+              </CardHeader>
             </Card>
           );
         })}

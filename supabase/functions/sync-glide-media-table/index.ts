@@ -36,7 +36,9 @@ serve(async (req: Request) => {
         .eq('id', tableId)
         .single();
 
-      if (configError) throw configError;
+      if (configError) {
+        throw configError;
+      }
 
       if (!config.active || !config.supabase_table_name) {
         throw new Error('Glide configuration is not active or table is not linked');
@@ -64,7 +66,9 @@ serve(async (req: Request) => {
 
       const { data: records, error: recordsError } = await query;
 
-      if (recordsError) throw recordsError;
+      if (recordsError) {
+        throw recordsError;
+      }
 
       console.log(`Found ${records?.length || 0} records to sync`);
 
@@ -73,6 +77,7 @@ serve(async (req: Request) => {
       let deleted = 0;
       const errors: string[] = [];
 
+      // Process each record
       for (const record of records || []) {
         try {
           // Map Supabase data to Glide format
@@ -107,10 +112,13 @@ serve(async (req: Request) => {
         .is('processed_at', null)
         .order('created_at', { ascending: true });
 
-      if (queueError) throw queueError;
+      if (queueError) {
+        throw queueError;
+      }
 
       console.log(`Found ${queueItems?.length || 0} queue items to process`);
 
+      // Process each queue item
       for (const item of queueItems || []) {
         try {
           switch (item.operation) {

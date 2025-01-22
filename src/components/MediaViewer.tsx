@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React from "react";
 import {
   Dialog,
   DialogContent,
@@ -7,7 +7,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { ExternalLink, X, MessageSquare, Users, Play, Pause } from "lucide-react";
+import { ExternalLink, X, MessageSquare, Users } from "lucide-react";
 
 interface MediaViewerProps {
   open: boolean;
@@ -36,60 +36,11 @@ interface MediaViewerProps {
 }
 
 const MediaViewer = ({ open, onOpenChange, media }: MediaViewerProps) => {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  
   if (!media) return null;
 
   const mediaUrl = media.public_url || media.default_public_url;
   const telegramType = media.telegram_data?.chat?.type;
   const telegramTitle = media.telegram_data?.chat?.title;
-
-  const handleVideoPlayback = async () => {
-    if (!videoRef.current) return;
-
-    try {
-      if (isPlaying) {
-        await videoRef.current.pause();
-        setIsPlaying(false);
-      } else {
-        setIsLoading(true);
-        videoRef.current.src = mediaUrl;
-        await videoRef.current.load();
-        const playPromise = videoRef.current.play();
-        if (playPromise !== undefined) {
-          await playPromise;
-          setIsPlaying(true);
-        }
-      }
-    } catch (error) {
-      console.error("Video playback error:", error);
-      setError("Failed to play video");
-      setIsPlaying(false);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
-    const video = e.target as HTMLVideoElement;
-    console.error("Video error:", video.error);
-    setError("Error loading video");
-    setIsLoading(false);
-    
-    // Try fallback URL if current URL fails
-    if (video.src === media.public_url && media.default_public_url) {
-      video.src = media.default_public_url;
-      video.load();
-    }
-  };
-
-  const handleVideoLoadedData = () => {
-    setIsLoading(false);
-    setError(null);
-  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -114,34 +65,18 @@ const MediaViewer = ({ open, onOpenChange, media }: MediaViewerProps) => {
               minHeight: '300px'
             }}>
               {media.file_type === "video" ? (
-                <div className="relative w-full h-full">
-                  <video
-                    ref={videoRef}
-                    src={mediaUrl}
-                    className="h-full w-full object-contain"
-                    poster={media.default_public_url}
-                    playsInline
-                    onEnded={() => setIsPlaying(false)}
-                    onError={(e) => {
-                      const video = e.target as HTMLVideoElement;
-                      if (video.src !== media.default_public_url) {
-                        video.src = media.default_public_url;
-                      }
-                    }}
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white/90 hover:bg-white rounded-full"
-                    onClick={handleVideoPlayback}
-                  >
-                    {isPlaying ? (
-                      <Pause className="h-6 w-6 text-black" />
-                    ) : (
-                      <Play className="h-6 w-6 text-black" />
-                    )}
-                  </Button>
-                </div>
+                <video
+                  src={mediaUrl}
+                  className="h-full w-full object-contain"
+                  controls
+                  autoPlay
+                  onError={(e) => {
+                    const video = e.target as HTMLVideoElement;
+                    if (video.src !== media.default_public_url) {
+                      video.src = media.default_public_url;
+                    }
+                  }}
+                />
               ) : (
                 <img
                   src={mediaUrl}
