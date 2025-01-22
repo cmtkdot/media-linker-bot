@@ -33,6 +33,8 @@ interface TelegramMediaResponse {
   telegram_data: TelegramData;
 }
 
+type MediaItemValue = string | number | null | undefined;
+
 const MediaGrid = () => {
   const [view, setView] = useState<'grid' | 'table'>('grid');
   const [search, setSearch] = useState("");
@@ -71,7 +73,7 @@ const MediaGrid = () => {
     }
   });
 
-  const { data: mediaItems, isLoading, error, refetch } = useQuery({
+  const { data: mediaItems, isLoading, error, refetch } = useQuery<MediaItem[]>({
     queryKey: ['telegram-media', search, selectedChannel, selectedType, selectedVendor],
     queryFn: async () => {
       let query = supabase
@@ -98,7 +100,19 @@ const MediaGrid = () => {
       const { data, error: queryError } = await query;
       
       if (queryError) throw queryError;
-      return (data || []) as MediaItem[];
+
+      // Group media by media_group_id if it exists
+      const groupedData = (data || []).reduce((acc: { [key: string]: MediaItem[] }, item: MediaItem) => {
+        const groupId = item.telegram_data?.media_group_id || item.id;
+        if (!acc[groupId]) {
+          acc[groupId] = [];
+        }
+        acc[groupId].push(item);
+        return acc;
+      }, {});
+
+      // Return first item from each group
+      return Object.values(groupedData).map(group => group[0]);
     }
   });
 
@@ -168,7 +182,7 @@ const MediaGrid = () => {
     }
   };
 
-  const handleItemChange = (field: keyof MediaItem, value: any) => {
+  const handleItemChange = (field: keyof MediaItem, value: MediaItemValue) => {
     setEditItem(prev => prev ? {...prev, [field]: value} : null);
   };
 
@@ -188,7 +202,7 @@ const MediaGrid = () => {
       <Alert variant="destructive" className="m-4">
         <AlertCircle className="h-4 w-4" />
         <AlertTitle>Error loading media</AlertTitle>
-        <AlertDescription>{error.message}</AlertDescription>
+        <AlertDescription>{(error as Error).message}</AlertDescription>
       </Alert>
     );
   }
@@ -223,7 +237,7 @@ const MediaGrid = () => {
           {mediaItems.map((item) => (
             <ContentCard
               key={item.id}
-              backgroundImage={item.public_url || item.default_public_url}
+              backgroundImage={item.thumbnail_url || item.public_url || item.default_public_url}
               onEdit={() => setEditItem(item)}
               onClick={() => setPreviewItem(item)}
               content={{

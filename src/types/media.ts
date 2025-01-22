@@ -1,8 +1,30 @@
+export interface TelegramChat {
+  type?: string;
+  title?: string;
+  id?: number;
+  username?: string;
+}
+
+export interface TelegramData {
+  chat?: TelegramChat;
+  message_id?: number;
+  chat_id?: number;
+  media_group_id?: string;
+  date?: number;
+  storage_path?: string;
+}
+
 export interface MediaItem {
   id: string;
   public_url: string;
   default_public_url: string;
-  file_type: string;
+  thumbnail_url?: string;
+  file_type: 'image' | 'video' | 'document';
+  mime_type?: string;
+  file_size?: number;
+  width?: number;
+  height?: number;
+  duration?: number; // for videos
   caption?: string;
   product_code?: string;
   product_name?: string;
@@ -12,14 +34,12 @@ export interface MediaItem {
   notes?: string;
   message_url?: string;
   chat_url?: string;
-  telegram_data?: {
-    chat?: {
-      type?: string;
-      title?: string;
-      id?: number;
-    };
-    message_id?: number;
-    chat_id?: number;
+  telegram_data?: TelegramData;
+  analyzed_content?: {
+    text?: string;
+    labels?: string[];
+    objects?: string[];
   };
   created_at: string;
+  updated_at?: string;
 }
