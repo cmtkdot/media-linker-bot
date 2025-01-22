@@ -9,20 +9,9 @@ import MediaSearchBar from "./MediaSearchBar";
 import MediaEditDialog from "./MediaEditDialog";
 import { MediaItem } from "@/types/media";
 
-// Define interfaces for type safety
 interface FilterOptions {
   channels: string[];
   vendors: string[];
-}
-
-interface TelegramData {
-  chat?: {
-    title?: string;
-  };
-}
-
-interface ChannelQueryResult {
-  telegram_data: TelegramData;
 }
 
 const MediaGrid = () => {
@@ -35,99 +24,76 @@ const MediaGrid = () => {
   const [previewItem, setPreviewItem] = useState<MediaItem | null>(null);
   const { toast } = useToast();
 
-  // Query to fetch unique channels and vendors for filters
+  // Query to fetch filter options
   const { data: filterOptions } = useQuery<FilterOptions>({
     queryKey: ['filter-options'],
     queryFn: async () => {
-      const { data: channelsData } = await supabase
-        .from('telegram_media')
-        .select('telegram_data->chat->title')
-        .not('telegram_data->chat->title', 'is', null);
+      const [channelsResult, vendorsResult] = await Promise.all([
+        supabase
+          .from('telegram_media')
+          .select('telegram_data->chat->title')
+          .not('telegram_data->chat->title', 'is', null),
+        supabase
+          .from('telegram_media')
+          .select('vendor_uid')
+          .not('vendor_uid', 'is', null)
+      ]);
 
-      const { data: vendorsData } = await supabase
-        .from('telegram_media')
-        .select('vendor_uid')
-        .not('vendor_uid', 'is', null);
-
-      // Type assertion to ensure proper typing
-      const typedChannelsData = (channelsData || []) as unknown as ChannelQueryResult[];
-      const channels = [...new Set(typedChannelsData
-        .map(item => item.telegram_data?.chat?.title)
-        .filter(Boolean))];
+      const channels = [...new Set(channelsResult.data?.map(item => 
+        item.telegram_data?.chat?.title).filter(Boolean) || [])];
       
-      const vendors = [...new Set((vendorsData || [])
-        .map(item => item.vendor_uid)
-        .filter(Boolean))];
+      const vendors = [...new Set(vendorsResult.data?.map(item => 
+        item.vendor_uid).filter(Boolean) || [])];
 
-      return {
-        channels,
-        vendors
-      };
+      return { channels, vendors };
     }
   });
 
+  // Query to fetch media items with filters
   const { data: mediaItems, isLoading, error, refetch } = useQuery({
     queryKey: ['telegram-media', search, selectedChannel, selectedType, selectedVendor],
     queryFn: async () => {
-      try {
-        let query = supabase
-          .from('telegram_media')
-          .select('*')
-          .order('created_at', { ascending: false });
+      let query = supabase
+        .from('telegram_media')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-        if (search) {
-          query = query.or(`caption.ilike.%${search}%,product_name.ilike.%${search}%,product_code.ilike.%${search}%,vendor_uid.ilike.%${search}%`);
-        }
-
-        if (selectedChannel !== "all") {
-          query = query.eq('telegram_data->>chat->>title', selectedChannel);
-        }
-
-        if (selectedType !== "all") {
-          query = query.eq('file_type', selectedType);
-        }
-
-        if (selectedVendor !== "all") {
-          query = query.eq('vendor_uid', selectedVendor);
-        }
-
-        const { data, error: queryError } = await query;
-        
-        if (queryError) {
-          console.error('Supabase query error:', queryError);
-          throw queryError;
-        }
-        
-        if (!data) {
-          console.warn('No data returned from Supabase');
-          return [];
-        }
-
-        return data as MediaItem[];
-      } catch (err) {
-        console.error('Error fetching media:', err);
-        throw err;
+      if (search) {
+        query = query.or(`caption.ilike.%${search}%,product_name.ilike.%${search}%,product_code.ilike.%${search}%,vendor_uid.ilike.%${search}%`);
       }
-    },
-    retry: 1
+
+      if (selectedChannel !== "all") {
+        query = query.eq('telegram_data->>chat->>title', selectedChannel);
+      }
+
+      if (selectedType !== "all") {
+        query = query.eq('file_type', selectedType);
+      }
+
+      if (selectedVendor !== "all") {
+        query = query.eq('vendor_uid', selectedVendor);
+      }
+
+      const { data, error: queryError } = await query;
+      
+      if (queryError) throw queryError;
+      return (data || []) as MediaItem[];
+    }
   });
 
+  // Subscribe to real-time updates
   useEffect(() => {
     const channel = supabase
       .channel('schema-db-changes')
       .on(
         'postgres_changes',
         {
-          event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
+          event: '*',
           schema: 'public',
           table: 'telegram_media'
         },
         (payload) => {
-          console.log('Real-time update:', payload);
-          // Refetch data when changes occur
           refetch();
-          
-          // Show toast notification for changes
           const eventMessages = {
             INSERT: 'New media item added',
             UPDATE: 'Media item updated',
@@ -186,15 +152,6 @@ const MediaGrid = () => {
     setEditItem(prev => prev ? {...prev, [field]: value} : null);
   };
 
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return null;
-    const date = new Date(dateString);
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-
   if (isLoading) {
     return <div className="flex items-center justify-center h-[50vh] text-muted-foreground">Loading media...</div>;
   }
@@ -226,7 +183,7 @@ const MediaGrid = () => {
 
       {view === 'grid' ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
-          {mediaItems?.map((item) => (
+          {mediaItems.map((item) => (
             <ContentCard
               key={item.id}
               backgroundImage={item.public_url || item.default_public_url}
@@ -255,7 +212,7 @@ const MediaGrid = () => {
         onClose={() => setEditItem(null)}
         onSave={handleEdit}
         onItemChange={handleItemChange}
-        formatDate={formatDate}
+        formatDate={(dateString) => dateString ? new Date(dateString).toISOString().split('T')[0] : null}
       />
 
       <MediaViewer
