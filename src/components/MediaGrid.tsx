@@ -6,11 +6,6 @@ import { MediaItem } from "@/types/media";
 import MediaGridFilters from "./MediaGridFilters";
 import MediaGridContent from "./MediaGridContent";
 
-interface TelegramVideoThumb {
-  file_id: string;
-  file_unique_id: string;
-}
-
 interface QueryResult {
   id: string;
   file_id: string;
@@ -25,10 +20,23 @@ interface QueryResult {
   vendor_uid: string | null;
   purchase_date: string | null;
   notes: string | null;
-  telegram_data: Record<string, any>;
+  telegram_data: {
+    message_data?: {
+      video?: {
+        thumb?: {
+          file_id: string;
+          file_unique_id: string;
+        };
+      };
+    };
+  };
   glide_data: Record<string, any>;
   media_metadata: Record<string, any>;
-  analyzed_content: Record<string, any> | null;
+  analyzed_content: {
+    text?: string;
+    labels?: string[];
+    objects?: string[];
+  } | null;
 }
 
 const MediaGrid = () => {
@@ -37,7 +45,6 @@ const MediaGrid = () => {
   const [selectedChannel, setSelectedChannel] = useState("all");
   const [selectedType, setSelectedType] = useState("all");
   const [selectedVendor, setSelectedVendor] = useState("all");
-  const { toast } = useToast();
 
   const { data: filterOptions } = useQuery({
     queryKey: ['filter-options'],
@@ -68,7 +75,7 @@ const MediaGrid = () => {
     queryFn: async () => {
       let query = supabase
         .from('telegram_media')
-        .select('*, telegram_data->message_data->video->thumb->file_id, telegram_data->message_data->video->thumb->file_unique_id');
+        .select('*');
 
       if (search) {
         query = query.or(`caption.ilike.%${search}%,product_name.ilike.%${search}%,product_code.ilike.%${search}%,vendor_uid.ilike.%${search}%`);
@@ -97,9 +104,9 @@ const MediaGrid = () => {
         glide_data: item.glide_data || {},
         media_metadata: item.media_metadata || {},
         analyzed_content: item.analyzed_content ? {
-          text: (item.analyzed_content as any).text as string,
-          labels: (item.analyzed_content as any).labels as string[],
-          objects: (item.analyzed_content as any).objects as string[]
+          text: item.analyzed_content.text || '',
+          labels: item.analyzed_content.labels || [],
+          objects: item.analyzed_content.objects || []
         } : undefined
       }));
     }
