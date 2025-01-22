@@ -124,7 +124,15 @@ export type Database = {
           retry_count?: number | null
           table_name?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "glide_sync_queue_record_id_fkey"
+            columns: ["record_id"]
+            isOneToOne: false
+            referencedRelation: "telegram_media"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       messages: {
         Row: {
