@@ -1,14 +1,13 @@
-import { SupabaseClient } from '@supabase/supabase-js';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import { GlideAPI } from './glideApi.ts';
-import { GlideSyncQueueItem, GlideConfig, TelegramMedia } from '../_shared/types.ts';
-import { mapSupabaseToGlide } from './productMapper.ts';
+import type { GlideSyncQueueItem, GlideConfig, TelegramMedia } from '../_shared/types.ts';
 
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY = 1000; // 1 second
 
 export class QueueProcessor {
   constructor(
-    private supabase: SupabaseClient,
+    private supabase: ReturnType<typeof createClient>,
     private config: GlideConfig,
     private glideApi: GlideAPI
   ) {}

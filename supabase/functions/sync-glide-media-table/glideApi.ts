@@ -1,5 +1,5 @@
 import type { GlideMutation, GlideApiRequest, GlideApiResponse } from '../_shared/types.ts';
-import { SupabaseClient } from '@supabase/supabase-js';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 
 class GlideApiError extends Error {
   constructor(
@@ -17,7 +17,7 @@ export class GlideAPI {
     private appId: string,
     private tableId: string,
     private apiToken: string,
-    private supabase: SupabaseClient
+    private supabase: ReturnType<typeof createClient>
   ) {}
 
   private async makeRequest(method: string, mutation: GlideMutation) {
