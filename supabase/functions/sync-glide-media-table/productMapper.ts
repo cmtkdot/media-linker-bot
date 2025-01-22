@@ -2,6 +2,7 @@ import { GlideTableSchema } from './types.ts';
 import type { TelegramMedia } from './types.ts';
 
 export function mapSupabaseToGlide(supabaseRow: TelegramMedia): Record<string, any> {
+  console.log('Mapping Supabase row to Glide:', supabaseRow);
   const mappedData: Record<string, any> = {};
 
   // Map each field according to the schema
@@ -13,15 +14,21 @@ export function mapSupabaseToGlide(supabaseRow: TelegramMedia): Record<string, a
       if (field.type === 'string' && typeof value === 'object') {
         value = JSON.stringify(value);
       }
-      
-      mappedData[field.name] = value;
+
+      // Ensure the value is not undefined
+      if (value !== undefined) {
+        console.log(`Mapping field ${key} to ${field.name}:`, value);
+        mappedData[field.name] = value;
+      }
     }
   });
 
+  console.log('Mapped data for Glide:', mappedData);
   return mappedData;
 }
 
 export function mapGlideToSupabase(glideData: Record<string, any>, rowID?: string): Partial<TelegramMedia> {
+  console.log('Mapping Glide data to Supabase:', glideData);
   const supabaseData: Partial<TelegramMedia> = {};
   
   Object.entries(GlideTableSchema).forEach(([key, field]) => {
@@ -43,6 +50,7 @@ export function mapGlideToSupabase(glideData: Record<string, any>, rowID?: strin
         }
       }
       
+      console.log(`Mapping Glide field ${field.name} to ${key}:`, value);
       supabaseData[key as keyof TelegramMedia] = value;
     }
   });
@@ -51,5 +59,6 @@ export function mapGlideToSupabase(glideData: Record<string, any>, rowID?: strin
     supabaseData.telegram_media_row_id = rowID;
   }
 
+  console.log('Mapped data for Supabase:', supabaseData);
   return supabaseData;
 }
