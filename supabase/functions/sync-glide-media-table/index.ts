@@ -6,7 +6,6 @@ import { QueueProcessor } from './queueProcessor.ts';
 import type { SyncResult, GlideConfig, GlideSyncQueueItem } from '../_shared/types.ts';
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { 
       headers: {
@@ -18,15 +17,20 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-    if (!supabaseUrl || !supabaseServiceKey) {
+    if (!supabaseUrl || !supabaseKey) {
       throw new Error('Missing Supabase configuration');
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    // Ensure URL has https:// prefix
+    const formattedUrl = supabaseUrl.startsWith('http') ? supabaseUrl : `https://${supabaseUrl}`;
+    const supabase = createClient(formattedUrl, supabaseKey, {
+      auth: {
+        persistSession: false
+      }
+    });
     
-    // Parse request body with error handling
     let body;
     try {
       body = await req.json();
@@ -104,7 +108,6 @@ serve(async (req) => {
       errors: []
     };
 
-    // Get unprocessed queue items
     const { data: queueItems, error: queueError } = await supabase
       .from('glide_sync_queue')
       .select('*')
@@ -125,7 +128,6 @@ serve(async (req) => {
 
     console.log(`Found ${queueItems?.length || 0} pending sync items`);
     
-    // Process each queue item
     for (const item of queueItems || []) {
       await queueProcessor.processQueueItem(item, result);
     }
