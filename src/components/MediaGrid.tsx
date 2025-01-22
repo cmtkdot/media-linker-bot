@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
-import { MediaItem, SupabaseMediaItem, MediaFileType } from "@/types/media";
+import { MediaItem, SupabaseMediaItem } from "@/types/media";
 import MediaGridFilters from "./MediaGridFilters";
 import MediaGridContent from "./MediaGridContent";
 import MediaEditDialog from "./MediaEditDialog";
@@ -70,15 +70,15 @@ const MediaGrid = () => {
 
       return (data || []).map((item: SupabaseMediaItem): MediaItem => ({
         ...item,
-        file_type: item.file_type as MediaFileType,
+        file_type: item.file_type as MediaItem['file_type'],
         telegram_data: item.telegram_data as Record<string, any>,
+        glide_data: item.glide_data as Record<string, any>,
+        media_metadata: item.media_metadata as Record<string, any>,
         analyzed_content: item.analyzed_content ? {
           text: (item.analyzed_content as any).text as string,
           labels: (item.analyzed_content as any).labels as string[],
           objects: (item.analyzed_content as any).objects as string[]
-        } : undefined,
-        glide_data: item.glide_data as Record<string, any>,
-        media_metadata: item.media_metadata as Record<string, any>
+        } : undefined
       }));
     }
   });

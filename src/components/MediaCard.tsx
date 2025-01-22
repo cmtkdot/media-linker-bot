@@ -49,8 +49,7 @@ const MediaCard = ({ item, onPreview, onEdit }: MediaCardProps) => {
     }
   };
 
-  const handleEditClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleEditClick = () => {
     onEdit(item);
   };
 

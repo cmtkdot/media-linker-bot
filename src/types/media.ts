@@ -27,8 +27,12 @@ export interface MediaItem {
   glide_app_url?: string;
 }
 
-export interface SupabaseMediaItem extends Omit<MediaItem, 'file_type'> {
+export interface SupabaseMediaItem extends Omit<MediaItem, 'file_type' | 'telegram_data' | 'glide_data' | 'media_metadata' | 'analyzed_content'> {
   file_type: string;
+  telegram_data: any;
+  glide_data: any;
+  media_metadata: any;
+  analyzed_content?: any;
 }
 
 export interface MediaSearchBarProps {
