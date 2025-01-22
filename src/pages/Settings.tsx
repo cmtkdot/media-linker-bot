@@ -33,14 +33,13 @@ const Settings = () => {
         .from('telegram_media')
         .update({ thumbnail_url: null })
         .eq('file_type', 'video')
-        .is('thumbnail_url', null)
-        .select();
+        .is('thumbnail_url', null);
 
       if (updateError) throw updateError;
       
       // Refetch the stats and invalidate any queries that might show media
       await refetch();
-      await queryClient.invalidateQueries({ queryKey: ['products'] });
+      await queryClient.invalidateQueries({ queryKey: ['telegram-media'] });
       
       toast({
         title: "Success",
