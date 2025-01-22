@@ -382,6 +382,15 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      generate_video_thumbnails_from_metadata: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          video_id: string
+          old_thumbnail: string
+          new_thumbnail: string
+          source: string
+        }[]
+      }
       get_all_tables: {
         Args: Record<PropertyKey, never>
         Returns: {
