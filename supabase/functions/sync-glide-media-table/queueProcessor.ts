@@ -1,6 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import { GlideAPI } from './glideApi.ts';
-import type { GlideSyncQueueItem, GlideConfig, TelegramMedia } from './types.ts';
+import type { GlideSyncQueueItem, GlideConfig } from './types.ts';
 import { mapSupabaseToGlide } from './productMapper.ts';
 
 const MAX_RETRIES = 3;
