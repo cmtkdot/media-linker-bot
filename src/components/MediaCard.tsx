@@ -48,7 +48,7 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
   };
 
   const handleVideoClick = async (e: React.MouseEvent) => {
-    e.stopPropagation();
+    e.stopPropagation(); // Prevent card click when clicking video controls
     if (!videoRef.current) return;
 
     try {
@@ -71,7 +71,7 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
 
   return (
     <Card 
-      className="group relative overflow-hidden bg-card hover:shadow-lg transition-all duration-300 rounded-xl border-0" 
+      className="group relative overflow-hidden bg-card hover:shadow-lg transition-all duration-300 rounded-xl border-0 cursor-pointer" 
       onClick={() => onPreview(item)}
     >
       {/* Media Section - Fixed aspect ratio container */}
@@ -137,7 +137,7 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
               size="icon"
               className="bg-white/90 hover:bg-white shrink-0"
               onClick={(e) => {
-                e.stopPropagation();
+                e.stopPropagation(); // Prevent card click when clicking edit button
                 onEdit(item);
               }}
             >
