@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 const Settings = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const { data: thumbnailStats, refetch } = useQuery({
     queryKey: ['thumbnailStats'],
@@ -23,11 +24,23 @@ const Settings = () => {
   const handleGenerateThumbnails = async () => {
     setIsGenerating(true);
     try {
-      const { error } = await supabase.rpc('generate_missing_thumbnails');
+      // First, generate thumbnails
+      const { error: genError } = await supabase.rpc('generate_missing_thumbnails');
+      if (genError) throw genError;
+
+      // Then update all videos that still don't have thumbnails to use their default_public_url
+      const { error: updateError } = await supabase
+        .from('telegram_media')
+        .update({ thumbnail_url: null })
+        .eq('file_type', 'video')
+        .is('thumbnail_url', null)
+        .select();
+
+      if (updateError) throw updateError;
       
-      if (error) throw error;
-      
+      // Refetch the stats and invalidate any queries that might show media
       await refetch();
+      await queryClient.invalidateQueries({ queryKey: ['products'] });
       
       toast({
         title: "Success",
