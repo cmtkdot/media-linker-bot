@@ -1,9 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
-import { SyncResult } from './types.ts';
-import { QueueProcessor } from './queueProcessor.ts';
-import { GlideAPI } from './glideApi.ts';
-import { corsHeaders } from './cors.ts';
+import { GlideAPI } from '../../glide-app/api.ts';
+import { corsHeaders } from '../../glide-app/utils.ts';
+import { mapSupabaseToGlide, mapGlideToSupabase } from '../../glide-app/mapper.ts';
+import type { SyncResult, GlideConfig, GlideSyncQueueItem } from '../../glide-app/types.ts';
 
 serve(async (req) => {
   console.log('Received request:', req.method, req.url);
@@ -137,56 +137,83 @@ serve(async (req) => {
     console.log(`Found ${queueItems?.length || 0} pending sync items`);
 
     const glideApi = new GlideAPI(config.app_id, config.table_id, config.api_token);
-    const queueProcessor = new QueueProcessor(supabase, config, glideApi);
-
+    
     // Process each queue item
     for (const item of queueItems || []) {
       try {
-        await queueProcessor.processQueueItem(item, result);
-        
-        // Mark item as processed
-        const { error: updateError } = await supabase
-          .from('glide_sync_queue')
-          .update({
-            processed_at: new Date().toISOString(),
-            retry_count: (item.retry_count || 0) + 1
-          })
-          .eq('id', item.id);
+        switch (item.operation) {
+          case 'INSERT': {
+            if (!item.new_data) {
+              throw new Error('No new data provided for INSERT operation');
+            }
 
-        if (updateError) {
-          console.error('Error updating queue item:', updateError);
-          result.errors.push(`Failed to mark item ${item.id} as processed: ${updateError.message}`);
-          continue;
-        }
+            const mappedData = mapSupabaseToGlide(item.new_data);
+            const response = await glideApi.addRow(mappedData);
+            console.log('Glide API response:', response);
 
-        // Delete processed items
-        if (item.processed_at) {
-          const { error: deleteError } = await supabase
-            .from('glide_sync_queue')
-            .delete()
-            .eq('id', item.id);
+            if (response.rowIDs?.[0]) {
+              // Update the telegram_media record with the new row ID
+              const { error: updateError } = await supabase
+                .from(config.supabase_table_name)
+                .update({ 
+                  telegram_media_row_id: response.rowIDs[0],
+                  last_synced_at: new Date().toISOString()
+                })
+                .eq('id', item.new_data.id);
 
-          if (deleteError) {
-            console.error('Error deleting processed queue item:', deleteError);
-            result.errors.push(`Failed to delete processed item ${item.id}: ${deleteError.message}`);
+              if (updateError) throw updateError;
+              result.added++;
+              console.log('Successfully added row and updated telegram_media_row_id:', response.rowIDs[0]);
+            } else {
+              throw new Error('No row ID returned from Glide API');
+            }
+            break;
           }
-        }
-      } catch (error) {
-        console.error('Error processing queue item:', error);
-        result.errors.push(`Error processing item ${item.id}: ${error.message}`);
-        
-        // Update error status
-        const { error: updateError } = await supabase
-          .from('glide_sync_queue')
-          .update({
-            error: error.message,
-            retry_count: (item.retry_count || 0) + 1
-          })
-          .eq('id', item.id);
 
-        if (updateError) {
-          console.error('Error updating queue item error status:', updateError);
+          case 'UPDATE': {
+            if (!item.new_data?.telegram_media_row_id) {
+              throw new Error('No Glide row ID found for UPDATE operation');
+            }
+
+            const mappedData = mapSupabaseToGlide(item.new_data);
+            const response = await glideApi.updateRow(item.new_data.telegram_media_row_id, mappedData);
+            console.log('Glide API update response:', response);
+
+            // Update last_synced_at in Supabase
+            const { error: updateError } = await supabase
+              .from(config.supabase_table_name)
+              .update({ last_synced_at: new Date().toISOString() })
+              .eq('id', item.new_data.id);
+
+            if (updateError) throw updateError;
+            result.updated++;
+            console.log('Successfully updated row in Glide');
+            break;
+          }
+
+          case 'DELETE': {
+            if (!item.old_data?.telegram_media_row_id) {
+              throw new Error('No Glide row ID found for DELETE operation');
+            }
+
+            const response = await glideApi.deleteRow(item.old_data.telegram_media_row_id);
+            console.log('Glide API delete response:', response);
+            result.deleted++;
+            console.log('Successfully deleted row from Glide');
+            break;
+          }
+
+          default:
+            throw new Error(`Unknown operation: ${item.operation}`);
         }
+
+      } catch (error) {
+        console.error('Error processing queue item:', {
+          item_id: item.id,
+          error: error.message,
+          stack: error.stack
+        });
+        result.errors.push(`Error processing item ${item.id}: ${error.message}`);
       }
     }
 
