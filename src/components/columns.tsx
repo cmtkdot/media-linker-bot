@@ -14,8 +14,8 @@ export const columns: ColumnDef<GlideSyncQueueItem>[] = [
     accessorKey: "created_at",
     header: "Created At",
     cell: ({ row }) => {
-      const date = new Date(row.getValue("created_at"));
-      return date.toLocaleString();
+      const date = row.getValue("created_at");
+      return date ? new Date(date as string).toLocaleString() : "N/A";
     },
   },
   {
@@ -23,7 +23,7 @@ export const columns: ColumnDef<GlideSyncQueueItem>[] = [
     header: "Processed At",
     cell: ({ row }) => {
       const date = row.getValue("processed_at");
-      return date ? new Date(date).toLocaleString() : "Pending";
+      return date ? new Date(date as string).toLocaleString() : "Pending";
     },
   },
   {

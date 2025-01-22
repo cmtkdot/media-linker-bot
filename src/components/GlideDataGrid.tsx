@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { DataTable } from "@/components/ui/data-table";
 import { columns } from "./columns";
-import type { GlideConfig } from "@/types/glide";
+import type { GlideConfig, GlideSyncQueueItem } from "@/types/glide";
 
 interface GlideDataGridProps {
   configs: GlideConfig[];
@@ -19,7 +19,7 @@ export function GlideDataGrid({ configs }: GlideDataGridProps) {
         .order('created_at', { ascending: false });
       
       if (error) throw error;
-      return data;
+      return data as GlideSyncQueueItem[];
     }
   });
 
