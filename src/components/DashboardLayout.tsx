@@ -25,6 +25,9 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
             <Link to="/glide-sync" className="text-gray-600 hover:text-gray-900">
               Glide Sync
             </Link>
+            <Link to="/database-chat" className="text-gray-600 hover:text-gray-900">
+              Database Chat
+            </Link>
           </div>
           <Button onClick={handleSignOut} variant="outline">
             Sign Out

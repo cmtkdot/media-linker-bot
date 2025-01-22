@@ -8,6 +8,7 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import GlideSync from "./pages/GlideSync";
 import GlideConnections from "./pages/GlideConnections";
+import DatabaseChat from "./pages/DatabaseChat";
 import { supabase } from "@/integrations/supabase/client";
 
 const queryClient = new QueryClient();
@@ -56,6 +57,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <GlideConnections />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/database-chat"
+              element={
+                <ProtectedRoute>
+                  <DatabaseChat />
                 </ProtectedRoute>
               }
             />
