@@ -109,7 +109,11 @@ const Auth = () => {
         <div className="relative backdrop-blur-xl bg-black/40 rounded-lg border border-white/10 p-8 shadow-2xl">
           {/* Logo and Title */}
           <div className="flex flex-col items-center justify-center gap-4 mb-8">
-            <h1 className="text-3xl font-bold text-white">Media Manager</h1>
+            <img 
+              src="/lovable-uploads/7770cb52-31d2-40b0-8b5b-0822783c71ef.png" 
+              alt="Xdelo Logo" 
+              className="h-12 w-auto"
+            />
             <p className="text-white/60">Sign in to continue</p>
           </div>
 
