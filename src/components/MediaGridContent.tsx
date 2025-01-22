@@ -5,6 +5,7 @@ import { Alert, AlertDescription } from "./ui/alert";
 import { Loader2 } from "lucide-react";
 
 interface MediaGridContentProps {
+  view: 'grid' | 'table';  // Added this prop
   isLoading: boolean;
   error: Error | null;
   mediaItems: MediaItem[] | undefined;
@@ -13,6 +14,7 @@ interface MediaGridContentProps {
 }
 
 const MediaGridContent = ({
+  view,
   isLoading,
   error,
   mediaItems,
