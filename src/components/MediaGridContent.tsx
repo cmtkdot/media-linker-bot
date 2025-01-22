@@ -9,7 +9,7 @@ interface MediaGridContentProps {
   view: 'grid' | 'table';
   isLoading?: boolean;
   error?: Error | null;
-  onMediaUpdate: () => Promise<void>;
+  onMediaUpdate: () => Promise<any>; // Updated type to be more permissive
 }
 
 const MediaGridContent = ({ items = [], view, onMediaUpdate }: MediaGridContentProps) => {
