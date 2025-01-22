@@ -3,9 +3,13 @@ import { useSupabaseClient } from "@supabase/auth-helpers-react";
 import { format } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ImageSwiper } from "@/components/ui/image-swiper";
-import { MediaItem } from "@/types/media";
+import { MediaItem, MediaFileType } from "@/types/media";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+
+interface SupabaseMediaItem extends Omit<MediaItem, 'file_type'> {
+  file_type: string;
+}
 
 const Products = () => {
   const { data: products } = useQuery<MediaItem[]>({
@@ -17,7 +21,12 @@ const Products = () => {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      return data;
+
+      // Convert the file_type to our MediaFileType
+      return (data || []).map((item: SupabaseMediaItem) => ({
+        ...item,
+        file_type: item.file_type as MediaFileType
+      }));
     }
   });
 

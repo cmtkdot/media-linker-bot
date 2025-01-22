@@ -14,17 +14,19 @@ export interface TelegramData {
   storage_path?: string;
 }
 
+export type MediaFileType = 'video' | 'image' | 'document';
+
 export interface MediaItem {
   id: string;
   public_url: string;
   default_public_url: string;
   thumbnail_url?: string;
-  file_type: 'image' | 'video' | 'document';
+  file_type: MediaFileType;
   mime_type?: string;
   file_size?: number;
   width?: number;
   height?: number;
-  duration?: number; // for videos
+  duration?: number;
   caption?: string;
   product_code?: string;
   product_name?: string;
