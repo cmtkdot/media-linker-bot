@@ -74,3 +74,37 @@ export interface SupabaseMediaItem {
   glide_data: Json;
   media_metadata: Json;
 }
+
+export interface MediaSearchBarProps {
+  search: string;
+  onSearchChange: (value: string) => void;
+  view: 'grid' | 'table';
+  onViewChange: (view: 'grid' | 'table') => void;
+  selectedChannel: string;
+  onChannelChange: (value: string) => void;
+  selectedType: string;
+  onTypeChange: (value: string) => void;
+  selectedVendor: string;
+  onVendorChange: (value: string) => void;
+  channels: string[];
+  vendors: string[];
+}
+
+export interface MediaEditDialogProps {
+  editItem: MediaItem | null;
+  onClose: () => void;
+  onSave: () => Promise<void>;
+  onItemChange: (field: keyof MediaItem, value: MediaItemValue) => void;
+  formatDate: (date: string | null) => string | null;
+}
+
+export interface MediaViewerProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  media: MediaItem | null;
+}
+
+export interface MediaTableProps {
+  data: MediaItem[];
+  onEdit: (item: MediaItem) => void;
+}
