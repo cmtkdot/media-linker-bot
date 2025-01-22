@@ -3,9 +3,9 @@ export interface GlideSyncQueueItem {
   table_name: string;
   record_id: string;
   operation: 'INSERT' | 'UPDATE' | 'DELETE';
-  old_data?: Record<string, any>;
-  new_data?: Record<string, any>;
-  created_at?: string;
+  old_data?: Record<string, any> | null;
+  new_data?: Record<string, any> | null;
+  created_at?: string | null;
   processed_at?: string | null;
   error?: string | null;
   retry_count?: number;
