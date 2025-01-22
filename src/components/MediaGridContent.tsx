@@ -7,10 +7,12 @@ import MediaEditDialog from "./MediaEditDialog";
 interface MediaGridContentProps {
   items: MediaItem[];
   view: 'grid' | 'table';
+  isLoading?: boolean;
+  error?: Error | null;
   onMediaUpdate: () => Promise<void>;
 }
 
-const MediaGridContent = ({ items, view, onMediaUpdate }: MediaGridContentProps) => {
+const MediaGridContent = ({ items = [], view, onMediaUpdate }: MediaGridContentProps) => {
   const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
   const [editItem, setEditItem] = useState<MediaItem | null>(null);
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -56,8 +58,7 @@ const MediaGridContent = ({ items, view, onMediaUpdate }: MediaGridContentProps)
           <MediaCard
             key={item.id}
             item={item}
-            view={view}
-            onView={handleView}
+            onPreview={() => handleView(item)}
             onEdit={handleEdit}
           />
         ))}

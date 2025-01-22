@@ -5,7 +5,6 @@ import { useToast } from "@/components/ui/use-toast";
 import { MediaItem, SupabaseMediaItem } from "@/types/media";
 import MediaGridFilters from "./MediaGridFilters";
 import MediaGridContent from "./MediaGridContent";
-import MediaEditDialog from "./MediaEditDialog";
 
 const MediaGrid = () => {
   const [view, setView] = useState<'grid' | 'table'>('grid');
@@ -13,8 +12,6 @@ const MediaGrid = () => {
   const [selectedChannel, setSelectedChannel] = useState("all");
   const [selectedType, setSelectedType] = useState("all");
   const [selectedVendor, setSelectedVendor] = useState("all");
-  const [editItem, setEditItem] = useState<MediaItem | null>(null);
-  const [previewItem, setPreviewItem] = useState<MediaItem | null>(null);
   const { toast } = useToast();
 
   const { data: filterOptions } = useQuery({
@@ -83,47 +80,6 @@ const MediaGrid = () => {
     }
   });
 
-  const handleEdit = async () => {
-    if (!editItem) return;
-
-    try {
-      const { error } = await supabase
-        .from('telegram_media')
-        .update({
-          caption: editItem.caption,
-          product_name: editItem.product_name,
-          product_code: editItem.product_code,
-          quantity: editItem.quantity,
-          vendor_uid: editItem.vendor_uid,
-          purchase_date: editItem.purchase_date,
-          notes: editItem.notes
-        })
-        .eq('id', editItem.id);
-
-      if (error) throw error;
-
-      toast({
-        title: "Changes saved",
-        description: "The media item has been updated successfully.",
-      });
-
-      setEditItem(null);
-      refetch();
-    } catch (error) {
-      console.error('Error updating media:', error);
-      toast({
-        title: "Error",
-        description: "Failed to update media item.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const formatDate = (date: string | null) => {
-    if (!date) return null;
-    return date.split('T')[0];
-  };
-
   return (
     <div className="space-y-4 px-4 py-4">
       <MediaGridFilters
@@ -142,22 +98,11 @@ const MediaGrid = () => {
       />
       
       <MediaGridContent
+        items={mediaItems || []}
         view={view}
         isLoading={isLoading}
         error={error as Error | null}
-        mediaItems={mediaItems}
-        previewItem={previewItem}
-        onPreviewChange={(open) => !open && setPreviewItem(null)}
-        onEdit={setEditItem}
-        onPreview={setPreviewItem}
-      />
-
-      <MediaEditDialog
-        editItem={editItem}
-        onClose={() => setEditItem(null)}
-        onItemChange={(field, value) => setEditItem(prev => prev ? {...prev, [field]: value} : null)}
-        onSave={handleEdit}
-        formatDate={formatDate}
+        onMediaUpdate={refetch}
       />
     </div>
   );
