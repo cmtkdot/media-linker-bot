@@ -1,34 +1,16 @@
 import React from "react";
 import { Card } from "@/components/ui/card";
 import { Play } from "lucide-react";
-
-interface MediaItem {
-  id: string;
-  public_url: string;
-  default_public_url: string;
-  thumbnail_url?: string;
-  file_type: string;
-  caption?: string;
-  product_name?: string;
-  product_code?: string;
-  quantity?: number;
-  vendor_uid?: string;
-  purchase_date?: string;
-  notes?: string;
-  telegram_data?: {
-    chat?: {
-      type?: string;
-      title?: string;
-    };
-  };
-}
+import { MediaItem } from "@/types/media";
+import { Dispatch, SetStateAction } from "react";
 
 interface MediaCardProps {
   item: MediaItem;
-  onPreview: (item: MediaItem) => void;
+  onPreview: () => void;
+  onEdit: Dispatch<SetStateAction<MediaItem | null>>;
 }
 
-const MediaCard = ({ item, onPreview }: MediaCardProps) => {
+const MediaCard = ({ item, onPreview, onEdit }: MediaCardProps) => {
   const [isPlaying, setIsPlaying] = React.useState(false);
   const videoRef = React.useRef<HTMLVideoElement>(null);
 
@@ -70,7 +52,7 @@ const MediaCard = ({ item, onPreview }: MediaCardProps) => {
   return (
     <Card 
       className="group relative overflow-hidden bg-card hover:shadow-lg transition-all duration-300 rounded-xl border-0 cursor-pointer" 
-      onClick={() => onPreview(item)}
+      onClick={() => onPreview()}
     >
       {/* Media Section - Fixed aspect ratio container */}
       <div className="relative aspect-square w-full">

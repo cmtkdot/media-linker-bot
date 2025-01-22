@@ -58,7 +58,10 @@ const MediaGridContent = ({
           <MediaCard
             key={item.id}
             item={item}
-            onPreview={() => onPreviewChange(true)}
+            onPreview={() => {
+              onPreviewChange(true);
+              onEdit(item);
+            }}
             onEdit={onEdit}
           />
         ))}
