@@ -14,7 +14,10 @@ export interface MediaItem {
     chat?: {
       type?: string;
       title?: string;
+      id?: number;
     };
+    message_id?: number;
+    chat_id?: number;
   };
   created_at: string;
 }

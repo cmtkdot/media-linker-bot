@@ -47,18 +47,24 @@ const MediaEditDialog = ({ editItem, onClose, onSave, onItemChange, formatDate }
   };
 
   const updateTelegramMessage = async (updates: any) => {
-    if (!editItem?.telegram_data) return;
+    if (!editItem?.telegram_data?.message_id || !editItem?.telegram_data?.chat?.id) {
+      console.warn('Missing telegram data for update:', editItem);
+      return;
+    }
 
     try {
       const { data, error } = await supabase.functions.invoke('update-telegram-message', {
         body: {
           messageId: editItem.telegram_data.message_id,
-          chatId: editItem.telegram_data.chat_id,
+          chatId: editItem.telegram_data.chat.id,
           updates
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error updating Telegram message:', error);
+        throw error;
+      }
 
       console.log('Telegram message updated:', data);
     } catch (error) {
@@ -78,15 +84,16 @@ const MediaEditDialog = ({ editItem, onClose, onSave, onItemChange, formatDate }
       // First save to Supabase
       await onSave();
 
-      // Then update Telegram message
-      await updateTelegramMessage({
-        caption: editItem.caption,
-        // Add other fields as needed
-      });
+      // Then update Telegram message if we have the required data
+      if (editItem.telegram_data?.message_id && editItem.telegram_data?.chat?.id) {
+        await updateTelegramMessage({
+          caption: editItem.caption,
+        });
+      }
 
       toast({
         title: "Changes saved",
-        description: "The media item and Telegram message have been updated successfully.",
+        description: "The media item has been updated successfully.",
       });
 
       onClose();
