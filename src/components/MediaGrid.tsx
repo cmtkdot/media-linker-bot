@@ -1,3 +1,4 @@
+<lov-code>
 import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -7,7 +8,7 @@ import MediaTable from "./MediaTable";
 import MediaViewer from "./MediaViewer";
 import MediaSearchBar from "./MediaSearchBar";
 import MediaEditDialog from "./MediaEditDialog";
-import { MediaItem } from "@/types/media";
+import { MediaItem, MediaFileType, SupabaseMediaItem } from "@/types/media";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Loader2, AlertCircle } from "lucide-react";
 
@@ -28,12 +29,6 @@ interface FilterOptions {
   channels: string[];
   vendors: string[];
 }
-
-interface TelegramMediaResponse {
-  telegram_data: TelegramData;
-}
-
-type MediaItemValue = string | number | null | undefined;
 
 const MediaGrid = () => {
   const [view, setView] = useState<'grid' | 'table'>('grid');
@@ -61,7 +56,7 @@ const MediaGrid = () => {
 
       const channels = [...new Set((channelsResult.data || [])
         .map(item => {
-          const response = item as unknown as TelegramMediaResponse;
+          const response = item as unknown as TelegramData;
           return response.telegram_data.chat?.title;
         })
         .filter(Boolean))];
@@ -101,8 +96,20 @@ const MediaGrid = () => {
       
       if (queryError) throw queryError;
 
+      // Convert Supabase data to MediaItem type
+      const convertedData = (data || []).map((item: SupabaseMediaItem) => ({
+        ...item,
+        file_type: item.file_type as MediaFileType,
+        telegram_data: item.telegram_data as TelegramData,
+        analyzed_content: item.analyzed_content ? {
+          text: item.analyzed_content.text as string,
+          labels: item.analyzed_content.labels as string[],
+          objects: item.analyzed_content.objects as string[]
+        } : undefined
+      }));
+
       // Group media by media_group_id if it exists
-      const groupedData = (data || []).reduce((acc: { [key: string]: MediaItem[] }, item: MediaItem) => {
+      const groupedData = convertedData.reduce<Record<string, MediaItem[]>>((acc, item) => {
         const groupId = item.telegram_data?.media_group_id || item.id;
         if (!acc[groupId]) {
           acc[groupId] = [];
@@ -216,63 +223,4 @@ const MediaGrid = () => {
   }
 
   return (
-    <div className="space-y-4 px-4 py-6 max-w-[2000px] mx-auto">
-      <MediaSearchBar
-        search={search}
-        view={view}
-        onSearchChange={setSearch}
-        onViewChange={setView}
-        selectedChannel={selectedChannel}
-        onChannelChange={setSelectedChannel}
-        selectedType={selectedType}
-        onTypeChange={setSelectedType}
-        selectedVendor={selectedVendor}
-        onVendorChange={setSelectedVendor}
-        channels={filterOptions?.channels || []}
-        vendors={filterOptions?.vendors || []}
-      />
-
-      {view === 'grid' ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
-          {mediaItems.map((item) => (
-            <ContentCard
-              key={item.id}
-              backgroundImage={item.thumbnail_url || item.public_url || item.default_public_url}
-              onEdit={() => setEditItem(item)}
-              onClick={() => setPreviewItem(item)}
-              content={{
-                channelTitle: item.telegram_data?.chat?.title,
-                purchaseDate: item.purchase_date ? new Date(item.purchase_date).toLocaleDateString() : undefined,
-                productName: item.product_name || 'Untitled Product',
-                caption: item.caption
-              }}
-              isVideo={item.file_type === 'video'}
-              className="group-hover/card:shadow-2xl transition-all duration-300"
-            />
-          ))}
-        </div>
-      ) : (
-        <MediaTable 
-          data={mediaItems} 
-          onEdit={setEditItem} 
-        />
-      )}
-
-      <MediaEditDialog
-        editItem={editItem}
-        onClose={() => setEditItem(null)}
-        onSave={handleEdit}
-        onItemChange={handleItemChange}
-        formatDate={(dateString) => dateString ? new Date(dateString).toISOString().split('T')[0] : null}
-      />
-
-      <MediaViewer
-        open={!!previewItem}
-        onOpenChange={(open) => !open && setPreviewItem(null)}
-        media={previewItem}
-      />
-    </div>
-  );
-};
-
-export default MediaGrid;
+    <div className="space-y-4 px-4 py

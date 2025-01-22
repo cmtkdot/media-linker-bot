@@ -1,8 +1,7 @@
-import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ImageSwiper } from "@/components/ui/image-swiper";
-import { MediaItem, MediaFileType, SupabaseMediaItem } from "@/types/media";
+import { MediaItem, MediaFileType, SupabaseMediaItem, TelegramData } from "@/types/media";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -21,7 +20,7 @@ const Products = () => {
       return (data || []).map((item: SupabaseMediaItem) => ({
         ...item,
         file_type: item.file_type as MediaFileType,
-        telegram_data: item.telegram_data as MediaItem['telegram_data'],
+        telegram_data: item.telegram_data as TelegramData,
         analyzed_content: item.analyzed_content ? {
           text: item.analyzed_content.text as string,
           labels: item.analyzed_content.labels as string[],

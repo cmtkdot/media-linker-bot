@@ -46,8 +46,28 @@ export interface MediaItem {
   updated_at?: string;
 }
 
-export interface SupabaseMediaItem extends Omit<MediaItem, 'file_type' | 'telegram_data' | 'analyzed_content'> {
+export interface SupabaseMediaItem {
+  id: string;
+  public_url: string;
+  default_public_url: string;
+  thumbnail_url?: string;
   file_type: string;
+  mime_type?: string;
+  file_size?: number;
+  width?: number;
+  height?: number;
+  duration?: number;
+  caption?: string;
+  product_code?: string;
+  product_name?: string;
+  quantity?: number;
+  vendor_uid?: string;
+  purchase_date?: string;
+  notes?: string;
+  message_url?: string;
+  chat_url?: string;
   telegram_data: Record<string, any>;
   analyzed_content: Record<string, any> | null;
+  created_at: string;
+  updated_at?: string;
 }
