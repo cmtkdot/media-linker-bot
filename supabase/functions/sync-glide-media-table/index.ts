@@ -11,6 +11,7 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -24,7 +25,16 @@ serve(async (req) => {
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    const body = await req.json();
+    
+    // Parse request body
+    let body;
+    try {
+      body = await req.json();
+    } catch (error) {
+      console.error('Error parsing request body:', error);
+      throw new Error('Invalid request body');
+    }
+    
     const { operation, tableId } = body;
 
     if (!operation || !tableId) {
@@ -71,7 +81,7 @@ serve(async (req) => {
       try {
         await queueProcessor.processQueueItem(item, result);
         
-        // Mark item as processed and update retry count
+        // Mark item as processed
         const { error: updateError } = await supabase
           .from('glide_sync_queue')
           .update({
@@ -83,18 +93,20 @@ serve(async (req) => {
         if (updateError) {
           console.error('Error updating queue item:', updateError);
           result.errors.push(`Failed to mark item ${item.id} as processed: ${updateError.message}`);
+          continue;
         }
 
         // Delete processed items
-        const { error: deleteError } = await supabase
-          .from('glide_sync_queue')
-          .delete()
-          .eq('id', item.id)
-          .not('processed_at', 'is', null);
+        if (item.processed_at) {
+          const { error: deleteError } = await supabase
+            .from('glide_sync_queue')
+            .delete()
+            .eq('id', item.id);
 
-        if (deleteError) {
-          console.error('Error deleting processed queue item:', deleteError);
-          result.errors.push(`Failed to delete processed item ${item.id}: ${deleteError.message}`);
+          if (deleteError) {
+            console.error('Error deleting processed queue item:', deleteError);
+            result.errors.push(`Failed to delete processed item ${item.id}: ${deleteError.message}`);
+          }
         }
       } catch (error) {
         console.error('Error processing queue item:', error);
