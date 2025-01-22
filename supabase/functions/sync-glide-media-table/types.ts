@@ -25,6 +25,7 @@ export interface GlideTableSchema {
   analyzedContent: { type: "string"; name: "c2o7S" };
   purchaseOrderUid: { type: "string"; name: "Ve1EB" };
   defaultPublicUrl: { type: "uri"; name: "XIJQs" };
+  mediaJson: { type: "string"; name: "bYXAn" };
 }
 
 export interface TelegramMedia {
