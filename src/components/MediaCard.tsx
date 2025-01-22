@@ -32,8 +32,29 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
   const [thumbnailLoaded, setThumbnailLoaded] = React.useState(false);
   const videoRef = React.useRef<HTMLVideoElement>(null);
 
-  // Cleanup function for video element
+  // Initialize video thumbnail
   React.useEffect(() => {
+    if (item.file_type === 'video' && videoRef.current) {
+      // Set poster image
+      videoRef.current.poster = item.default_public_url;
+      
+      // Load metadata to get thumbnail
+      const loadMetadata = async () => {
+        try {
+          if (videoRef.current) {
+            videoRef.current.currentTime = 0.1;
+            await videoRef.current.load();
+            setThumbnailLoaded(true);
+          }
+        } catch (error) {
+          console.error("Error loading video metadata:", error);
+        }
+      };
+      
+      loadMetadata();
+    }
+    
+    // Cleanup
     return () => {
       if (videoRef.current) {
         videoRef.current.pause();
@@ -41,52 +62,35 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
         videoRef.current.load();
       }
     };
-  }, []);
+  }, [item.file_type, item.default_public_url]);
 
-  // Load video thumbnail
-  React.useEffect(() => {
-    if (item.file_type === 'video' && videoRef.current) {
-      videoRef.current.currentTime = 0.1; // Set to 0.1s to get the first frame
-      const handleLoadedData = () => setThumbnailLoaded(true);
-      videoRef.current.addEventListener('loadeddata', handleLoadedData);
-      return () => {
-        if (videoRef.current) {
-          videoRef.current.removeEventListener('loadeddata', handleLoadedData);
-        }
-      };
-    }
-  }, [item.file_type]);
-
-  const handleVideoClick = (e: React.MouseEvent) => {
+  const handleVideoClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (videoRef.current) {
-      try {
-        if (isPlaying) {
-          videoRef.current.pause();
-          videoRef.current.currentTime = 0;
-        } else {
-          if (!videoRef.current.src) {
-            videoRef.current.src = item.public_url || item.default_public_url;
-          }
-          const playPromise = videoRef.current.play();
-          if (playPromise !== undefined) {
-            playPromise.catch((error) => {
-              console.error("Video playback error:", error);
-              setIsPlaying(false);
-            });
-          }
+    if (!videoRef.current) return;
+
+    try {
+      if (isPlaying) {
+        videoRef.current.pause();
+        videoRef.current.currentTime = 0;
+      } else {
+        if (!videoRef.current.src) {
+          videoRef.current.src = item.public_url || item.default_public_url;
         }
-        setIsPlaying(!isPlaying);
-      } catch (error) {
-        console.error("Video interaction error:", error);
-        setIsPlaying(false);
+        const playPromise = videoRef.current.play();
+        if (playPromise !== undefined) {
+          await playPromise;
+        }
       }
+      setIsPlaying(!isPlaying);
+    } catch (error) {
+      console.error("Video playback error:", error);
+      setIsPlaying(false);
     }
   };
 
   return (
     <Card 
-      className="group relative overflow-hidden bg-card hover:shadow-lg transition-all duration-300 rounded-xl border-0 flex flex-col" 
+      className="group relative overflow-hidden bg-card hover:shadow-lg transition-all duration-300 rounded-xl border-0 flex flex-col h-full" 
       onClick={() => onPreview(item)}
     >
       <div className="aspect-square relative">
@@ -97,7 +101,6 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
               className="object-cover w-full h-full"
               muted
               playsInline
-              poster={item.default_public_url}
               preload="metadata"
             />
             {!isPlaying && (
