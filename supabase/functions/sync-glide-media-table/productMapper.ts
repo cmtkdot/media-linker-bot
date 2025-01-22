@@ -24,7 +24,7 @@ export function mapSupabaseToGlide(supabaseRow: TelegramMedia): Record<string, a
     vendor_uid: supabaseRow.vendor_uid,
     purchase_date: supabaseRow.purchase_date,
     notes: supabaseRow.notes,
-    analyzed_content: JSON.stringify(supabaseRow.analyzed_content),
+    analyzed_content: supabaseRow.analyzed_content ? JSON.stringify(supabaseRow.analyzed_content) : null,
     purchase_order_uid: supabaseRow.purchase_order_uid,
     default_public_url: supabaseRow.default_public_url,
     telegram_media_row_id: supabaseRow.telegram_media_row_id
