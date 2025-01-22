@@ -1,10 +1,12 @@
 import type { GlideMutation, GlideApiRequest } from '../_shared/types.ts';
+import { SupabaseClient } from '@supabase/supabase-js';
 
 export class GlideAPI {
   constructor(
     private appId: string,
     private tableId: string,
-    private apiToken: string
+    private apiToken: string,
+    private supabase: SupabaseClient
   ) {}
 
   private async makeRequest(method: string, mutation: GlideMutation) {
@@ -35,16 +37,30 @@ export class GlideAPI {
     return data;
   }
 
-  async addRow(data: Record<string, unknown>) {
-    return this.makeRequest('POST', {
-      kind: 'set-columns-in-row',
+  async addRow(data: GlideMutation['columnValues'], recordId: string) {
+    const response = await this.makeRequest('POST', {
+      kind: 'add-row-to-table',
       tableName: this.tableId,
-      columnValues: data,
-      rowID: data.id as string
+      columnValues: data
     });
+
+    // Update telegram_media_row_id in Supabase when Glide returns the rowID
+    if (response.rowID) {
+      const { error } = await this.supabase
+        .from('telegram_media')
+        .update({ telegram_media_row_id: response.rowID })
+        .eq('id', recordId);
+
+      if (error) {
+        console.error('Error updating telegram_media_row_id:', error);
+        throw error;
+      }
+    }
+
+    return response;
   }
 
-  async updateRow(rowId: string, data: Record<string, unknown>) {
+  async updateRow(rowId: string, data: GlideMutation['columnValues']) {
     return this.makeRequest('POST', {
       kind: 'set-columns-in-row',
       tableName: this.tableId,
