@@ -233,30 +233,6 @@ export type Database = {
         }
         Relationships: []
       }
-      products: {
-        Row: {
-          caption: string | null
-          id: string
-          media_group_id: string
-          name: string
-          purchase_date: string
-        }
-        Insert: {
-          caption?: string | null
-          id?: string
-          media_group_id: string
-          name: string
-          purchase_date: string
-        }
-        Update: {
-          caption?: string | null
-          id?: string
-          media_group_id?: string
-          name?: string
-          purchase_date?: string
-        }
-        Relationships: []
-      }
       telegram_media: {
         Row: {
           analyzed_content: Json | null
@@ -284,7 +260,6 @@ export type Database = {
           quantity: number | null
           telegram_data: Json
           telegram_media_row_id: string | null
-          thumbnail_url: string | null
           updated_at: string
           vendor_uid: string | null
         }
@@ -314,7 +289,6 @@ export type Database = {
           quantity?: number | null
           telegram_data?: Json
           telegram_media_row_id?: string | null
-          thumbnail_url?: string | null
           updated_at?: string
           vendor_uid?: string | null
         }
@@ -344,7 +318,6 @@ export type Database = {
           quantity?: number | null
           telegram_data?: Json
           telegram_media_row_id?: string | null
-          thumbnail_url?: string | null
           updated_at?: string
           vendor_uid?: string | null
         }
