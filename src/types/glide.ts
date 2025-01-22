@@ -39,22 +39,22 @@ export interface GlideConfig {
   supabase_table_name: string;
 }
 
-export interface SyncResult {
-  added: number;
-  updated: number;
-  deleted: number;
-  errors: string[];
-}
-
 export interface GlideSyncQueueItem {
   id: string;
   table_name: string;
   record_id: string;
   operation: 'INSERT' | 'UPDATE' | 'DELETE';
-  old_data?: Record<string, any>;
-  new_data?: Record<string, any>;
-  created_at?: string;
+  old_data?: Record<string, any> | null;
+  new_data?: Record<string, any> | null;
+  created_at?: string | null;
   processed_at?: string | null;
   error?: string | null;
   retry_count?: number;
+}
+
+export interface SyncResult {
+  added: number;
+  updated: number;
+  deleted: number;
+  errors: string[];
 }

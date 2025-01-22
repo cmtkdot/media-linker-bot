@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { DataTable } from "@/components/ui/data-table";
 import { columns } from "./columns";
-import type { GlideSyncQueueItem } from "@/types/glide";
+import type { GlideSyncQueueItem, GlideConfig } from "@/types/glide";
 
 interface GlideDataGridProps {
   configs: GlideConfig[];
