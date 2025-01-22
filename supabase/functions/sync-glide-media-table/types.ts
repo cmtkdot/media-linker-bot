@@ -12,30 +12,31 @@ export interface GlideResponse {
 
 export interface GlideTableSchema {
   id: { type: "string"; name: "UkkMS" };
-  fileId: { type: "string"; name: "9Bod8" };
-  fileUniqueId: { type: "string"; name: "IYnip" };
-  fileType: { type: "string"; name: "hbjE4" };
-  publicUrl: { type: "uri"; name: "d8Di5" };
-  productName: { type: "string"; name: "xGGv3" };
-  productCode: { type: "string"; name: "xlfB9" };
+  file_id: { type: "string"; name: "9Bod8" };
+  file_unique_id: { type: "string"; name: "IYnip" };
+  file_type: { type: "string"; name: "hbjE4" };
+  public_url: { type: "uri"; name: "d8Di5" };
+  product_name: { type: "string"; name: "xGGv3" };
+  product_code: { type: "string"; name: "xlfB9" };
   quantity: { type: "number"; name: "TWRwx" };
-  telegramData: { type: "string"; name: "Wm1he" };
-  glideData: { type: "string"; name: "ZRV7Z" };
-  mediaMetadata: { type: "string"; name: "Eu9Zn" };
+  telegram_data: { type: "string"; name: "Wm1he" };
+  glide_data: { type: "string"; name: "ZRV7Z" };
+  media_metadata: { type: "string"; name: "Eu9Zn" };
   processed: { type: "boolean"; name: "oj7fP" };
-  processingError: { type: "string"; name: "A4sZX" };
-  lastSyncedAt: { type: "string"; name: "PWhCr" };
-  createdAt: { type: "string"; name: "Oa3L9" };
-  updatedAt: { type: "string"; name: "9xwrl" };
-  messageId: { type: "string"; name: "Uzkgt" };
+  processing_error: { type: "string"; name: "A4sZX" };
+  last_synced_at: { type: "string"; name: "PWhCr" };
+  created_at: { type: "string"; name: "Oa3L9" };
+  updated_at: { type: "string"; name: "9xwrl" };
+  message_id: { type: "string"; name: "Uzkgt" };
   caption: { type: "string"; name: "pRsjz" };
-  vendorUid: { type: "string"; name: "uxDo1" };
-  purchaseDate: { type: "date"; name: "AMWxJ" };
+  vendor_uid: { type: "string"; name: "uxDo1" };
+  purchase_date: { type: "date"; name: "AMWxJ" };
   notes: { type: "string"; name: "BkUFO" };
-  analyzedContent: { type: "string"; name: "QhAgy" };
-  purchaseOrderUid: { type: "string"; name: "3y8Wt" };
-  defaultPublicUrl: { type: "uri"; name: "rCJK2" };
-  rowId: { type: "string"; name: "rowID" };
+  analyzed_content: { type: "string"; name: "QhAgy" };
+  purchase_order_uid: { type: "string"; name: "3y8Wt" };
+  default_public_url: { type: "uri"; name: "rCJK2" };
+  telegram_media_row_id: { type: "string"; name: "rowID" };
+  media_json: { type: "string"; name: "NL5gM" };
 }
 
 export interface TelegramMedia {
