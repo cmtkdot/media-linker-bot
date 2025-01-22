@@ -135,19 +135,19 @@ const MediaGrid = () => {
   };
 
   if (isLoading) {
-    return <div className="text-center p-4">Loading media...</div>;
+    return <div className="flex items-center justify-center h-[50vh] text-muted-foreground">Loading media...</div>;
   }
 
   if (error) {
-    return <div className="text-center text-red-500 p-4">Error loading media: {error.message}</div>;
+    return <div className="text-center text-destructive p-4">Error loading media: {error.message}</div>;
   }
 
   if (!mediaItems?.length) {
-    return <div className="text-center p-4">No media items found</div>;
+    return <div className="text-center text-muted-foreground p-4">No media items found</div>;
   }
 
   return (
-    <div className="space-y-4 px-2 sm:px-4">
+    <div className="space-y-4 px-4 py-6 max-w-7xl mx-auto">
       <MediaSearchBar
         search={search}
         view={view}
@@ -156,7 +156,7 @@ const MediaGrid = () => {
       />
 
       {view === 'grid' ? (
-        <div className="grid grid-cols-2 gap-2 sm:gap-4">
+        <div className="grid grid-cols-2 gap-4">
           {mediaItems.map((item) => (
             <MediaCard
               key={item.id}

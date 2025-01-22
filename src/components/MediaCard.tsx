@@ -44,50 +44,40 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
     }
   };
 
-  const handleVideoError = (video: HTMLVideoElement, defaultUrl: string) => {
-    if (video.src !== defaultUrl) {
-      video.src = defaultUrl;
-    }
-  };
-
-  const handleImageError = (img: HTMLImageElement, defaultUrl: string) => {
-    if (img.src !== defaultUrl) {
-      img.src = defaultUrl;
-    }
-  };
-
   return (
     <Card 
-      className="overflow-hidden group relative hover:shadow-lg transition-all duration-300" 
+      className="group relative overflow-hidden bg-card hover:shadow-lg transition-all duration-300 rounded-xl border-0" 
       onClick={() => onPreview(item)}
     >
       <div className="aspect-square relative">
-        <div className="absolute inset-0 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+        <div className="absolute inset-0 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-black/20">
           <Button
             variant="outline"
             size="icon"
-            className="bg-white/80 hover:bg-white"
+            className="bg-white/90 hover:bg-white"
             onClick={(e) => {
               e.stopPropagation();
               onEdit(item);
             }}
           >
-            <Pencil className="h-4 w-4" />
+            <Pencil className="h-4 w-4 text-black" />
           </Button>
         </div>
         {item.file_type === 'video' ? (
-          <div className="relative h-full cursor-pointer" onClick={handleVideoClick}>
+          <div className="relative h-full cursor-pointer group" onClick={handleVideoClick}>
             <video
               ref={videoRef}
               src={item.public_url || item.default_public_url}
               className="object-cover w-full h-full"
               muted
               playsInline
-              onError={(e) => handleVideoError(e.target as HTMLVideoElement, item.default_public_url)}
+              poster={item.default_public_url}
             />
             {!isPlaying && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                <Play className="h-12 w-12 text-white" />
+              <div className="absolute inset-0 flex items-center justify-center bg-black/40 group-hover:bg-black/60 transition-colors">
+                <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Play className="h-6 w-6 text-black" />
+                </div>
               </div>
             )}
           </div>
@@ -96,23 +86,22 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
             src={item.public_url || item.default_public_url}
             alt={item.caption || "Media item"}
             className="object-cover w-full h-full"
-            onError={(e) => handleImageError(e.target as HTMLImageElement, item.default_public_url)}
           />
         )}
       </div>
-      <div className="p-2 sm:p-4 bg-white border-t">
-        <p className="text-center text-sm sm:text-base font-medium mb-1 truncate">
+      <div className="p-3 bg-card border-t border-border/5">
+        <p className="text-sm font-medium text-foreground truncate">
           {item.caption || 'No caption'}
         </p>
-        <div className="flex justify-between items-end text-xs text-gray-600 px-0.5 mt-1">
+        <div className="flex justify-between items-center text-xs text-muted-foreground mt-1">
           <span>{item.purchase_date ? new Date(item.purchase_date).toLocaleDateString() : '-'}</span>
           <span className="capitalize">{item.file_type}</span>
         </div>
       </div>
-      <div className="p-2 text-xs sm:text-sm space-y-1 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-full group-hover:translate-y-0 bg-white absolute bottom-0 left-0 right-0">
+      <div className="p-3 text-xs space-y-1 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-full group-hover:translate-y-0 bg-card/95 backdrop-blur-sm absolute bottom-0 left-0 right-0 border-t border-border/10">
         <div className="grid grid-cols-2 gap-x-2 gap-y-1">
           <div>
-            <p className="font-medium truncate">{item.product_name || 'Untitled'}</p>
+            <p className="font-medium truncate text-foreground">{item.product_name || 'Untitled'}</p>
             <p className="text-muted-foreground">Code: {item.product_code || '-'}</p>
             <p className="text-muted-foreground">Quantity: {item.quantity || '-'}</p>
             <p className="text-muted-foreground">Vendor: {item.vendor_uid || '-'}</p>
