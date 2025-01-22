@@ -86,17 +86,38 @@ export class GlideAPI {
     return data;
   }
 
-  private extractRowId(response: GlideApiResponse): string {
-    // Check both possible response formats
-    const rowId = response.rowID || response.Row_ID || response.Row_Id || response.row_id;
-    if (!rowId) {
-      throw new GlideApiError(
-        'Glide API did not return a rowID',
-        undefined,
-        JSON.stringify(response)
-      );
+  private extractRowId(response: GlideApiResponse | GlideApiResponse[]): string {
+    console.log('Extracting rowID from response:', response);
+    
+    // Handle array response
+    if (Array.isArray(response)) {
+      const firstResponse = response[0];
+      if (!firstResponse) {
+        throw new GlideApiError(
+          'Empty response array from Glide API',
+          undefined,
+          JSON.stringify(response)
+        );
+      }
+      if (firstResponse.rowID) {
+        return firstResponse.rowID;
+      }
     }
-    return rowId;
+    
+    // Handle single response object
+    if (typeof response === 'object' && response !== null) {
+      // Check all possible rowID field variations
+      const rowId = response.rowID || response.Row_ID || response.Row_Id || response.row_id;
+      if (rowId) {
+        return rowId;
+      }
+    }
+
+    throw new GlideApiError(
+      'Glide API did not return a rowID in an expected format',
+      undefined,
+      JSON.stringify(response)
+    );
   }
 
   async addRow(data: GlideMutation['columnValues'], recordId: string) {
