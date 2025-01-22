@@ -16,6 +16,7 @@ interface MediaCardProps {
     vendor_uid?: string;
     purchase_date?: string;
     notes?: string;
+    thumbnail_url?: string;
     telegram_data?: {
       chat?: {
         type?: string;
@@ -96,7 +97,7 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
             <video
               ref={videoRef}
               className="object-cover w-full h-full"
-              poster={item.default_public_url}
+              poster={item.thumbnail_url || item.default_public_url}
               playsInline
               muted
               preload="metadata"

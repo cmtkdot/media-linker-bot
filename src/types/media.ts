@@ -12,6 +12,7 @@ export interface MediaItem {
   notes?: string;
   message_url?: string;
   chat_url?: string;
+  thumbnail_url?: string;
   analyzed_content?: {
     remaining?: number;
     [key: string]: any;

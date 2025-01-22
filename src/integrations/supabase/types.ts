@@ -284,6 +284,7 @@ export type Database = {
           quantity: number | null
           telegram_data: Json
           telegram_media_row_id: string | null
+          thumbnail_url: string | null
           updated_at: string
           vendor_uid: string | null
         }
@@ -313,6 +314,7 @@ export type Database = {
           quantity?: number | null
           telegram_data?: Json
           telegram_media_row_id?: string | null
+          thumbnail_url?: string | null
           updated_at?: string
           vendor_uid?: string | null
         }
@@ -342,6 +344,7 @@ export type Database = {
           quantity?: number | null
           telegram_data?: Json
           telegram_media_row_id?: string | null
+          thumbnail_url?: string | null
           updated_at?: string
           vendor_uid?: string | null
         }
