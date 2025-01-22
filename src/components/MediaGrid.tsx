@@ -29,6 +29,10 @@ interface FilterOptions {
   vendors: string[];
 }
 
+interface TelegramMediaResponse {
+  telegram_data: TelegramData;
+}
+
 const MediaGrid = () => {
   const [view, setView] = useState<'grid' | 'table'>('grid');
   const [search, setSearch] = useState("");
@@ -45,7 +49,7 @@ const MediaGrid = () => {
       const [channelsResult, vendorsResult] = await Promise.all([
         supabase
           .from('telegram_media')
-          .select('telegram_data->chat->title')
+          .select('telegram_data')
           .not('telegram_data->chat->title', 'is', null),
         supabase
           .from('telegram_media')
@@ -54,7 +58,7 @@ const MediaGrid = () => {
       ]);
 
       const channels = [...new Set((channelsResult.data || [])
-        .map(item => (item.telegram_data as TelegramData).chat?.title)
+        .map(item => (item as TelegramMediaResponse).telegram_data.chat?.title)
         .filter(Boolean))];
       
       const vendors = [...new Set(vendorsResult.data?.map(item => 
@@ -178,10 +182,7 @@ const MediaGrid = () => {
 
   if (error) {
     return (
-      <Alert 
-        variant="destructive"
-        className="m-4"
-      >
+      <Alert variant="destructive" className="m-4">
         <AlertCircle className="h-4 w-4" />
         <AlertTitle>Error loading media</AlertTitle>
         <AlertDescription>{error.message}</AlertDescription>
@@ -191,10 +192,7 @@ const MediaGrid = () => {
 
   if (!mediaItems?.length) {
     return (
-      <Alert 
-        variant="default"
-        className="m-4"
-      >
+      <Alert variant="default" className="m-4">
         <AlertDescription>No media items found</AlertDescription>
       </Alert>
     );
