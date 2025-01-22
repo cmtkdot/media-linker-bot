@@ -1,5 +1,8 @@
 import { serve } from "https://deno.land/std@0.131.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { GlideAPI } from "./glideApi.ts";
+import { mapSupabaseToGlide, mapGlideToSupabase } from "./productMapper.ts";
+import type { GlideSyncQueueItem, TelegramMedia } from "./types.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -43,6 +46,14 @@ serve(async (req: Request) => {
 
       console.log('Found config:', config);
 
+      // Initialize Glide API client
+      const glideApi = new GlideAPI(
+        config.app_id,
+        config.table_id,
+        config.api_token,
+        supabase
+      );
+
       // Get records to sync
       let query = supabase
         .from('telegram_media')
@@ -69,47 +80,16 @@ serve(async (req: Request) => {
       // Process each record
       for (const record of records || []) {
         try {
-          // Map the record to Glide format
-          const glideData = {
-            id: record.id,
-            file_id: record.file_id,
-            file_unique_id: record.file_unique_id,
-            file_type: record.file_type,
-            public_url: record.public_url,
-            product_name: record.product_name,
-            product_code: record.product_code,
-            quantity: record.quantity,
-            telegram_data: JSON.stringify(record.telegram_data),
-            glide_data: JSON.stringify(record.glide_data),
-            media_metadata: JSON.stringify(record.media_metadata),
-            processed: record.processed,
-            processing_error: record.processing_error,
-            last_synced_at: record.last_synced_at,
-            created_at: record.created_at,
-            updated_at: record.updated_at,
-            message_id: record.message_id,
-            caption: record.caption,
-            vendor_uid: record.vendor_uid,
-            purchase_date: record.purchase_date,
-            notes: record.notes,
-            analyzed_content: JSON.stringify(record.analyzed_content),
-            purchase_order_uid: record.purchase_order_uid,
-            default_public_url: record.default_public_url
-          };
+          // Map Supabase data to Glide format
+          const glideData = mapSupabaseToGlide(record);
 
-          // Update or insert the record
-          const { error: upsertError } = await supabase
-            .from(config.supabase_table_name)
-            .upsert(glideData);
-
-          if (upsertError) {
-            throw upsertError;
-          }
-
-          // Track statistics
-          if (record.last_synced_at) {
+          // If record has a Glide row ID, update it
+          if (record.telegram_media_row_id) {
+            await glideApi.updateRow(record.telegram_media_row_id, glideData);
             updated++;
           } else {
+            // Otherwise create a new row
+            await glideApi.addRow(glideData, record.id);
             added++;
           }
 
@@ -125,6 +105,66 @@ serve(async (req: Request) => {
         }
       }
 
+      // Process sync queue for changes from Glide
+      const { data: queueItems, error: queueError } = await supabase
+        .from('glide_sync_queue')
+        .select('*')
+        .is('processed_at', null)
+        .order('created_at', { ascending: true });
+
+      if (queueError) {
+        throw queueError;
+      }
+
+      console.log(`Found ${queueItems?.length || 0} queue items to process`);
+
+      // Process each queue item
+      for (const item of queueItems || []) {
+        try {
+          switch (item.operation) {
+            case 'INSERT':
+            case 'UPDATE':
+              if (item.new_data) {
+                const supabaseData = mapGlideToSupabase(item.new_data);
+                await supabase
+                  .from('telegram_media')
+                  .upsert(supabaseData)
+                  .eq('id', item.record_id);
+              }
+              break;
+            case 'DELETE':
+              await supabase
+                .from('telegram_media')
+                .delete()
+                .eq('id', item.record_id);
+              deleted++;
+              break;
+          }
+
+          // Mark as processed
+          await supabase
+            .from('glide_sync_queue')
+            .update({ 
+              processed_at: new Date().toISOString(),
+              error: null 
+            })
+            .eq('id', item.id);
+
+        } catch (error) {
+          console.error('Error processing queue item:', error);
+          errors.push(`Error processing queue item ${item.id}: ${error.message}`);
+
+          // Update error count
+          await supabase
+            .from('glide_sync_queue')
+            .update({ 
+              error: error.message,
+              retry_count: (item.retry_count || 0) + 1
+            })
+            .eq('id', item.id);
+        }
+      }
+
       const response = {
         success: true,
         data: {
@@ -134,7 +174,7 @@ serve(async (req: Request) => {
           errors
         },
         stats: {
-          processedItems: records?.length || 0,
+          processedItems: (records?.length || 0) + (queueItems?.length || 0),
           skippedItems: 0,
           errorItems: errors.length,
           totalTime: 0,
