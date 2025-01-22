@@ -149,6 +149,7 @@ const MediaGrid = () => {
         previewItem={previewItem}
         onPreviewChange={(open) => !open && setPreviewItem(null)}
         onEdit={setEditItem}
+        onPreview={setPreviewItem}
       />
 
       <MediaEditDialog

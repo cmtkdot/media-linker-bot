@@ -13,6 +13,7 @@ interface MediaGridContentProps {
   previewItem: MediaItem | null;
   onPreviewChange: (open: boolean) => void;
   onEdit: Dispatch<SetStateAction<MediaItem | null>>;
+  onPreview: (item: MediaItem) => void;
 }
 
 const MediaGridContent = ({
@@ -23,6 +24,7 @@ const MediaGridContent = ({
   previewItem,
   onPreviewChange,
   onEdit,
+  onPreview,
 }: MediaGridContentProps) => {
   if (isLoading) {
     return (
@@ -58,11 +60,7 @@ const MediaGridContent = ({
           <MediaCard
             key={item.id}
             item={item}
-            onPreview={() => {
-              onPreviewChange(true);
-              // Set the preview item without triggering edit
-              onEdit(item);
-            }}
+            onPreview={() => onPreview(item)}
             onEdit={onEdit}
           />
         ))}
