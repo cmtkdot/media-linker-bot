@@ -16,12 +16,7 @@ export class GlideAPI {
       },
       body: JSON.stringify({
         appID: this.appId,
-        mutations: [
-          {
-            ...body,
-            tableName: this.tableId
-          }
-        ]
+        mutations: [body]
       })
     });
 
@@ -38,14 +33,17 @@ export class GlideAPI {
 
   async addRow(data: Record<string, any>) {
     return this.makeRequest('POST', {
-      kind: 'add-row-to-table',
-      columnValues: data
+      kind: 'set-columns-in-row',
+      tableName: this.tableId,
+      columnValues: data,
+      rowID: data.id // Use the provided ID
     });
   }
 
   async updateRow(rowId: string, data: Record<string, any>) {
     return this.makeRequest('POST', {
       kind: 'set-columns-in-row',
+      tableName: this.tableId,
       rowID: rowId,
       columnValues: data
     });
@@ -54,6 +52,7 @@ export class GlideAPI {
   async deleteRow(rowId: string) {
     return this.makeRequest('POST', {
       kind: 'delete-row',
+      tableName: this.tableId,
       rowID: rowId
     });
   }
