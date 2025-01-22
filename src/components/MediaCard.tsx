@@ -56,10 +56,14 @@ const MediaCard = ({ item, onPreview, onEdit }: MediaCardProps) => {
     onEdit(item);
   };
 
+  const handleCardClick = () => {
+    onPreview();
+  };
+
   return (
     <Card 
       className="group relative overflow-hidden bg-card hover:shadow-lg transition-all duration-300 rounded-xl border-0 cursor-pointer" 
-      onClick={onPreview}
+      onClick={handleCardClick}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
