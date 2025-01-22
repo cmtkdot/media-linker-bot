@@ -9,17 +9,20 @@ import MediaSearchBar from "./MediaSearchBar";
 import MediaEditDialog from "./MediaEditDialog";
 import { MediaItem } from "@/types/media";
 
-// Define a simple interface for filter options to avoid deep type instantiation
+// Define interfaces for type safety
 interface FilterOptions {
   channels: string[];
   vendors: string[];
 }
 
-// Define a simple interface for the channel data
-interface ChannelData {
-  chat: {
+interface TelegramData {
+  chat?: {
     title?: string;
   };
+}
+
+interface ChannelQueryResult {
+  telegram_data: TelegramData;
 }
 
 const MediaGrid = () => {
@@ -46,17 +49,17 @@ const MediaGrid = () => {
         .select('vendor_uid')
         .not('vendor_uid', 'is', null);
 
-      const channels = [...new Set(channelsData?.map(item => 
-        (item.telegram_data as ChannelData)?.chat?.title
-      ).filter(Boolean))];
+      const channels = [...new Set((channelsData as ChannelQueryResult[] || [])
+        .map(item => item.telegram_data?.chat?.title)
+        .filter(Boolean))];
       
-      const vendors = [...new Set(vendorsData?.map(item => 
-        item.vendor_uid
-      ).filter(Boolean))];
+      const vendors = [...new Set((vendorsData || [])
+        .map(item => item.vendor_uid)
+        .filter(Boolean))];
 
       return {
-        channels: channels,
-        vendors: vendors
+        channels,
+        vendors
       };
     }
   });
@@ -107,7 +110,6 @@ const MediaGrid = () => {
     retry: 1
   });
 
-  // Subscribe to real-time changes
   useEffect(() => {
     const channel = supabase
       .channel('schema-db-changes')
