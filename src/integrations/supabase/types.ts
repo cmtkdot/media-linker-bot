@@ -233,6 +233,30 @@ export type Database = {
         }
         Relationships: []
       }
+      products: {
+        Row: {
+          caption: string | null
+          id: string
+          media_group_id: string
+          name: string
+          purchase_date: string
+        }
+        Insert: {
+          caption?: string | null
+          id?: string
+          media_group_id: string
+          name: string
+          purchase_date: string
+        }
+        Update: {
+          caption?: string | null
+          id?: string
+          media_group_id?: string
+          name?: string
+          purchase_date?: string
+        }
+        Relationships: []
+      }
       telegram_media: {
         Row: {
           analyzed_content: Json | null
