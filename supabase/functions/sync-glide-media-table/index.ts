@@ -3,12 +3,18 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { GlideAPI } from "./glideApi.ts";
 import { mapSupabaseToGlide, mapGlideToSupabase } from "./productMapper.ts";
 import type { GlideSyncQueueItem, TelegramMedia } from "./types.ts";
-import { corsHeaders } from "./cors.ts";
+import { corsHeaders } from "../_shared/cors.ts";
 
 serve(async (req: Request) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { 
+      headers: {
+        ...corsHeaders,
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Max-Age': '86400',
+      }
+    });
   }
 
   try {
@@ -176,7 +182,10 @@ serve(async (req: Request) => {
       return new Response(
         JSON.stringify(response),
         { 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { 
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          },
           status: 200 
         }
       );
@@ -193,7 +202,10 @@ serve(async (req: Request) => {
         error: error.message
       }),
       { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { 
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        },
         status: 400
       }
     );
