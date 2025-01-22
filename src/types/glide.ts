@@ -43,8 +43,8 @@ export interface GlideSyncQueueItem {
   table_name: string;
   record_id: string;
   operation: 'INSERT' | 'UPDATE' | 'DELETE';
-  old_data?: TelegramMedia | null;
-  new_data?: TelegramMedia | null;
+  old_data: Record<string, any> | null;
+  new_data: Record<string, any> | null;
   created_at?: string | null;
   processed_at?: string | null;
   error?: string | null;
@@ -76,6 +76,7 @@ export interface TelegramMedia {
   analyzed_content?: Record<string, any>;
   purchase_order_uid?: string;
   default_public_url?: string;
+  telegram_media_row_id?: string;
 }
 
 export interface SyncResult {

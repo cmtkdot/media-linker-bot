@@ -30,7 +30,7 @@ export function GlideDataGrid({ configs }: GlideDataGridProps) {
       if (error) throw error;
       
       // Cast the data to the correct type
-      return (data as unknown as GlideSyncQueueItem[]) || [];
+      return (data || []) as GlideSyncQueueItem[];
     }
   });
 
@@ -54,7 +54,10 @@ export function GlideDataGrid({ configs }: GlideDataGridProps) {
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Sync error:', error);
+        throw error;
+      }
 
       toast({
         title: "Sync Completed",
