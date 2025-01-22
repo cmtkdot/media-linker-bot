@@ -69,3 +69,31 @@ export interface GlideApiRequest {
   appID: string;
   mutations: GlideMutation[];
 }
+
+export const GlideTableSchema = {
+  id: { name: 'UkkMS' },
+  file_id: { name: '9Bod8' },
+  file_unique_id: { name: 'IYnip' },
+  file_type: { name: 'hbjE4' },
+  public_url: { name: 'd8Di5' },
+  product_name: { name: 'xGGv3' },
+  product_code: { name: 'xlfB9' },
+  quantity: { name: 'TWRwx' },
+  telegram_data: { name: 'Wm1he' },
+  glide_data: { name: 'ZRV7Z' },
+  media_metadata: { name: 'Eu9Zn' },
+  processed: { name: 'oj7fP' },
+  processing_error: { name: 'A4sZX' },
+  last_synced_at: { name: 'PWhCr' },
+  created_at: { name: 'Oa3L9' },
+  updated_at: { name: '9xwrl' },
+  message_id: { name: 'Uzkgt' },
+  caption: { name: 'pRsjz' },
+  vendor_uid: { name: 'uxDo1' },
+  purchase_date: { name: 'AMWxJ' },
+  notes: { name: 'BkUFO' },
+  analyzed_content: { name: 'QhAgy' },
+  purchase_order_uid: { name: '3y8Wt' },
+  default_public_url: { name: 'rCJK2' },
+  media_json: { name: 'NL5gM' }
+} as const;

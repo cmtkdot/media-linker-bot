@@ -1,3 +1,5 @@
+import type { GlideMutation, GlideApiRequest } from '../_shared/types.ts';
+
 export class GlideAPI {
   constructor(
     private appId: string,
@@ -5,19 +7,21 @@ export class GlideAPI {
     private apiToken: string
   ) {}
 
-  private async makeRequest(method: string, body: any) {
-    console.log('Making Glide API request:', { method, body });
+  private async makeRequest(method: string, mutation: GlideMutation) {
+    console.log('Making Glide API request:', { method, mutation });
     
+    const request: GlideApiRequest = {
+      appID: this.appId,
+      mutations: [mutation]
+    };
+
     const response = await fetch('https://api.glideapp.io/api/function/mutateTables', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${this.apiToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        appID: this.appId,
-        mutations: [body]
-      })
+      body: JSON.stringify(request)
     });
 
     if (!response.ok) {
@@ -31,16 +35,16 @@ export class GlideAPI {
     return data;
   }
 
-  async addRow(data: Record<string, any>) {
+  async addRow(data: Record<string, unknown>) {
     return this.makeRequest('POST', {
       kind: 'set-columns-in-row',
       tableName: this.tableId,
       columnValues: data,
-      rowID: data.id // Use the provided ID
+      rowID: data.id as string
     });
   }
 
-  async updateRow(rowId: string, data: Record<string, any>) {
+  async updateRow(rowId: string, data: Record<string, unknown>) {
     return this.makeRequest('POST', {
       kind: 'set-columns-in-row',
       tableName: this.tableId,
