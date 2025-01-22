@@ -28,7 +28,7 @@ serve(async (req) => {
         'Authorization': `Bearer ${AYD_API_KEY}`,
       },
       body: JSON.stringify({
-        chatbotId: 'ffa05499087f66d554e38ff4fadf4972',
+        chatbotId: 'ffa05499087f66d554e38ff4fadf4972', // Fixed parameter name from chatbotid to chatbotId
         name,
         email,
       }),
