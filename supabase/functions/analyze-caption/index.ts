@@ -1,5 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -41,7 +42,7 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4',
+        model: 'gpt-4o-mini',
         messages: [
           {
             role: 'system',
@@ -59,17 +60,7 @@ serve(async (req) => {
             6. notes: Any text in parentheses () should be captured as notes
                - Multiple parentheses should be combined with spaces
 
-            Return ONLY a valid JSON object with these exact fields if not available try to extract atleast the product name which should always be present. Never reply with sentences just json data.
-            {
-              "product_name": string or null,
-              "product_code": string or null,
-              "quantity": number or null,
-              "vendor_uid": string or null,
-              "purchase_date": string or null,
-              "notes": string or null,
-              "raw_caption": string,
-              "analyzed_at": string (current ISO timestamp)
-            }`
+            Return ONLY a valid JSON object with these exact fields if not available try to extract atleast the product name which should always be present. Never reply with sentences just json data.`
           },
           {
             role: 'user',
@@ -154,29 +145,6 @@ serve(async (req) => {
         if (groupUpdateError) {
           console.error('Error updating media group:', groupUpdateError);
           throw groupUpdateError;
-        }
-      }
-
-      // Also update the messages table to maintain consistency
-      if (telegramData?.message_id && telegramData?.chat?.id) {
-        const { error: messageUpdateError } = await supabase
-          .from('messages')
-          .update({
-            analyzed_content: result,
-            product_name: result.product_name,
-            product_code: result.product_code,
-            quantity: result.quantity,
-            vendor_uid: result.vendor_uid,
-            purchase_date: result.purchase_date,
-            notes: result.notes,
-            caption: caption
-          })
-          .eq('message_id', telegramData.message_id)
-          .eq('chat_id', telegramData.chat.id);
-
-        if (messageUpdateError) {
-          console.error('Error updating message:', messageUpdateError);
-          throw messageUpdateError;
         }
       }
 

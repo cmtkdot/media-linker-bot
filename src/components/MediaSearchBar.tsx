@@ -44,7 +44,7 @@ const MediaSearchBar = ({ search, view, onSearchChange, onViewChange }: MediaSea
           body: {
             caption: item.caption,
             messageId: item.id,
-            mediaGroupId: item.telegram_data?.media_group_id,
+            mediaGroupId: typeof item.telegram_data === 'object' ? (item.telegram_data as Record<string, any>).media_group_id : undefined,
             telegramData: item.telegram_data
           }
         });
