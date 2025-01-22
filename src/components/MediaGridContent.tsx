@@ -1,28 +1,23 @@
 import { MediaItem } from "@/types/media";
-import MediaTable from "./MediaTable";
 import MediaViewer from "./MediaViewer";
 import MediaCard from "./MediaCard";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Loader2 } from "lucide-react";
 
 interface MediaGridContentProps {
-  view: 'grid' | 'table';
   isLoading: boolean;
   error: Error | null;
   mediaItems: MediaItem[] | undefined;
   previewItem: MediaItem | null;
   onPreviewChange: (open: boolean) => void;
-  onEdit: (item: MediaItem) => void;
 }
 
 const MediaGridContent = ({
-  view,
   isLoading,
   error,
   mediaItems,
   previewItem,
   onPreviewChange,
-  onEdit
 }: MediaGridContentProps) => {
   if (isLoading) {
     return (
@@ -53,28 +48,20 @@ const MediaGridContent = ({
 
   return (
     <>
-      {view === 'grid' ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {mediaItems.map((item) => (
-            <MediaCard
-              key={item.id}
-              item={item}
-              onEdit={onEdit}
-              onPreview={() => onPreviewChange(true)}
-            />
-          ))}
-          <MediaViewer
-            open={!!previewItem}
-            onOpenChange={onPreviewChange}
-            media={previewItem}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        {mediaItems.map((item) => (
+          <MediaCard
+            key={item.id}
+            item={item}
+            onPreview={() => onPreviewChange(true)}
           />
-        </div>
-      ) : (
-        <MediaTable
-          data={mediaItems}
-          onEdit={onEdit}
-        />
-      )}
+        ))}
+      </div>
+      <MediaViewer
+        open={!!previewItem}
+        onOpenChange={onPreviewChange}
+        media={previewItem}
+      />
     </>
   );
 };

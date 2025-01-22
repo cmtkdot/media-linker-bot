@@ -1,7 +1,6 @@
 import React from "react";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Pencil, Play } from "lucide-react";
+import { Play } from "lucide-react";
 
 interface MediaItem {
   id: string;
@@ -26,11 +25,10 @@ interface MediaItem {
 
 interface MediaCardProps {
   item: MediaItem;
-  onEdit: (item: MediaItem) => void;
   onPreview: (item: MediaItem) => void;
 }
 
-const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
+const MediaCard = ({ item, onPreview }: MediaCardProps) => {
   const [isPlaying, setIsPlaying] = React.useState(false);
   const videoRef = React.useRef<HTMLVideoElement>(null);
 
@@ -110,7 +108,7 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
         )}
       </div>
 
-      {/* Static Info Section */}
+      {/* Info Section */}
       <div className="p-3 bg-card">
         <p className="font-medium text-foreground truncate">
           {item.product_name || 'Untitled Product'}
@@ -118,33 +116,6 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
         <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
           {item.caption || 'No caption'}
         </p>
-      </div>
-
-      {/* Hover Info Section - Channel, Date, Edit */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-        <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
-          <div className="flex justify-between items-center">
-            <div>
-              <p className="text-sm font-medium">
-                {item.telegram_data?.chat?.title || 'Unknown Channel'}
-              </p>
-              <p className="text-xs opacity-80">
-                {item.purchase_date ? new Date(item.purchase_date).toLocaleDateString() : '-'}
-              </p>
-            </div>
-            <Button
-              variant="outline"
-              size="icon"
-              className="bg-white/90 hover:bg-white shrink-0"
-              onClick={(e) => {
-                e.stopPropagation(); // Prevent card click when clicking edit button
-                onEdit(item);
-              }}
-            >
-              <Pencil className="h-4 w-4 text-black" />
-            </Button>
-          </div>
-        </div>
       </div>
     </Card>
   );
