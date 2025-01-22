@@ -98,10 +98,19 @@ export class GlideAPI {
       columnValues: data
     });
 
-    // Validate response
-    if (!response || !response.rowID) {
+    // Handle array response format
+    let rowID: string | undefined;
+    if (Array.isArray(response) && response.length > 0) {
+      rowID = response[0].rowID;
+    } else if (response && typeof response === 'object') {
+      rowID = response.rowID;
+    }
+
+    // Validate rowID
+    if (!rowID) {
+      console.error('Invalid response format:', response);
       throw new GlideApiError(
-        'Glide API did not return a rowID',
+        'Glide API did not return a valid rowID',
         undefined,
         JSON.stringify(response)
       );
@@ -111,7 +120,7 @@ export class GlideAPI {
     try {
       const { error } = await this.supabase
         .from('telegram_media')
-        .update({ telegram_media_row_id: response.rowID })
+        .update({ telegram_media_row_id: rowID })
         .eq('id', recordId);
 
       if (error) {
@@ -123,7 +132,7 @@ export class GlideAPI {
       );
     }
 
-    return response;
+    return { rowID };
   }
 
   async updateRow(rowId: string, data: Record<string, any>) {
