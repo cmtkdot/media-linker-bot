@@ -5,7 +5,7 @@ import { columns } from "./columns";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { useState, useEffect } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, RefreshCw, Trash2, AlertCircle } from "lucide-react";
 import type { GlideSyncQueueItem, GlideConfig } from "@/types/glide";
 
 interface GlideDataGridProps {
@@ -161,29 +161,43 @@ export function GlideDataGrid({ configs }: GlideDataGridProps) {
     {
       id: "actions",
       header: "Actions",
-      cell: ({ row }) => (
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleRetrySync(row.original.id)}
-            disabled={isSyncing}
-          >
-            {isSyncing ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              'Retry Sync'
-            )}
-          </Button>
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={() => handleDelete(row.original.id)}
-          >
-            Delete
-          </Button>
-        </div>
-      ),
+      cell: ({ row }) => {
+        const hasError = row.original.error;
+        return (
+          <div className="flex items-center gap-2">
+            <Button
+              variant={hasError ? "destructive" : "outline"}
+              size="sm"
+              onClick={() => handleRetrySync(row.original.id)}
+              disabled={isSyncing}
+              className="flex items-center gap-2"
+            >
+              {isSyncing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : hasError ? (
+                <>
+                  <AlertCircle className="h-4 w-4" />
+                  Retry Failed Sync
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="h-4 w-4" />
+                  Sync Now
+                </>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleDelete(row.original.id)}
+              className="flex items-center gap-2 hover:bg-destructive hover:text-destructive-foreground"
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete
+            </Button>
+          </div>
+        );
+      },
     },
   ];
 
@@ -194,27 +208,35 @@ export function GlideDataGrid({ configs }: GlideDataGridProps) {
           variant="outline"
           onClick={() => handleSync(selectedRows)}
           disabled={isSyncing || selectedRows.length === 0}
+          className="flex items-center gap-2"
         >
           {isSyncing ? (
             <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin" />
               Syncing Selected...
             </>
           ) : (
-            `Sync Selected (${selectedRows.length})`
+            <>
+              <RefreshCw className="h-4 w-4" />
+              Sync Selected ({selectedRows.length})
+            </>
           )}
         </Button>
         <Button
           onClick={() => handleSync()}
           disabled={isSyncing || !syncQueue?.length}
+          className="flex items-center gap-2"
         >
           {isSyncing ? (
             <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin" />
               Syncing All...
             </>
           ) : (
-            'Sync All'
+            <>
+              <RefreshCw className="h-4 w-4" />
+              Sync All
+            </>
           )}
         </Button>
       </div>
