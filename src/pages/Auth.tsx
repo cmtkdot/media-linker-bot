@@ -15,6 +15,9 @@ const Auth = () => {
     if (error instanceof AuthApiError) {
       switch (error.status) {
         case 400:
+          if (error.message.includes("invalid_credentials")) {
+            return "Invalid email or password. Please check your credentials and try again.";
+          }
           if (error.message.includes("refresh_token_not_found")) {
             return "Your session has expired. Please sign in again.";
           }
