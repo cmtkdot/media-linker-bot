@@ -54,6 +54,7 @@ export interface TelegramMedia {
   message_url?: string;
   chat_url?: string;
   thumbnail_url?: string;
+  glide_app_url?: string;
 }
 
 export interface GlideSyncQueueItem {
@@ -97,5 +98,6 @@ export const GlideTableSchema = {
   telegram_media_row_id: { name: 'NL5gM', type: 'string' },
   message_url: { name: 'KjP2m', type: 'string' },
   chat_url: { name: 'Lm3nQ', type: 'string' },
-  thumbnail_url: { name: 'Rt4vX', type: 'string' }
+  thumbnail_url: { name: 'Rt4vX', type: 'string' },
+  glide_app_url: { name: 'Yx9Kp', type: 'string' },
 };

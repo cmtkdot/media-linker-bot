@@ -29,6 +29,7 @@ export interface GlideTableSchema {
   message_url: { type: "uri"; name: "KjP2m" };
   chat_url: { type: "uri"; name: "Lm3nQ" };
   thumbnail_url: { type: "uri"; name: "Rt4vX" };
+  glide_app_url: { type: "uri"; name: "Yx9Kp" };
 }
 
 export interface GlideConfig {
@@ -103,3 +104,4 @@ export interface GlideApiRequest {
   appID: string;
   mutations: GlideMutation[];
 }
+
