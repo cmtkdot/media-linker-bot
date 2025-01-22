@@ -17,7 +17,12 @@ const MediaCard = ({ item, onPreview, onEdit }: MediaCardProps) => {
 
   const getDisplayUrl = () => {
     if (item.file_type === 'video') {
-      // First try to use thumbnail_url, then fallback to other URLs
+      // Try to get thumbnail from various sources
+      const thumbFromMetadata = item.telegram_data?.message_data?.video?.thumb?.file_id;
+      if (thumbFromMetadata) {
+        return `https://kzfamethztziwqiocbwz.supabase.co/storage/v1/object/public/media/${item.telegram_data.message_data.video.thumb.file_unique_id}.jpg`;
+      }
+      // Fallback to other URLs
       return item.thumbnail_url || item.public_url || item.default_public_url;
     }
     return item.public_url || item.default_public_url;
