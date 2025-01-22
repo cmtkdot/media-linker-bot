@@ -45,3 +45,9 @@ export interface MediaItem {
   created_at: string;
   updated_at?: string;
 }
+
+export interface SupabaseMediaItem extends Omit<MediaItem, 'file_type' | 'telegram_data' | 'analyzed_content'> {
+  file_type: string;
+  telegram_data: Record<string, any>;
+  analyzed_content: Record<string, any> | null;
+}

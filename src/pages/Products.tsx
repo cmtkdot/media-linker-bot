@@ -1,15 +1,10 @@
 import { useEffect, useState } from "react";
-import { useSupabaseClient } from "@supabase/auth-helpers-react";
 import { format } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ImageSwiper } from "@/components/ui/image-swiper";
-import { MediaItem, MediaFileType } from "@/types/media";
+import { MediaItem, MediaFileType, SupabaseMediaItem } from "@/types/media";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-
-interface SupabaseMediaItem extends Omit<MediaItem, 'file_type'> {
-  file_type: string;
-}
 
 const Products = () => {
   const { data: products } = useQuery<MediaItem[]>({
@@ -22,16 +17,22 @@ const Products = () => {
 
       if (error) throw error;
 
-      // Convert the file_type to our MediaFileType
+      // Convert the raw Supabase data to our MediaItem type
       return (data || []).map((item: SupabaseMediaItem) => ({
         ...item,
-        file_type: item.file_type as MediaFileType
+        file_type: item.file_type as MediaFileType,
+        telegram_data: item.telegram_data as MediaItem['telegram_data'],
+        analyzed_content: item.analyzed_content ? {
+          text: item.analyzed_content.text as string,
+          labels: item.analyzed_content.labels as string[],
+          objects: item.analyzed_content.objects as string[]
+        } : undefined
       }));
     }
   });
 
   const groupMediaByProduct = (media: MediaItem[]) => {
-    return media.reduce((acc: Record<string, MediaItem[]>, item) => {
+    return media.reduce<Record<string, MediaItem[]>>((acc, item) => {
       const key = item.product_code || "uncategorized";
       if (!acc[key]) {
         acc[key] = [];
