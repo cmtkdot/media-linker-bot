@@ -50,42 +50,27 @@ export interface MediaItem {
   media_metadata: Record<string, any>;
 }
 
-export interface SupabaseMediaItem extends Omit<MediaItem, 'telegram_data' | 'file_type' | 'analyzed_content'> {
-  telegram_data: Record<string, any>;
+export interface SupabaseMediaItem {
+  id: string;
+  public_url: string | null;
+  default_public_url: string | null;
+  thumbnail_url?: string | null;
   file_type: string;
-  analyzed_content: Record<string, any> | null;
-}
-
-export interface MediaEditDialogProps {
-  editItem: MediaItem | null;
-  onClose: () => void;
-  onSave: () => Promise<void>;
-  onItemChange: (field: keyof MediaItem, value: MediaItemValue) => void;
-  formatDate: (date: string | null) => string | null;
-}
-
-export interface MediaSearchBarProps {
-  search: string;
-  onSearchChange: (value: string) => void;
-  view: 'grid' | 'table';
-  onViewChange: (view: 'grid' | 'table') => void;
-  selectedChannel: string;
-  onChannelChange: (value: string) => void;
-  selectedType: string;
-  onTypeChange: (value: string) => void;
-  selectedVendor: string;
-  onVendorChange: (value: string) => void;
-  channels: string[];
-  vendors: string[];
-}
-
-export interface MediaViewerProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  media: MediaItem | null;
-}
-
-export interface MediaTableProps {
-  data: MediaItem[];
-  onEdit: (item: MediaItem) => void;
+  file_id: string;
+  file_unique_id: string;
+  caption?: string | null;
+  product_code?: string | null;
+  product_name?: string | null;
+  quantity?: number | null;
+  vendor_uid?: string | null;
+  purchase_date?: string | null;
+  notes?: string | null;
+  message_url?: string | null;
+  chat_url?: string | null;
+  telegram_data: Json;
+  analyzed_content: Json | null;
+  created_at: string;
+  updated_at?: string;
+  glide_data: Json;
+  media_metadata: Json;
 }

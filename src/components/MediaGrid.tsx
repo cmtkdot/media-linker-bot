@@ -68,15 +68,17 @@ const MediaGrid = () => {
       const { data, error: queryError } = await query;
       if (queryError) throw queryError;
 
-      return (data || []).map((item) => ({
+      return (data || []).map((item: SupabaseMediaItem): MediaItem => ({
         ...item,
         file_type: item.file_type as MediaFileType,
         telegram_data: item.telegram_data as Record<string, any>,
         analyzed_content: item.analyzed_content ? {
-          text: item.analyzed_content.text as string,
-          labels: item.analyzed_content.labels as string[],
-          objects: item.analyzed_content.objects as string[]
-        } : undefined
+          text: (item.analyzed_content as any).text as string,
+          labels: (item.analyzed_content as any).labels as string[],
+          objects: (item.analyzed_content as any).objects as string[]
+        } : undefined,
+        glide_data: item.glide_data as Record<string, any>,
+        media_metadata: item.media_metadata as Record<string, any>
       }));
     }
   });
