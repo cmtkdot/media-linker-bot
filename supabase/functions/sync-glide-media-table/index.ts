@@ -7,12 +7,13 @@ import { QueueProcessor } from './queueProcessor.ts';
 import type { SyncResult, GlideConfig, GlideSyncQueueItem } from '../_shared/types.ts';
 
 serve(async (req) => {
-  console.log('Received request:', req.method, req.url);
-
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { 
-      headers: corsHeaders,
+      headers: {
+        ...corsHeaders,
+        'Access-Control-Max-Age': '86400',
+      },
       status: 204
     });
   }
