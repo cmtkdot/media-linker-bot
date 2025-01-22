@@ -49,7 +49,9 @@ const MediaGrid = () => {
         .select('vendor_uid')
         .not('vendor_uid', 'is', null);
 
-      const channels = [...new Set((channelsData as ChannelQueryResult[] || [])
+      // Type assertion to ensure proper typing
+      const typedChannelsData = (channelsData || []) as unknown as ChannelQueryResult[];
+      const channels = [...new Set(typedChannelsData
         .map(item => item.telegram_data?.chat?.title)
         .filter(Boolean))];
       
