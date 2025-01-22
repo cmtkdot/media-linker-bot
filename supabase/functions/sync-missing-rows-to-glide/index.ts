@@ -43,30 +43,62 @@ serve(async (req) => {
 
     console.log(`Found ${missingGlideRecords.length} records missing Glide row IDs`);
 
-    const queueEntries = missingGlideRecords.map((record) => ({
-      table_name: 'telegram_media',
-      record_id: record.id,
-      operation: 'INSERT',
-      old_data: null,
-      new_data: record,
-      created_at: new Date().toISOString()
-    }));
+    let addedCount = 0;
+    let skippedCount = 0;
+    const errors = [];
 
-    const { error: queueError } = await supabase
-      .from('glide_sync_queue')
-      .insert(queueEntries);
+    // Process each record individually to better handle duplicates
+    for (const record of missingGlideRecords) {
+      try {
+        const { error: queueError } = await supabase
+          .from('glide_sync_queue')
+          .insert({
+            table_name: 'telegram_media',
+            record_id: record.id,
+            operation: 'INSERT',
+            old_data: null,
+            new_data: record,
+            created_at: new Date().toISOString()
+          });
 
-    if (queueError) {
-      console.error('Error inserting queue entries:', queueError);
-      throw queueError;
+        if (queueError) {
+          if (queueError.message?.includes('duplicate key value')) {
+            console.log(`Skipping duplicate record: ${record.id}`);
+            skippedCount++;
+          } else {
+            console.error(`Error queueing record ${record.id}:`, queueError);
+            errors.push({
+              record_id: record.id,
+              error: queueError.message
+            });
+          }
+        } else {
+          addedCount++;
+        }
+      } catch (error) {
+        console.error(`Error processing record ${record.id}:`, error);
+        errors.push({
+          record_id: record.id,
+          error: error.message
+        });
+      }
     }
 
-    console.log(`Successfully queued ${queueEntries.length} records for sync`);
+    console.log(`Successfully processed records:`, {
+      added: addedCount,
+      skipped: skippedCount,
+      errors: errors.length
+    });
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Queued ${queueEntries.length} record(s) for addition to Glide.`
+        message: `Processed ${missingGlideRecords.length} records. Added: ${addedCount}, Skipped: ${skippedCount}, Errors: ${errors.length}`,
+        details: {
+          added: addedCount,
+          skipped: skippedCount,
+          errors: errors
+        }
       }),
       { 
         headers: {
@@ -82,7 +114,12 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message
+        error: error.message,
+        details: {
+          type: error.code || 'UNKNOWN_ERROR',
+          message: error.message,
+          stack: error.stack
+        }
       }),
       { 
         status: 500,
