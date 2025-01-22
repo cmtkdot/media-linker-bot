@@ -1,7 +1,7 @@
 import React from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Pencil, Play } from "lucide-react";
+import { Pencil, Play, Pause } from "lucide-react";
 
 interface MediaCardProps {
   item: {
@@ -29,40 +29,7 @@ interface MediaCardProps {
 
 const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
   const [isPlaying, setIsPlaying] = React.useState(false);
-  const [thumbnailLoaded, setThumbnailLoaded] = React.useState(false);
   const videoRef = React.useRef<HTMLVideoElement>(null);
-
-  // Initialize video thumbnail
-  React.useEffect(() => {
-    if (item.file_type === 'video' && videoRef.current) {
-      // Set poster image
-      videoRef.current.poster = item.default_public_url;
-      
-      // Load metadata to get thumbnail
-      const loadMetadata = async () => {
-        try {
-          if (videoRef.current) {
-            videoRef.current.currentTime = 0.1;
-            await videoRef.current.load();
-            setThumbnailLoaded(true);
-          }
-        } catch (error) {
-          console.error("Error loading video metadata:", error);
-        }
-      };
-      
-      loadMetadata();
-    }
-    
-    // Cleanup
-    return () => {
-      if (videoRef.current) {
-        videoRef.current.pause();
-        videoRef.current.removeAttribute('src');
-        videoRef.current.load();
-      }
-    };
-  }, [item.file_type, item.default_public_url]);
 
   const handleVideoClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -71,7 +38,6 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
     try {
       if (isPlaying) {
         videoRef.current.pause();
-        videoRef.current.currentTime = 0;
       } else {
         if (!videoRef.current.src) {
           videoRef.current.src = item.public_url || item.default_public_url;
@@ -88,6 +54,17 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
     }
   };
 
+  React.useEffect(() => {
+    // Cleanup function to handle component unmount
+    return () => {
+      if (videoRef.current) {
+        videoRef.current.pause();
+        videoRef.current.removeAttribute('src');
+        videoRef.current.load();
+      }
+    };
+  }, []);
+
   return (
     <Card 
       className="group relative overflow-hidden bg-card hover:shadow-lg transition-all duration-300 rounded-xl border-0 flex flex-col h-full" 
@@ -100,23 +77,43 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
             <video
               ref={videoRef}
               className="object-cover w-full h-full"
+              poster={item.default_public_url}
               muted
               playsInline
-              preload="metadata"
+              onEnded={() => setIsPlaying(false)}
+              onError={(e) => {
+                const video = e.target as HTMLVideoElement;
+                if (video.src !== item.default_public_url) {
+                  video.src = item.default_public_url;
+                }
+              }}
             />
-            {!isPlaying && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors">
-                <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center group-hover:scale-110 transition-transform">
+            <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="w-12 h-12 rounded-full bg-white/90 hover:bg-white group-hover:scale-110 transition-transform"
+                onClick={handleVideoClick}
+              >
+                {isPlaying ? (
+                  <Pause className="h-6 w-6 text-black" />
+                ) : (
                   <Play className="h-6 w-6 text-black" />
-                </div>
-              </div>
-            )}
+                )}
+              </Button>
+            </div>
           </div>
         ) : (
           <img
             src={item.public_url || item.default_public_url}
             alt={item.caption || "Media item"}
             className="object-cover w-full h-full"
+            onError={(e) => {
+              const img = e.target as HTMLImageElement;
+              if (img.src !== item.default_public_url) {
+                img.src = item.default_public_url;
+              }
+            }}
           />
         )}
       </div>
