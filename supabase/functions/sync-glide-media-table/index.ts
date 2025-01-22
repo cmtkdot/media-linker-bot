@@ -2,7 +2,6 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import { GlideAPI } from './glideApi.ts';
 import { corsHeaders } from './cors.ts';
-import { mapSupabaseToGlide } from './productMapper.ts';
 import { QueueProcessor } from './queueProcessor.ts';
 import type { SyncResult, GlideConfig, GlideSyncQueueItem } from '../_shared/types.ts';
 
@@ -95,26 +94,9 @@ serve(async (req) => {
       );
     }
 
-    if (!config.supabase_table_name) {
-      return new Response(
-        JSON.stringify({ error: 'No Supabase table linked' }), 
-        { 
-          status: 400,
-          headers: corsHeaders
-        }
-      );
-    }
-
-    if (!config.api_token) {
-      return new Response(
-        JSON.stringify({ error: 'Glide API token not configured' }), 
-        { 
-          status: 400,
-          headers: corsHeaders
-        }
-      );
-    }
-
+    const glideApi = new GlideAPI(config.app_id, config.table_id, config.api_token);
+    const queueProcessor = new QueueProcessor(config, glideApi);
+    
     const result: SyncResult = {
       added: 0,
       updated: 0,
@@ -142,45 +124,10 @@ serve(async (req) => {
     }
 
     console.log(`Found ${queueItems?.length || 0} pending sync items`);
-
-    const glideApi = new GlideAPI(config.app_id, config.table_id, config.api_token);
-    const queueProcessor = new QueueProcessor(supabase, config, glideApi);
     
     // Process each queue item
     for (const item of queueItems || []) {
-      try {
-        await queueProcessor.processQueueItem(item, result);
-        
-        // Mark item as processed
-        const { error: updateError } = await supabase
-          .from('glide_sync_queue')
-          .update({ 
-            processed_at: new Date().toISOString(),
-            error: null
-          })
-          .eq('id', item.id);
-
-        if (updateError) {
-          console.error('Error updating queue item:', updateError);
-          result.errors.push(`Failed to mark item ${item.id} as processed: ${updateError.message}`);
-        }
-      } catch (error) {
-        console.error('Error processing queue item:', error);
-        result.errors.push(`Error processing item ${item.id}: ${error.message}`);
-        
-        // Update error information
-        const { error: updateError } = await supabase
-          .from('glide_sync_queue')
-          .update({ 
-            error: error.message,
-            retry_count: (item.retry_count || 0) + 1
-          })
-          .eq('id', item.id);
-
-        if (updateError) {
-          console.error('Error updating queue item error status:', updateError);
-        }
-      }
+      await queueProcessor.processQueueItem(item, result);
     }
 
     console.log('Sync completed:', result);

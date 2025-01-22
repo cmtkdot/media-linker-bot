@@ -10,11 +10,16 @@ export class QueueProcessor {
   private supabase;
 
   constructor(
-    supabaseUrl: string,
-    supabaseKey: string,
     private config: GlideConfig,
     private glideApi: GlideAPI
   ) {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error('Missing Supabase configuration');
+    }
+
     this.supabase = createClient(supabaseUrl, supabaseKey);
   }
 
