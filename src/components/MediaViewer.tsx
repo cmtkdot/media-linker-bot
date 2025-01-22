@@ -7,7 +7,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { ExternalLink, X } from "lucide-react";
+import { ExternalLink, X, MessageSquare, Users } from "lucide-react";
 
 interface MediaViewerProps {
   open: boolean;
@@ -24,6 +24,8 @@ interface MediaViewerProps {
     vendor_uid?: string;
     purchase_date?: string;
     notes?: string;
+    message_url?: string;
+    chat_url?: string;
     telegram_data?: {
       chat?: {
         type?: string;
@@ -152,7 +154,41 @@ const MediaViewer = ({ open, onOpenChange, media }: MediaViewerProps) => {
                 </div>
               )}
             </div>
-            <div className="pt-4">
+            <div className="flex flex-col gap-2 pt-4">
+              {media.message_url && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  asChild
+                  className="w-full"
+                >
+                  <a
+                    href={media.message_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-2"
+                  >
+                    View Message <MessageSquare className="h-4 w-4" />
+                  </a>
+                </Button>
+              )}
+              {media.chat_url && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  asChild
+                  className="w-full"
+                >
+                  <a
+                    href={media.chat_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-2"
+                  >
+                    View Channel <Users className="h-4 w-4" />
+                  </a>
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"

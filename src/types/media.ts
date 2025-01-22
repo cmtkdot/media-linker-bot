@@ -10,6 +10,8 @@ export interface MediaItem {
   vendor_uid?: string;
   purchase_date?: string;
   notes?: string;
+  message_url?: string;
+  chat_url?: string;
   telegram_data?: {
     chat?: {
       type?: string;
