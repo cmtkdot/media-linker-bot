@@ -1,4 +1,3 @@
-<lov-code>
 import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -223,4 +222,40 @@ const MediaGrid = () => {
   }
 
   return (
-    <div className="space-y-4 px-4 py
+    <div className="space-y-4 px-4 py-4">
+      <MediaSearchBar 
+        search={search} 
+        setSearch={setSearch} 
+        filterOptions={filterOptions} 
+        selectedChannel={selectedChannel} 
+        setSelectedChannel={setSelectedChannel} 
+        selectedType={selectedType} 
+        setSelectedType={setSelectedType} 
+        selectedVendor={selectedVendor} 
+        setSelectedVendor={setSelectedVendor} 
+      />
+      {view === 'grid' ? (
+        <MediaViewer 
+          mediaItems={mediaItems} 
+          setPreviewItem={setPreviewItem} 
+          setEditItem={setEditItem} 
+        />
+      ) : (
+        <MediaTable 
+          mediaItems={mediaItems} 
+          setPreviewItem={setPreviewItem} 
+          setEditItem={setEditItem} 
+        />
+      )}
+      <MediaEditDialog 
+        open={!!editItem} 
+        onOpenChange={(open) => { if (!open) setEditItem(null); }} 
+        editItem={editItem} 
+        onItemChange={handleItemChange} 
+        onSave={handleEdit} 
+      />
+    </div>
+  );
+};
+
+export default MediaGrid;

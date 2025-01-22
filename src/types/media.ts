@@ -1,3 +1,5 @@
+import { Json } from "@/integrations/supabase/types";
+
 export interface TelegramChat {
   type?: string;
   title?: string;
