@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import { GlideAPI } from './glideApi.ts';
 import type { GlideSyncQueueItem, GlideConfig } from './types.ts';
 import { mapSupabaseToGlide } from './productMapper.ts';
+import { SyncErrorType } from '../_shared/sync-logger.ts';
 
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY = 1000; // 1 second
@@ -10,7 +11,8 @@ export class QueueProcessor {
   constructor(
     private supabase: ReturnType<typeof createClient>,
     private config: GlideConfig,
-    private glideApi: GlideAPI
+    private glideApi: GlideAPI,
+    private logger: any
   ) {}
 
   private async wait(ms: number) {
@@ -19,21 +21,31 @@ export class QueueProcessor {
 
   private async withRetry<T>(
     operation: () => Promise<T>,
-    retryCount = 0
+    retryCount = 0,
+    context: { operation: string; itemId: string }
   ): Promise<T> {
     try {
       return await operation();
     } catch (error) {
+      this.logger.log({
+        operation: context.operation,
+        status: 'error',
+        errorType: error.name === 'GlideApiError' ? SyncErrorType.API : SyncErrorType.UNKNOWN,
+        details: {
+          retry_count: retryCount,
+          item_id: context.itemId,
+          error: error.message
+        }
+      });
+
       if (retryCount >= MAX_RETRIES) {
         throw error;
       }
 
-      // Calculate exponential backoff delay
       const delay = INITIAL_RETRY_DELAY * Math.pow(2, retryCount);
-      console.log(`Retry ${retryCount + 1}/${MAX_RETRIES} after ${delay}ms`);
       await this.wait(delay);
 
-      return this.withRetry(operation, retryCount + 1);
+      return this.withRetry(operation, retryCount + 1, context);
     }
   }
 
