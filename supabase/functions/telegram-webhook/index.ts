@@ -44,7 +44,6 @@ serve(async (req) => {
                    update.message?.animation ? 'animation' : 'unknown'
     });
 
-    // First process the webhook update to ensure message record is created
     const result = await handleWebhookUpdate(update, supabase, TELEGRAM_BOT_TOKEN);
 
     const message = update.message || update.channel_post;
@@ -78,7 +77,6 @@ serve(async (req) => {
         }
 
         if (fileId && fileUniqueId) {
-          // Check if media record exists using file_unique_id
           const { data: existingMedia } = await supabase
             .from('telegram_media')
             .select('*')
@@ -86,6 +84,11 @@ serve(async (req) => {
             .maybeSingle();
 
           const messageCreatedAt = new Date(messageRecord.created_at);
+          
+          // Generate URLs
+          const chatId = message.chat.id.toString();
+          const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
+          const chatUrl = `https://t.me/c/${chatId.substring(4)}`;
 
           // Check if file exists in storage
           const { data: storageData } = await supabase.storage
@@ -101,7 +104,6 @@ serve(async (req) => {
               .getPublicUrl(storageData[0].name);
             publicUrl = data.publicUrl;
           } else {
-            // Set default public URL based on file type
             publicUrl = fileType === 'photo' 
               ? `https://kzfamethztziwqiocbwz.supabase.co/storage/v1/object/public/media/${fileUniqueId}.jpg`
               : `https://kzfamethztziwqiocbwz.supabase.co/storage/v1/object/public/media/${fileUniqueId}.MOV`;
@@ -110,7 +112,6 @@ serve(async (req) => {
           if (existingMedia) {
             const mediaCreatedAt = new Date(existingMedia.created_at);
             
-            // Only update if message is newer than existing media record
             if (messageCreatedAt > mediaCreatedAt) {
               console.log('Updating existing telegram_media record:', existingMedia.id);
               
@@ -128,6 +129,8 @@ serve(async (req) => {
                   notes: messageRecord.notes,
                   analyzed_content: messageRecord.analyzed_content,
                   public_url: publicUrl,
+                  message_url: messageUrl,
+                  chat_url: chatUrl,
                   telegram_data: {
                     message_id: message.message_id,
                     chat_id: message.chat.id,
@@ -166,6 +169,8 @@ serve(async (req) => {
                 notes: messageRecord.notes,
                 analyzed_content: messageRecord.analyzed_content,
                 public_url: publicUrl,
+                message_url: messageUrl,
+                chat_url: chatUrl,
                 telegram_data: {
                   message_id: message.message_id,
                   chat_id: message.chat.id,
