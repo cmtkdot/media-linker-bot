@@ -13,8 +13,7 @@ serve(async (req) => {
       headers: {
         ...corsHeaders,
         'Access-Control-Max-Age': '86400',
-      },
-      status: 204
+      }
     });
   }
 
@@ -42,7 +41,10 @@ serve(async (req) => {
         }), 
         { 
           status: 400,
-          headers: corsHeaders
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          }
         }
       );
     }
@@ -56,7 +58,10 @@ serve(async (req) => {
         }), 
         { 
           status: 400,
-          headers: corsHeaders
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          }
         }
       );
     }
@@ -199,7 +204,8 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message
+        error: error.message,
+        stack: error.stack
       }),
       { 
         status: 500,
