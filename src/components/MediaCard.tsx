@@ -93,6 +93,7 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
       className="group relative overflow-hidden bg-card hover:shadow-lg transition-all duration-300 rounded-xl border-0 flex flex-col h-full" 
       onClick={() => onPreview(item)}
     >
+      {/* Media Section */}
       <div className="aspect-square relative">
         {item.file_type === 'video' ? (
           <div className="relative h-full cursor-pointer group" onClick={handleVideoClick}>
@@ -104,7 +105,7 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
               preload="metadata"
             />
             {!isPlaying && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/40 group-hover:bg-black/60 transition-colors">
+              <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors">
                 <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center group-hover:scale-110 transition-transform">
                   <Play className="h-6 w-6 text-black" />
                 </div>
@@ -120,53 +121,40 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
         )}
       </div>
 
-      {/* Main Info Section */}
-      <div className="p-3 bg-card border-t border-border/5">
-        <div className="flex justify-between items-start">
-          <div className="flex-1">
-            <p className="text-sm font-medium text-foreground truncate">
-              {item.caption || 'No caption'}
-            </p>
-            <div className="flex justify-between items-center text-xs text-muted-foreground mt-1">
-              <span>{item.purchase_date ? new Date(item.purchase_date).toLocaleDateString() : '-'}</span>
-              <span className="capitalize">{item.file_type}</span>
-            </div>
-          </div>
-          <Button
-            variant="outline"
-            size="icon"
-            className="ml-2 bg-white/90 hover:bg-white shrink-0"
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit(item);
-            }}
-          >
-            <Pencil className="h-4 w-4 text-black" />
-          </Button>
-        </div>
+      {/* Static Info Section */}
+      <div className="p-3 bg-card">
+        <p className="font-medium text-foreground truncate">
+          {item.product_name || 'Untitled Product'}
+        </p>
+        <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
+          {item.caption || 'No caption'}
+        </p>
       </div>
 
-      {/* Expanded Info Section */}
-      <div className="p-4 mt-auto bg-card/95 backdrop-blur-sm border-t border-border/10">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-          <div className="space-y-1">
-            <p className="font-medium text-foreground">Product Details</p>
-            <p className="text-muted-foreground">Name: {item.product_name || '-'}</p>
-            <p className="text-muted-foreground">Code: {item.product_code || '-'}</p>
-            <p className="text-muted-foreground">Quantity: {item.quantity || '-'}</p>
-          </div>
-          <div className="space-y-1">
-            <p className="font-medium text-foreground">Source Info</p>
-            <p className="text-muted-foreground">Vendor: {item.vendor_uid || '-'}</p>
-            <p className="text-muted-foreground">Type: {item.telegram_data?.chat?.type || '-'}</p>
-            <p className="text-muted-foreground">Channel: {item.telegram_data?.chat?.title || '-'}</p>
-          </div>
-          {item.notes && (
-            <div className="col-span-full">
-              <p className="font-medium text-foreground">Notes</p>
-              <p className="text-muted-foreground mt-1">{item.notes}</p>
+      {/* Hover Info Section - Channel, Date, Edit */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+        <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
+          <div className="flex justify-between items-center">
+            <div>
+              <p className="text-sm font-medium">
+                {item.telegram_data?.chat?.title || 'Unknown Channel'}
+              </p>
+              <p className="text-xs opacity-80">
+                {item.purchase_date ? new Date(item.purchase_date).toLocaleDateString() : '-'}
+              </p>
             </div>
-          )}
+            <Button
+              variant="outline"
+              size="icon"
+              className="bg-white/90 hover:bg-white shrink-0"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit(item);
+              }}
+            >
+              <Pencil className="h-4 w-4 text-black" />
+            </Button>
+          </div>
         </div>
       </div>
     </Card>
