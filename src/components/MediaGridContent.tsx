@@ -3,14 +3,16 @@ import MediaViewer from "./MediaViewer";
 import MediaCard from "./MediaCard";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Loader2 } from "lucide-react";
+import { Dispatch, SetStateAction } from "react";
 
 interface MediaGridContentProps {
-  view: 'grid' | 'table';  // Added this prop
+  view: 'grid' | 'table';
   isLoading: boolean;
   error: Error | null;
   mediaItems: MediaItem[] | undefined;
   previewItem: MediaItem | null;
   onPreviewChange: (open: boolean) => void;
+  onEdit: Dispatch<SetStateAction<MediaItem | null>>;
 }
 
 const MediaGridContent = ({
@@ -20,6 +22,7 @@ const MediaGridContent = ({
   mediaItems,
   previewItem,
   onPreviewChange,
+  onEdit,
 }: MediaGridContentProps) => {
   if (isLoading) {
     return (
@@ -56,6 +59,7 @@ const MediaGridContent = ({
             key={item.id}
             item={item}
             onPreview={() => onPreviewChange(true)}
+            onEdit={onEdit}
           />
         ))}
       </div>

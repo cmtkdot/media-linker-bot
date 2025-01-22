@@ -7,6 +7,7 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -23,6 +24,8 @@ serve(async (req) => {
       throw new Error('AYD_API_KEY is not configured');
     }
 
+    console.log('Creating AYD session for:', { name, email });
+
     const response = await fetch('https://api.askyourdata.com/v1/sessions', {
       method: 'POST',
       headers: {
@@ -33,10 +36,13 @@ serve(async (req) => {
     });
 
     if (!response.ok) {
+      const error = await response.text();
+      console.error('AYD API error:', error);
       throw new Error(`Failed to create session: ${response.statusText}`);
     }
 
     const data = await response.json();
+    console.log('AYD session created successfully');
     
     return new Response(JSON.stringify(data), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
