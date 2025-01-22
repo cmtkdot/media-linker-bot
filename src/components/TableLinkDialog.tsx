@@ -87,10 +87,11 @@ export function TableLinkDialog({ config, onClose, onSuccess }: TableLinkDialogP
 
     setIsCreating(true);
     try {
-      // Call the create_glide_sync_table function
+      // First create the table using the RPC function
       const { error: functionError } = await supabase.rpc(
         'create_glide_sync_table',
-        { table_name: newTableName }
+        { table_name: newTableName },
+        { head: { Prefer: 'return=minimal' } }
       );
 
       if (functionError) throw functionError;
@@ -112,11 +113,11 @@ export function TableLinkDialog({ config, onClose, onSuccess }: TableLinkDialogP
       });
       
       onSuccess();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating table:', error);
       toast({
         title: "Error",
-        description: "Failed to create and link table",
+        description: error.message || "Failed to create and link table",
         variant: "destructive",
       });
     } finally {
