@@ -90,8 +90,7 @@ export function TableLinkDialog({ config, onClose, onSuccess }: TableLinkDialogP
       // First create the table using the RPC function
       const { error: functionError } = await supabase.rpc(
         'create_glide_sync_table',
-        { table_name: newTableName },
-        { head: { Prefer: 'return=minimal' } }
+        { table_name: newTableName }
       );
 
       if (functionError) throw functionError;

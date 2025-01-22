@@ -294,15 +294,7 @@ export type Database = {
           updated_at?: string
           vendor_uid?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "telegram_media_message_id_fkey"
-            columns: ["message_id"]
-            isOneToOne: true
-            referencedRelation: "messages"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
     }
     Views: {
