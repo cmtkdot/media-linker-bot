@@ -6,14 +6,9 @@ import MediaTable from "./MediaTable";
 import MediaViewer from "./MediaViewer";
 import MediaSearchBar from "./MediaSearchBar";
 import MediaEditDialog from "./MediaEditDialog";
-import { MediaItem, MediaFileType, SupabaseMediaItem, MediaItemValue, TelegramData } from "@/types/media";
+import { MediaItem, SupabaseMediaItem, MediaFileType } from "@/types/media";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Loader2, AlertCircle } from "lucide-react";
-
-interface FilterOptions {
-  channels: string[];
-  vendors: string[];
-}
 
 const MediaGrid = () => {
   const [view, setView] = useState<'grid' | 'table'>('grid');
@@ -25,7 +20,7 @@ const MediaGrid = () => {
   const [previewItem, setPreviewItem] = useState<MediaItem | null>(null);
   const { toast } = useToast();
 
-  const { data: filterOptions } = useQuery<FilterOptions>({
+  const { data: filterOptions } = useQuery({
     queryKey: ['filter-options'],
     queryFn: async () => {
       const [channelsResult, vendorsResult] = await Promise.all([
@@ -39,12 +34,8 @@ const MediaGrid = () => {
           .not('vendor_uid', 'is', null)
       ]);
 
-      const channels = [...new Set((channelsResult.data || [])
-        .map(item => {
-          const telegramData = item.telegram_data as unknown as TelegramData;
-          return telegramData.chat?.title;
-        })
-        .filter(Boolean))];
+      const channels = [...new Set(channelsResult.data?.map(item => 
+        (item.telegram_data as any).chat?.title).filter(Boolean) || [])];
       
       const vendors = [...new Set(vendorsResult.data?.map(item => 
         item.vendor_uid).filter(Boolean) || [])];
@@ -78,13 +69,12 @@ const MediaGrid = () => {
       }
 
       const { data, error: queryError } = await query;
-      
       if (queryError) throw queryError;
 
-      const convertedData = (data || []).map((item: SupabaseMediaItem): MediaItem => ({
+      const items = (data || []).map((item: SupabaseMediaItem): MediaItem => ({
         ...item,
         file_type: item.file_type as MediaFileType,
-        telegram_data: item.telegram_data as unknown as TelegramData,
+        telegram_data: item.telegram_data as any,
         analyzed_content: item.analyzed_content ? {
           text: item.analyzed_content.text as string,
           labels: item.analyzed_content.labels as string[],
@@ -92,16 +82,7 @@ const MediaGrid = () => {
         } : undefined
       }));
 
-      const groupedData = convertedData.reduce<Record<string, MediaItem[]>>((acc, item) => {
-        const groupId = item.telegram_data?.media_group_id || item.id;
-        if (!acc[groupId]) {
-          acc[groupId] = [];
-        }
-        acc[groupId].push(item);
-        return acc;
-      }, {});
-
-      return Object.values(groupedData).map(group => group[0]);
+      return items;
     }
   });
 
@@ -171,10 +152,6 @@ const MediaGrid = () => {
     }
   };
 
-  const handleItemChange = (field: keyof MediaItem, value: MediaItemValue) => {
-    setEditItem(prev => prev ? {...prev, [field]: value} : null);
-  };
-
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-[50vh]">
@@ -207,35 +184,39 @@ const MediaGrid = () => {
   return (
     <div className="space-y-4 px-4 py-4">
       <MediaSearchBar 
-        search={search} 
-        setSearch={setSearch} 
-        filterOptions={filterOptions} 
-        selectedChannel={selectedChannel} 
-        setSelectedChannel={setSelectedChannel} 
-        selectedType={selectedType} 
-        setSelectedType={setSelectedType} 
-        selectedVendor={selectedVendor} 
-        setSelectedVendor={setSelectedVendor} 
+        search={search}
+        onSearchChange={setSearch}
+        view={view}
+        onViewChange={setView}
+        selectedChannel={selectedChannel}
+        onChannelChange={setSelectedChannel}
+        selectedType={selectedType}
+        onTypeChange={setSelectedType}
+        selectedVendor={selectedVendor}
+        onVendorChange={setSelectedVendor}
+        channels={filterOptions?.channels || []}
+        vendors={filterOptions?.vendors || []}
       />
+      
       {view === 'grid' ? (
         <MediaViewer 
-          mediaItems={mediaItems} 
-          setPreviewItem={setPreviewItem} 
-          setEditItem={setEditItem} 
+          open={!!previewItem}
+          onOpenChange={(open) => !open && setPreviewItem(null)}
+          media={previewItem}
         />
       ) : (
         <MediaTable 
-          mediaItems={mediaItems} 
-          setPreviewItem={setPreviewItem} 
-          setEditItem={setEditItem} 
+          data={mediaItems}
+          onEdit={setEditItem}
         />
       )}
+
       <MediaEditDialog 
-        open={!!editItem} 
-        onOpenChange={(open) => { if (!open) setEditItem(null); }} 
-        editItem={editItem} 
-        onItemChange={handleItemChange} 
-        onSave={handleEdit} 
+        open={!!editItem}
+        onOpenChange={(open) => !open && setEditItem(null)}
+        editItem={editItem}
+        onItemChange={(field, value) => setEditItem(prev => prev ? {...prev, [field]: value} : null)}
+        onSave={handleEdit}
       />
     </div>
   );
