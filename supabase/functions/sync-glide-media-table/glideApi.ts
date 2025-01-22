@@ -86,35 +86,29 @@ export class GlideAPI {
     return data;
   }
 
-  private extractRowId(response: GlideApiResponse | GlideApiResponse[]): string {
+  private extractRowId(response: any): string {
     console.log('Extracting rowID from response:', response);
     
     // Handle array response
     if (Array.isArray(response)) {
-      const firstResponse = response[0];
-      if (!firstResponse) {
-        throw new GlideApiError(
-          'Empty response array from Glide API',
-          undefined,
-          JSON.stringify(response)
-        );
+      if (response.length === 0) {
+        throw new GlideApiError('Empty response array from Glide API');
       }
-      if (firstResponse.rowID) {
-        return firstResponse.rowID;
+      const firstItem = response[0];
+      if (typeof firstItem === 'object' && firstItem !== null) {
+        const rowId = firstItem.rowID || firstItem.Row_ID || firstItem.Row_Id || firstItem.row_id;
+        if (rowId) return rowId;
       }
     }
     
-    // Handle single response object
+    // Handle single object response
     if (typeof response === 'object' && response !== null) {
-      // Check all possible rowID field variations
       const rowId = response.rowID || response.Row_ID || response.Row_Id || response.row_id;
-      if (rowId) {
-        return rowId;
-      }
+      if (rowId) return rowId;
     }
 
     throw new GlideApiError(
-      'Glide API did not return a rowID in an expected format',
+      'Could not find rowID in response',
       undefined,
       JSON.stringify(response)
     );
@@ -129,7 +123,6 @@ export class GlideAPI {
 
     const rowId = this.extractRowId(response);
 
-    // Update telegram_media_row_id in Supabase
     try {
       const { error } = await this.supabase
         .from('telegram_media')
