@@ -59,7 +59,7 @@ serve(async (req) => {
             6. notes: Any text in parentheses () should be captured as notes
                - Multiple parentheses should be combined with spaces
 
-            Return ONLY a valid JSON object with these exact fields:
+            Return ONLY a valid JSON object with these exact fields if not available try to extract atleast the product name which should always be present. Never reply with sentences just json data.
             {
               "product_name": string or null,
               "product_code": string or null,
