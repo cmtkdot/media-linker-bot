@@ -29,6 +29,7 @@ interface MediaCardProps {
 
 const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
   const [isPlaying, setIsPlaying] = React.useState(false);
+  const [thumbnailLoaded, setThumbnailLoaded] = React.useState(false);
   const videoRef = React.useRef<HTMLVideoElement>(null);
 
   // Cleanup function for video element
@@ -42,6 +43,20 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
     };
   }, []);
 
+  // Load video thumbnail
+  React.useEffect(() => {
+    if (item.file_type === 'video' && videoRef.current) {
+      videoRef.current.currentTime = 0.1; // Set to 0.1s to get the first frame
+      const handleLoadedData = () => setThumbnailLoaded(true);
+      videoRef.current.addEventListener('loadeddata', handleLoadedData);
+      return () => {
+        if (videoRef.current) {
+          videoRef.current.removeEventListener('loadeddata', handleLoadedData);
+        }
+      };
+    }
+  }, [item.file_type]);
+
   const handleVideoClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (videoRef.current) {
@@ -50,7 +65,6 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
           videoRef.current.pause();
           videoRef.current.currentTime = 0;
         } else {
-          // Reset video source before playing to prevent stale state
           if (!videoRef.current.src) {
             videoRef.current.src = item.public_url || item.default_public_url;
           }
@@ -72,23 +86,10 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
 
   return (
     <Card 
-      className="group relative overflow-hidden bg-card hover:shadow-lg transition-all duration-300 rounded-xl border-0" 
+      className="group relative overflow-hidden bg-card hover:shadow-lg transition-all duration-300 rounded-xl border-0 flex flex-col" 
       onClick={() => onPreview(item)}
     >
       <div className="aspect-square relative">
-        <div className="absolute inset-0 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-black/20">
-          <Button
-            variant="outline"
-            size="icon"
-            className="bg-white/90 hover:bg-white"
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit(item);
-            }}
-          >
-            <Pencil className="h-4 w-4 text-black" />
-          </Button>
-        </div>
         {item.file_type === 'video' ? (
           <div className="relative h-full cursor-pointer group" onClick={handleVideoClick}>
             <video
@@ -97,7 +98,7 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
               muted
               playsInline
               poster={item.default_public_url}
-              preload="none"
+              preload="metadata"
             />
             {!isPlaying && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/40 group-hover:bg-black/60 transition-colors">
@@ -115,31 +116,54 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
           />
         )}
       </div>
+
+      {/* Main Info Section */}
       <div className="p-3 bg-card border-t border-border/5">
-        <p className="text-sm font-medium text-foreground truncate">
-          {item.caption || 'No caption'}
-        </p>
-        <div className="flex justify-between items-center text-xs text-muted-foreground mt-1">
-          <span>{item.purchase_date ? new Date(item.purchase_date).toLocaleDateString() : '-'}</span>
-          <span className="capitalize">{item.file_type}</span>
+        <div className="flex justify-between items-start">
+          <div className="flex-1">
+            <p className="text-sm font-medium text-foreground truncate">
+              {item.caption || 'No caption'}
+            </p>
+            <div className="flex justify-between items-center text-xs text-muted-foreground mt-1">
+              <span>{item.purchase_date ? new Date(item.purchase_date).toLocaleDateString() : '-'}</span>
+              <span className="capitalize">{item.file_type}</span>
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            size="icon"
+            className="ml-2 bg-white/90 hover:bg-white shrink-0"
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit(item);
+            }}
+          >
+            <Pencil className="h-4 w-4 text-black" />
+          </Button>
         </div>
       </div>
-      <div className="p-3 text-xs space-y-1 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-full group-hover:translate-y-0 bg-card/95 backdrop-blur-sm absolute bottom-0 left-0 right-0 border-t border-border/10">
-        <div className="grid grid-cols-2 gap-x-2 gap-y-1">
-          <div>
-            <p className="font-medium truncate text-foreground">{item.product_name || 'Untitled'}</p>
+
+      {/* Expanded Info Section */}
+      <div className="p-4 mt-auto bg-card/95 backdrop-blur-sm border-t border-border/10">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+          <div className="space-y-1">
+            <p className="font-medium text-foreground">Product Details</p>
+            <p className="text-muted-foreground">Name: {item.product_name || '-'}</p>
             <p className="text-muted-foreground">Code: {item.product_code || '-'}</p>
             <p className="text-muted-foreground">Quantity: {item.quantity || '-'}</p>
-            <p className="text-muted-foreground">Vendor: {item.vendor_uid || '-'}</p>
           </div>
-          <div>
+          <div className="space-y-1">
+            <p className="font-medium text-foreground">Source Info</p>
+            <p className="text-muted-foreground">Vendor: {item.vendor_uid || '-'}</p>
             <p className="text-muted-foreground">Type: {item.telegram_data?.chat?.type || '-'}</p>
             <p className="text-muted-foreground">Channel: {item.telegram_data?.chat?.title || '-'}</p>
-            <p className="text-muted-foreground">Date: {item.purchase_date ? new Date(item.purchase_date).toLocaleDateString() : '-'}</p>
-            {item.notes && (
-              <p className="text-muted-foreground">Notes: {item.notes}</p>
-            )}
           </div>
+          {item.notes && (
+            <div className="col-span-full">
+              <p className="font-medium text-foreground">Notes</p>
+              <p className="text-muted-foreground mt-1">{item.notes}</p>
+            </div>
+          )}
         </div>
       </div>
     </Card>
