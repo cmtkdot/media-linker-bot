@@ -9,10 +9,10 @@ interface MediaGridContentProps {
   view: 'grid' | 'table';
   isLoading?: boolean;
   error?: Error | null;
-  onMediaUpdate: () => Promise<any>; // Updated type to be more permissive
+  onMediaUpdate: () => Promise<any>;
 }
 
-const MediaGridContent = ({ items = [], view, onMediaUpdate }: MediaGridContentProps) => {
+const MediaGridContent = ({ items = [], view, isLoading, error, onMediaUpdate }: MediaGridContentProps) => {
   const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
   const [editItem, setEditItem] = useState<MediaItem | null>(null);
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -46,6 +46,18 @@ const MediaGridContent = ({ items = [], view, onMediaUpdate }: MediaGridContentP
     if (!selectedMedia) return -1;
     return items.findIndex(item => item.id === selectedMedia.id);
   };
+
+  if (isLoading) {
+    return <div className="text-center py-8">Loading media items...</div>;
+  }
+
+  if (error) {
+    return <div className="text-center py-8 text-red-500">Error loading media: {error.message}</div>;
+  }
+
+  if (items.length === 0) {
+    return <div className="text-center py-8">No media items found</div>;
+  }
 
   return (
     <>
