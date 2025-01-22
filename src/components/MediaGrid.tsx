@@ -19,16 +19,7 @@ interface QueryResult {
   vendor_uid: string | null;
   purchase_date: string | null;
   notes: string | null;
-  telegram_data: {
-    message_data?: {
-      video?: {
-        thumb?: {
-          file_id: string;
-          file_unique_id: string;
-        };
-      };
-    };
-  };
+  telegram_data: Record<string, any>;
   glide_data: Record<string, any>;
   media_metadata: Record<string, any>;
   analyzed_content: {
