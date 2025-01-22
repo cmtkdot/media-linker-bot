@@ -43,7 +43,11 @@ const MediaGrid = () => {
     queryFn: async () => {
       let query = supabase
         .from('telegram_media')
-        .select('*')
+        .select(`
+          *,
+          telegram_data->message_data->video->thumb->file_id,
+          telegram_data->message_data->video->thumb->file_unique_id
+        `)
         .order('created_at', { ascending: false });
 
       if (search) {
