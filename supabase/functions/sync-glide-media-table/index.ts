@@ -51,6 +51,7 @@ serve(async (req) => {
       errors: []
     };
 
+    // Get unprocessed queue items
     const { data: queueItems, error: queueError } = await supabase
       .from('glide_sync_queue')
       .select('*')
@@ -65,8 +66,53 @@ serve(async (req) => {
     const glideApi = new GlideAPI(config.app_id, config.table_id, config.api_token);
     const queueProcessor = new QueueProcessor(supabase, config, glideApi);
 
+    // Process each queue item
     for (const item of queueItems || []) {
-      await queueProcessor.processQueueItem(item, result);
+      try {
+        await queueProcessor.processQueueItem(item, result);
+        
+        // Mark item as processed and update retry count
+        const { error: updateError } = await supabase
+          .from('glide_sync_queue')
+          .update({
+            processed_at: new Date().toISOString(),
+            retry_count: (item.retry_count || 0) + 1
+          })
+          .eq('id', item.id);
+
+        if (updateError) {
+          console.error('Error updating queue item:', updateError);
+          result.errors.push(`Failed to mark item ${item.id} as processed: ${updateError.message}`);
+        }
+
+        // Delete processed items
+        const { error: deleteError } = await supabase
+          .from('glide_sync_queue')
+          .delete()
+          .eq('id', item.id)
+          .not('processed_at', 'is', null);
+
+        if (deleteError) {
+          console.error('Error deleting processed queue item:', deleteError);
+          result.errors.push(`Failed to delete processed item ${item.id}: ${deleteError.message}`);
+        }
+      } catch (error) {
+        console.error('Error processing queue item:', error);
+        result.errors.push(`Error processing item ${item.id}: ${error.message}`);
+        
+        // Update error status
+        const { error: updateError } = await supabase
+          .from('glide_sync_queue')
+          .update({
+            error: error.message,
+            retry_count: (item.retry_count || 0) + 1
+          })
+          .eq('id', item.id);
+
+        if (updateError) {
+          console.error('Error updating queue item error status:', updateError);
+        }
+      }
     }
 
     console.log('Sync completed:', result);
