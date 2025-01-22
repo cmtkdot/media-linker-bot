@@ -60,79 +60,61 @@ export class QueueProcessor {
     console.log('Processing queue item:', item);
 
     try {
-      // Start transaction
-      const { error: txError } = await this.supabase.rpc('begin_transaction');
-      if (txError) throw txError;
-
-      try {
-        switch (item.operation) {
-          case 'INSERT': {
-            if (!item.new_data) {
-              throw new Error('New data is required for INSERT operation');
-            }
-
-            // Map Supabase data to Glide format
-            const glideData = mapSupabaseToGlide(item.new_data);
-            
-            // Add row to Glide with retry logic
-            await this.withRetry(async () => {
-              await this.glideApi.addRow(glideData, item.record_id);
-            });
-            result.added++;
-            break;
+      switch (item.operation) {
+        case 'INSERT': {
+          if (!item.new_data) {
+            throw new Error('New data is required for INSERT operation');
           }
 
-          case 'UPDATE': {
-            if (!item.new_data || !item.old_data?.telegram_media_row_id) {
-              throw new Error('New data and Glide row ID are required for UPDATE operation');
-            }
-
-            // Map updated data to Glide format
-            const glideData = mapSupabaseToGlide(item.new_data);
-            
-            // Update existing row in Glide with retry logic
-            await this.withRetry(async () => {
-              await this.glideApi.updateRow(item.old_data!.telegram_media_row_id!, glideData);
-            });
-            result.updated++;
-            break;
-          }
-
-          case 'DELETE': {
-            if (!item.old_data?.telegram_media_row_id) {
-              throw new Error('Glide row ID is required for DELETE operation');
-            }
-
-            // Delete row from Glide with retry logic
-            await this.withRetry(async () => {
-              await this.glideApi.deleteRow(item.old_data!.telegram_media_row_id!);
-            });
-            result.deleted++;
-            break;
-          }
-
-          default:
-            throw new Error(`Unknown operation: ${item.operation}`);
+          // Map Supabase data to Glide format
+          const glideData = mapSupabaseToGlide(item.new_data);
+          
+          // Add row to Glide with retry logic
+          await this.withRetry(async () => {
+            await this.glideApi.addRow(glideData, item.record_id);
+          });
+          result.added++;
+          break;
         }
 
-        // Mark item as processed within transaction
-        await this.updateQueueItemStatus(item, {
-          processed_at: new Date().toISOString(),
-          error: null
-        });
+        case 'UPDATE': {
+          if (!item.new_data || !item.old_data?.telegram_media_row_id) {
+            throw new Error('New data and Glide row ID are required for UPDATE operation');
+          }
 
-        // Commit transaction
-        const { error: commitError } = await this.supabase.rpc('commit_transaction');
-        if (commitError) throw commitError;
-
-      } catch (error) {
-        // Rollback transaction on error
-        const { error: rollbackError } = await this.supabase.rpc('rollback_transaction');
-        if (rollbackError) {
-          console.error('Error rolling back transaction:', rollbackError);
+          // Map updated data to Glide format
+          const glideData = mapSupabaseToGlide(item.new_data);
+          
+          // Update existing row in Glide with retry logic
+          await this.withRetry(async () => {
+            await this.glideApi.updateRow(item.old_data!.telegram_media_row_id!, glideData);
+          });
+          result.updated++;
+          break;
         }
-        throw error;
+
+        case 'DELETE': {
+          if (!item.old_data?.telegram_media_row_id) {
+            throw new Error('Glide row ID is required for DELETE operation');
+          }
+
+          // Delete row from Glide with retry logic
+          await this.withRetry(async () => {
+            await this.glideApi.deleteRow(item.old_data!.telegram_media_row_id!);
+          });
+          result.deleted++;
+          break;
+        }
+
+        default:
+          throw new Error(`Unknown operation: ${item.operation}`);
       }
+
+      // Mark item as processed
+      await this.updateQueueItemStatus(item, {
+        processed_at: new Date().toISOString(),
+        error: null
+      });
 
     } catch (error) {
       console.error('Error processing queue item:', error);
