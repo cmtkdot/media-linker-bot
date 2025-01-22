@@ -9,6 +9,11 @@ import MediaSearchBar from "./MediaSearchBar";
 import MediaEditDialog from "./MediaEditDialog";
 import { MediaItem } from "@/types/media";
 
+interface FilterOptions {
+  channels: string[];
+  vendors: string[];
+}
+
 const MediaGrid = () => {
   const [view, setView] = useState<'grid' | 'table'>('grid');
   const [search, setSearch] = useState("");
@@ -20,7 +25,7 @@ const MediaGrid = () => {
   const { toast } = useToast();
 
   // Query to fetch unique channels and vendors for filters
-  const { data: filterOptions } = useQuery({
+  const { data: filterOptions } = useQuery<FilterOptions>({
     queryKey: ['filter-options'],
     queryFn: async () => {
       const { data: channelsData } = await supabase
@@ -33,12 +38,17 @@ const MediaGrid = () => {
         .select('vendor_uid')
         .not('vendor_uid', 'is', null);
 
-      const channels = [...new Set(channelsData?.map(item => item.telegram_data.chat.title))];
-      const vendors = [...new Set(vendorsData?.map(item => item.vendor_uid))];
+      const channels = [...new Set(channelsData?.map(item => 
+        item.telegram_data?.chat?.title
+      ).filter(Boolean))];
+      
+      const vendors = [...new Set(vendorsData?.map(item => 
+        item.vendor_uid
+      ).filter(Boolean))];
 
       return {
-        channels: channels.filter(Boolean),
-        vendors: vendors.filter(Boolean)
+        channels: channels,
+        vendors: vendors
       };
     }
   });
