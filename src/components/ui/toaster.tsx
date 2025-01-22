@@ -37,13 +37,15 @@ export function Toaster() {
               >
                 OK
               </Button>
-              {action?.onClick && (
+              {action?.ignore && (
                 <Button 
                   variant="secondary" 
                   size="sm" 
-                  onClick={action.onClick}
+                  onClick={() => {
+                    if (action.ignore) action.ignore()
+                  }}
                 >
-                  {action.altText || 'Dismiss'}
+                  Ignore
                 </Button>
               )}
             </div>
