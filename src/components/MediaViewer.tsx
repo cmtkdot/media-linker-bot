@@ -4,9 +4,10 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogClose,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, X } from "lucide-react";
 
 interface MediaViewerProps {
   open: boolean;
@@ -41,17 +42,25 @@ const MediaViewer = ({ open, onOpenChange, media }: MediaViewerProps) => {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl p-4">
-        <DialogHeader className="w-full">
-          <DialogTitle className="text-center">{media.product_name || "Media Preview"}</DialogTitle>
+      <DialogContent className="w-[95vw] max-w-6xl p-4 sm:p-6 h-[90vh] sm:h-auto overflow-y-auto">
+        <DialogHeader className="w-full relative mb-2">
+          <DialogTitle className="pr-8 text-center">
+            {media.product_name || "Media Preview"}
+          </DialogTitle>
+          <DialogClose className="absolute right-0 top-0">
+            <Button variant="ghost" size="icon" className="h-8 w-8">
+              <X className="h-4 w-4" />
+            </Button>
+          </DialogClose>
         </DialogHeader>
+        
         <div className="flex flex-col lg:flex-row gap-4">
           {/* Media Column */}
-          <div className="flex-[1.5]">
+          <div className="flex-[1.5] min-h-0">
             <div className="relative bg-black/5 rounded-lg overflow-hidden flex items-center justify-center" style={{ 
-              height: '80vh',
-              maxHeight: 'calc(100vh - 200px)',
-              minHeight: '500px'
+              height: '50vh',
+              maxHeight: 'calc(100vh - 300px)',
+              minHeight: '300px'
             }}>
               {media.file_type === "video" ? (
                 <video
@@ -83,11 +92,11 @@ const MediaViewer = ({ open, onOpenChange, media }: MediaViewerProps) => {
           </div>
 
           {/* Details Column */}
-          <div className="flex-1 flex flex-col justify-center space-y-4">
+          <div className="flex-1 flex flex-col space-y-4 overflow-y-auto">
             {media.caption && (
-              <p className="text-muted-foreground">{media.caption}</p>
+              <p className="text-muted-foreground text-sm">{media.caption}</p>
             )}
-            <div className="grid gap-3">
+            <div className="grid gap-3 text-sm">
               {telegramType && (
                 <div>
                   <span className="font-medium">Type: </span>
