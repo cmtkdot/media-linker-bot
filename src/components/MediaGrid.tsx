@@ -2,9 +2,34 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
-import { MediaItem, SupabaseMediaItem } from "@/types/media";
+import { MediaItem } from "@/types/media";
 import MediaGridFilters from "./MediaGridFilters";
 import MediaGridContent from "./MediaGridContent";
+
+interface TelegramVideoThumb {
+  file_id: string;
+  file_unique_id: string;
+}
+
+interface QueryResult {
+  id: string;
+  file_id: string;
+  file_unique_id: string;
+  file_type: string;
+  public_url: string | null;
+  default_public_url: string | null;
+  thumbnail_url: string | null;
+  caption: string | null;
+  product_name: string | null;
+  product_code: string | null;
+  vendor_uid: string | null;
+  purchase_date: string | null;
+  notes: string | null;
+  telegram_data: Record<string, any>;
+  glide_data: Record<string, any>;
+  media_metadata: Record<string, any>;
+  analyzed_content: Record<string, any> | null;
+}
 
 const MediaGrid = () => {
   const [view, setView] = useState<'grid' | 'table'>('grid');
@@ -43,12 +68,7 @@ const MediaGrid = () => {
     queryFn: async () => {
       let query = supabase
         .from('telegram_media')
-        .select(`
-          *,
-          telegram_data->message_data->video->thumb->file_id,
-          telegram_data->message_data->video->thumb->file_unique_id
-        `)
-        .order('created_at', { ascending: false });
+        .select('*, telegram_data->message_data->video->thumb->file_id, telegram_data->message_data->video->thumb->file_unique_id');
 
       if (search) {
         query = query.or(`caption.ilike.%${search}%,product_name.ilike.%${search}%,product_code.ilike.%${search}%,vendor_uid.ilike.%${search}%`);
@@ -66,15 +86,16 @@ const MediaGrid = () => {
         query = query.eq('vendor_uid', selectedVendor);
       }
 
-      const { data, error: queryError } = await query;
+      const { data: queryResult, error: queryError } = await query;
+      
       if (queryError) throw queryError;
 
-      return (data || []).map((item: SupabaseMediaItem): MediaItem => ({
+      return (queryResult as QueryResult[]).map((item): MediaItem => ({
         ...item,
         file_type: item.file_type as MediaItem['file_type'],
-        telegram_data: item.telegram_data as Record<string, any>,
-        glide_data: item.glide_data as Record<string, any>,
-        media_metadata: item.media_metadata as Record<string, any>,
+        telegram_data: item.telegram_data || {},
+        glide_data: item.glide_data || {},
+        media_metadata: item.media_metadata || {},
         analyzed_content: item.analyzed_content ? {
           text: (item.analyzed_content as any).text as string,
           labels: (item.analyzed_content as any).labels as string[],
