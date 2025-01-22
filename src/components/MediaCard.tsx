@@ -33,35 +33,27 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
   const [isLoaded, setIsLoaded] = React.useState(false);
   const videoRef = React.useRef<HTMLVideoElement>(null);
 
-  // Initialize video
+  // Initialize video and handle cleanup
   React.useEffect(() => {
     if (item.file_type === 'video' && videoRef.current) {
-      // Set initial thumbnail
-      videoRef.current.poster = item.thumbnail_url || item.default_public_url;
+      const video = videoRef.current;
       
-      const loadVideo = async () => {
-        try {
-          if (videoRef.current) {
-            videoRef.current.src = item.public_url || item.default_public_url;
-            await videoRef.current.load();
-            setIsLoaded(true);
-          }
-        } catch (error) {
-          console.error("Error loading video:", error);
-          setIsLoaded(false);
-        }
+      // Set initial poster image
+      video.poster = item.thumbnail_url || item.default_public_url;
+      video.src = item.public_url || item.default_public_url;
+      
+      // Handle video loaded
+      const handleCanPlay = () => setIsLoaded(true);
+      video.addEventListener('canplay', handleCanPlay);
+
+      // Cleanup
+      return () => {
+        video.removeEventListener('canplay', handleCanPlay);
+        video.pause();
+        video.src = '';
+        video.load();
       };
-      
-      loadVideo();
     }
-    
-    return () => {
-      if (videoRef.current) {
-        videoRef.current.pause();
-        videoRef.current.removeAttribute('src');
-        videoRef.current.load();
-      }
-    };
   }, [item.file_type, item.public_url, item.default_public_url, item.thumbnail_url]);
 
   const handleVideoClick = async (e: React.MouseEvent) => {
@@ -72,13 +64,14 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
       if (isPlaying) {
         await videoRef.current.pause();
         videoRef.current.currentTime = 0;
+        setIsPlaying(false);
       } else {
         const playPromise = videoRef.current.play();
         if (playPromise !== undefined) {
           await playPromise;
+          setIsPlaying(true);
         }
       }
-      setIsPlaying(!isPlaying);
     } catch (error) {
       console.error("Video playback error:", error);
       setIsPlaying(false);
@@ -128,7 +121,7 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
         </p>
       </div>
 
-      {/* Hover Info Section - Channel, Date, Edit */}
+      {/* Hover Info Section */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
         <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
           <div className="flex justify-between items-center">
