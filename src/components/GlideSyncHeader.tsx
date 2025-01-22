@@ -101,7 +101,14 @@ export function GlideSyncHeader({ configs, isLoading }: GlideSyncHeaderProps) {
   return (
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-4">
-        <h1 className="text-2xl font-semibold">Glide Sync Settings</h1>
+        <div className="flex items-center gap-3">
+          <img 
+            src="/lovable-uploads/7770cb52-31d2-40b0-8b5b-0822783c71ef.png" 
+            alt="App Logo" 
+            className="h-8 w-8 object-contain"
+          />
+          <h1 className="text-2xl font-semibold">Glide Sync Settings</h1>
+        </div>
         <Button variant="outline" asChild>
           <Link to="/glide-connections">Manage Connections</Link>
         </Button>
