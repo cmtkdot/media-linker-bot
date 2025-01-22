@@ -2,27 +2,13 @@ import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
-import { ContentCard } from "@/components/ui/content-card";
 import MediaTable from "./MediaTable";
 import MediaViewer from "./MediaViewer";
 import MediaSearchBar from "./MediaSearchBar";
 import MediaEditDialog from "./MediaEditDialog";
-import { MediaItem, MediaFileType, SupabaseMediaItem } from "@/types/media";
+import { MediaItem, MediaFileType, SupabaseMediaItem, MediaItemValue, TelegramData } from "@/types/media";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Loader2, AlertCircle } from "lucide-react";
-
-interface TelegramData {
-  chat: {
-    id?: number;
-    type?: string;
-    title?: string;
-  };
-  message_id?: number;
-  chat_id?: number;
-  storage_path?: string;
-  media_group_id?: string;
-  date?: number;
-}
 
 interface FilterOptions {
   channels: string[];
@@ -95,11 +81,10 @@ const MediaGrid = () => {
       
       if (queryError) throw queryError;
 
-      // Convert Supabase data to MediaItem type
-      const convertedData = (data || []).map((item: SupabaseMediaItem) => ({
+      const convertedData = (data || []).map((item: SupabaseMediaItem): MediaItem => ({
         ...item,
         file_type: item.file_type as MediaFileType,
-        telegram_data: item.telegram_data as TelegramData,
+        telegram_data: item.telegram_data as unknown as TelegramData,
         analyzed_content: item.analyzed_content ? {
           text: item.analyzed_content.text as string,
           labels: item.analyzed_content.labels as string[],
@@ -107,7 +92,6 @@ const MediaGrid = () => {
         } : undefined
       }));
 
-      // Group media by media_group_id if it exists
       const groupedData = convertedData.reduce<Record<string, MediaItem[]>>((acc, item) => {
         const groupId = item.telegram_data?.media_group_id || item.id;
         if (!acc[groupId]) {
@@ -117,7 +101,6 @@ const MediaGrid = () => {
         return acc;
       }, {});
 
-      // Return first item from each group
       return Object.values(groupedData).map(group => group[0]);
     }
   });
