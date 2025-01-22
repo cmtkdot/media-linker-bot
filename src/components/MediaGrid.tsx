@@ -162,12 +162,14 @@ const MediaGrid = () => {
               key={item.id}
               backgroundImage={item.public_url || item.default_public_url}
               onEdit={() => setEditItem(item)}
+              onClick={() => setPreviewItem(item)}
               content={{
                 channelTitle: item.telegram_data?.chat?.title,
                 purchaseDate: item.purchase_date ? new Date(item.purchase_date).toLocaleDateString() : undefined,
                 productName: item.product_name || 'Untitled Product',
                 caption: item.caption
               }}
+              isVideo={item.file_type === 'video'}
               className="group-hover/card:shadow-2xl transition-all duration-300"
             />
           ))}
