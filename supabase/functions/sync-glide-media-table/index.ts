@@ -1,281 +1,171 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
-import { GlideAPI } from './glideApi.ts';
-import { corsHeaders } from './cors.ts';
-import { mapSupabaseToGlide, mapGlideToSupabase } from './productMapper.ts';
-import { QueueProcessor } from './queueProcessor.ts';
-import type { SyncResult, GlideConfig, GlideSyncQueueItem } from '../_shared/types.ts';
+import { serve } from "https://deno.land/std@0.131.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-interface SyncStats {
-  processedItems: number;
-  skippedItems: number;
-  errorItems: number;
-  totalTime: number;
-  details: {
-    operation: string;
-    status: string;
-    timestamp: string;
-    error?: string;
-  }[];
-}
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
-serve(async (req) => {
-  const startTime = Date.now();
-  const stats: SyncStats = {
-    processedItems: 0,
-    skippedItems: 0,
-    errorItems: 0,
-    totalTime: 0,
-    details: []
-  };
-
+serve(async (req: Request) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { 
-      headers: {
-        ...corsHeaders,
-        'Access-Control-Max-Age': '86400',
-      }
-    });
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    console.log('Starting sync operation...');
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-
-    if (!supabaseUrl || !supabaseServiceKey) {
-      throw new Error('Missing Supabase configuration');
-    }
-
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    
-    let body;
-    try {
-      body = await req.json();
-      console.log('Received request body:', JSON.stringify(body));
-    } catch (error) {
-      console.error('Error parsing request body:', error);
-      return new Response(
-        JSON.stringify({ 
-          error: 'Invalid request body',
-          details: error.message,
-          stats 
-        }), 
-        { 
-          status: 400,
-          headers: {
-            ...corsHeaders,
-            'Content-Type': 'application/json'
+
+    const { operation, tableId, recordIds } = await req.json();
+
+    console.log('Received sync request:', { operation, tableId, recordIds });
+
+    if (!operation) {
+      throw new Error('Operation is required');
+    }
+
+    if (operation === 'syncBidirectional') {
+      // Get the Glide configuration
+      const { data: config, error: configError } = await supabase
+        .from('glide_config')
+        .select('*')
+        .eq('id', tableId)
+        .single();
+
+      if (configError) {
+        throw configError;
+      }
+
+      if (!config.active || !config.supabase_table_name) {
+        throw new Error('Glide configuration is not active or table is not linked');
+      }
+
+      console.log('Found config:', config);
+
+      // Get records to sync
+      let query = supabase
+        .from('telegram_media')
+        .select('*');
+
+      // If specific records are requested, filter for those
+      if (recordIds && recordIds.length > 0) {
+        query = query.in('id', recordIds);
+      }
+
+      const { data: records, error: recordsError } = await query;
+
+      if (recordsError) {
+        throw recordsError;
+      }
+
+      console.log(`Found ${records?.length || 0} records to sync`);
+
+      let added = 0;
+      let updated = 0;
+      let deleted = 0;
+      const errors: string[] = [];
+
+      // Process each record
+      for (const record of records || []) {
+        try {
+          // Map the record to Glide format
+          const glideData = {
+            id: record.id,
+            file_id: record.file_id,
+            file_unique_id: record.file_unique_id,
+            file_type: record.file_type,
+            public_url: record.public_url,
+            product_name: record.product_name,
+            product_code: record.product_code,
+            quantity: record.quantity,
+            telegram_data: JSON.stringify(record.telegram_data),
+            glide_data: JSON.stringify(record.glide_data),
+            media_metadata: JSON.stringify(record.media_metadata),
+            processed: record.processed,
+            processing_error: record.processing_error,
+            last_synced_at: record.last_synced_at,
+            created_at: record.created_at,
+            updated_at: record.updated_at,
+            message_id: record.message_id,
+            caption: record.caption,
+            vendor_uid: record.vendor_uid,
+            purchase_date: record.purchase_date,
+            notes: record.notes,
+            analyzed_content: JSON.stringify(record.analyzed_content),
+            purchase_order_uid: record.purchase_order_uid,
+            default_public_url: record.default_public_url
+          };
+
+          // Update or insert the record
+          const { error: upsertError } = await supabase
+            .from(config.supabase_table_name)
+            .upsert(glideData);
+
+          if (upsertError) {
+            throw upsertError;
           }
-        }
-      );
-    }
-    
-    const { operation, tableId } = body;
 
-    if (!operation || !tableId) {
-      return new Response(
-        JSON.stringify({ 
-          error: 'Missing required parameters: operation and tableId',
-          stats 
-        }), 
-        { 
-          status: 400,
-          headers: {
-            ...corsHeaders,
-            'Content-Type': 'application/json'
+          // Track statistics
+          if (record.last_synced_at) {
+            updated++;
+          } else {
+            added++;
           }
-        }
-      );
-    }
 
-    console.log(`Fetching configuration for table ID: ${tableId}`);
-    const { data: config, error: configError } = await supabase
-      .from('glide_config')
-      .select('*')
-      .eq('id', tableId)
-      .maybeSingle();
+          // Update last_synced_at
+          await supabase
+            .from('telegram_media')
+            .update({ last_synced_at: new Date().toISOString() })
+            .eq('id', record.id);
 
-    if (configError) {
-      console.error('Configuration error:', configError);
-      return new Response(
-        JSON.stringify({ 
-          error: configError.message,
-          stats 
-        }), 
-        { 
-          status: 500,
-          headers: corsHeaders
-        }
-      );
-    }
-
-    if (!config) {
-      return new Response(
-        JSON.stringify({ 
-          error: 'Configuration not found',
-          stats 
-        }), 
-        { 
-          status: 404,
-          headers: corsHeaders
-        }
-      );
-    }
-
-    console.log(`Using configuration for table: ${config.table_name}`);
-
-    const result: SyncResult = {
-      added: 0,
-      updated: 0,
-      deleted: 0,
-      errors: []
-    };
-
-    // Get unprocessed queue items
-    console.log('Fetching unprocessed queue items...');
-    const { data: queueItems, error: queueError } = await supabase
-      .from('glide_sync_queue')
-      .select('*')
-      .eq('table_name', config.supabase_table_name)
-      .is('processed_at', null)
-      .order('created_at');
-
-    if (queueError) {
-      console.error('Queue error:', queueError);
-      return new Response(
-        JSON.stringify({ 
-          error: queueError.message,
-          stats 
-        }), 
-        { 
-          status: 500,
-          headers: corsHeaders
-        }
-      );
-    }
-
-    console.log(`Found ${queueItems?.length || 0} pending sync items`);
-    
-    if (!queueItems || queueItems.length === 0) {
-      stats.totalTime = Date.now() - startTime;
-      return new Response(
-        JSON.stringify({
-          message: 'No items to sync',
-          result,
-          stats
-        }),
-        { 
-          headers: {
-            ...corsHeaders,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-    }
-
-    const glideApi = new GlideAPI(config.app_id, config.table_id, config.api_token);
-    const queueProcessor = new QueueProcessor(supabase, config, glideApi);
-    
-    // Process each queue item
-    for (const item of queueItems) {
-      try {
-        console.log(`Processing item ${item.id} - Operation: ${item.operation}`);
-        const startItemTime = Date.now();
-        
-        await queueProcessor.processQueueItem(item, result);
-        stats.processedItems++;
-        
-        // Mark item as processed
-        const { error: updateError } = await supabase
-          .from('glide_sync_queue')
-          .update({ 
-            processed_at: new Date().toISOString(),
-            error: null
-          })
-          .eq('id', item.id);
-
-        if (updateError) {
-          console.error('Error updating queue item:', updateError);
-          result.errors.push(`Failed to mark item ${item.id} as processed: ${updateError.message}`);
-          stats.errorItems++;
-        }
-
-        stats.details.push({
-          operation: item.operation,
-          status: 'success',
-          timestamp: new Date().toISOString(),
-        });
-
-        console.log(`Completed processing item ${item.id} in ${Date.now() - startItemTime}ms`);
-
-      } catch (error) {
-        console.error(`Error processing item ${item.id}:`, error);
-        result.errors.push(`Error processing item ${item.id}: ${error.message}`);
-        stats.errorItems++;
-        
-        stats.details.push({
-          operation: item.operation,
-          status: 'error',
-          timestamp: new Date().toISOString(),
-          error: error.message
-        });
-
-        // Update error information
-        const { error: updateError } = await supabase
-          .from('glide_sync_queue')
-          .update({ 
-            error: error.message,
-            retry_count: (item.retry_count || 0) + 1
-          })
-          .eq('id', item.id);
-
-        if (updateError) {
-          console.error('Error updating queue item error status:', updateError);
+        } catch (error) {
+          console.error('Error processing record:', error);
+          errors.push(`Error processing record ${record.id}: ${error.message}`);
         }
       }
-    }
 
-    stats.totalTime = Date.now() - startTime;
-    console.log('Sync completed:', {
-      result,
-      stats,
-      totalTimeMs: stats.totalTime
-    });
-
-    return new Response(
-      JSON.stringify({
+      const response = {
         success: true,
-        data: result,
-        stats,
-        summary: `Processed ${stats.processedItems} items (${result.added} added, ${result.updated} updated, ${result.deleted} deleted) with ${stats.errorItems} errors in ${stats.totalTime}ms`
-      }),
-      { 
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json'
+        data: {
+          added,
+          updated,
+          deleted,
+          errors
+        },
+        stats: {
+          processedItems: records?.length || 0,
+          skippedItems: 0,
+          errorItems: errors.length,
+          totalTime: 0,
+          details: {}
         }
-      }
-    );
+      };
+
+      console.log('Sync completed:', response);
+
+      return new Response(
+        JSON.stringify(response),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200 
+        }
+      );
+    }
+
+    throw new Error(`Unknown operation: ${operation}`);
 
   } catch (error) {
-    console.error('Error in sync operation:', error);
-    stats.totalTime = Date.now() - startTime;
+    console.error('Error in sync function:', error);
     
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message,
-        stack: error.stack,
-        stats
+        error: error.message
       }),
       { 
-        status: 500,
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json'
-        }
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400
       }
     );
   }
