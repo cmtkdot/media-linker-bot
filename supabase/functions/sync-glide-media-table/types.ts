@@ -51,6 +51,9 @@ export interface TelegramMedia {
   purchase_order_uid?: string;
   default_public_url?: string;
   telegram_media_row_id?: string;
+  message_url?: string;
+  chat_url?: string;
+  thumbnail_url?: string;
 }
 
 export interface GlideSyncQueueItem {
@@ -91,5 +94,8 @@ export const GlideTableSchema = {
   analyzed_content: { name: 'QhAgy', type: 'json' },
   purchase_order_uid: { name: '3y8Wt', type: 'string' },
   default_public_url: { name: 'rCJK2', type: 'string' },
-  telegram_media_row_id: { name: 'NL5gM', type: 'string' }
+  telegram_media_row_id: { name: 'NL5gM', type: 'string' },
+  message_url: { name: 'KjP2m', type: 'string' },
+  chat_url: { name: 'Lm3nQ', type: 'string' },
+  thumbnail_url: { name: 'Rt4vX', type: 'string' }
 };
