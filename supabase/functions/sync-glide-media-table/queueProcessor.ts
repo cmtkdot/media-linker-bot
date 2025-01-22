@@ -1,17 +1,22 @@
-import { SupabaseClient } from '@supabase/supabase-js';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import { GlideAPI } from './glideApi.ts';
-import { GlideSyncQueueItem, GlideConfig, TelegramMedia } from '../_shared/types.ts';
+import type { GlideSyncQueueItem, GlideConfig, TelegramMedia } from '../_shared/types.ts';
 import { mapSupabaseToGlide } from './productMapper.ts';
 
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY = 1000; // 1 second
 
 export class QueueProcessor {
+  private supabase;
+
   constructor(
-    private supabase: SupabaseClient,
+    supabaseUrl: string,
+    supabaseKey: string,
     private config: GlideConfig,
     private glideApi: GlideAPI
-  ) {}
+  ) {
+    this.supabase = createClient(supabaseUrl, supabaseKey);
+  }
 
   private async wait(ms: number) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -72,7 +77,7 @@ export class QueueProcessor {
             }
 
             // Map Supabase data to Glide format
-            const glideData = mapSupabaseToGlide(item.new_data);
+            const glideData = mapSupabaseToGlide(item.new_data as TelegramMedia);
             
             // Add row to Glide with retry logic
             await this.withRetry(async () => {
@@ -88,7 +93,7 @@ export class QueueProcessor {
             }
 
             // Map updated data to Glide format
-            const glideData = mapSupabaseToGlide(item.new_data);
+            const glideData = mapSupabaseToGlide(item.new_data as TelegramMedia);
             
             // Update existing row in Glide with retry logic
             await this.withRetry(async () => {
