@@ -29,6 +29,8 @@ interface MediaCardProps {
 
 const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
   const [isPlaying, setIsPlaying] = React.useState(false);
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
   const videoRef = React.useRef<HTMLVideoElement>(null);
 
   const handleVideoClick = async (e: React.MouseEvent) => {
@@ -37,29 +39,45 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
 
     try {
       if (isPlaying) {
-        videoRef.current.pause();
+        await videoRef.current.pause();
+        setIsPlaying(false);
       } else {
+        setIsLoading(true);
         if (!videoRef.current.src) {
           videoRef.current.src = item.public_url || item.default_public_url;
         }
-        const playPromise = videoRef.current.play();
-        if (playPromise !== undefined) {
-          await playPromise;
-        }
+        await videoRef.current.play();
+        setIsPlaying(true);
       }
-      setIsPlaying(!isPlaying);
     } catch (error) {
       console.error("Video playback error:", error);
+      setError("Failed to play video");
       setIsPlaying(false);
+    } finally {
+      setIsLoading(false);
     }
   };
 
+  const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
+    const video = e.target as HTMLVideoElement;
+    console.error("Video error:", video.error);
+    setError("Error loading video");
+    setIsLoading(false);
+    if (video.src !== item.default_public_url) {
+      video.src = item.default_public_url;
+    }
+  };
+
+  const handleVideoLoadedData = () => {
+    setIsLoading(false);
+    setError(null);
+  };
+
   React.useEffect(() => {
-    // Cleanup function to handle component unmount
     return () => {
       if (videoRef.current) {
         videoRef.current.pause();
-        videoRef.current.removeAttribute('src');
+        videoRef.current.src = "";
         videoRef.current.load();
       }
     };
@@ -70,37 +88,41 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
       className="group relative overflow-hidden bg-card hover:shadow-lg transition-all duration-300 rounded-xl border-0 flex flex-col h-full" 
       onClick={() => onPreview(item)}
     >
-      {/* Media Section */}
       <div className="aspect-square relative">
         {item.file_type === 'video' ? (
-          <div className="relative h-full cursor-pointer group" onClick={handleVideoClick}>
+          <div className="relative h-full cursor-pointer" onClick={handleVideoClick}>
             <video
               ref={videoRef}
               className="object-cover w-full h-full"
               poster={item.default_public_url}
               muted
               playsInline
+              onLoadedData={handleVideoLoadedData}
               onEnded={() => setIsPlaying(false)}
-              onError={(e) => {
-                const video = e.target as HTMLVideoElement;
-                if (video.src !== item.default_public_url) {
-                  video.src = item.default_public_url;
-                }
-              }}
+              onError={handleVideoError}
             />
             <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="w-12 h-12 rounded-full bg-white/90 hover:bg-white group-hover:scale-110 transition-transform"
-                onClick={handleVideoClick}
-              >
-                {isPlaying ? (
-                  <Pause className="h-6 w-6 text-black" />
-                ) : (
-                  <Play className="h-6 w-6 text-black" />
-                )}
-              </Button>
+              {error ? (
+                <p className="text-white bg-red-500/80 px-3 py-1 rounded-md text-sm">
+                  {error}
+                </p>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="w-12 h-12 rounded-full bg-white/90 hover:bg-white group-hover:scale-110 transition-transform"
+                  onClick={handleVideoClick}
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <div className="h-6 w-6 border-2 border-black/20 border-t-black rounded-full animate-spin" />
+                  ) : isPlaying ? (
+                    <Pause className="h-6 w-6 text-black" />
+                  ) : (
+                    <Play className="h-6 w-6 text-black" />
+                  )}
+                </Button>
+              )}
             </div>
           </div>
         ) : (
@@ -118,7 +140,6 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
         )}
       </div>
 
-      {/* Static Info Section */}
       <div className="p-3 bg-card">
         <p className="font-medium text-foreground truncate">
           {item.product_name || 'Untitled Product'}
@@ -128,7 +149,6 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
         </p>
       </div>
 
-      {/* Hover Info Section - Channel, Date, Edit */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
         <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
           <div className="flex justify-between items-center">
