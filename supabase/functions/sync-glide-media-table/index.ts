@@ -3,12 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import { SyncResult } from './types.ts';
 import { QueueProcessor } from './queueProcessor.ts';
 import { GlideAPI } from './glideApi.ts';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+import { corsHeaders } from './cors.ts';
 
 serve(async (req) => {
   console.log('Received request:', req.method, req.url);
@@ -45,10 +40,7 @@ serve(async (req) => {
         }), 
         { 
           status: 400,
-          headers: { 
-            ...corsHeaders,
-            'Content-Type': 'application/json'
-          }
+          headers: corsHeaders
         }
       );
     }
@@ -62,10 +54,7 @@ serve(async (req) => {
         }), 
         { 
           status: 400,
-          headers: { 
-            ...corsHeaders,
-            'Content-Type': 'application/json'
-          }
+          headers: corsHeaders
         }
       );
     }
@@ -80,41 +69,41 @@ serve(async (req) => {
 
     if (configError) {
       console.error('Config error:', configError);
-      throw configError;
+      return new Response(
+        JSON.stringify({ error: configError.message }), 
+        { 
+          status: 500,
+          headers: corsHeaders
+        }
+      );
     }
+
     if (!config) {
       return new Response(
         JSON.stringify({ error: 'Configuration not found' }), 
         { 
           status: 404,
-          headers: { 
-            ...corsHeaders,
-            'Content-Type': 'application/json'
-          }
+          headers: corsHeaders
         }
       );
     }
+
     if (!config.supabase_table_name) {
       return new Response(
         JSON.stringify({ error: 'No Supabase table linked' }), 
         { 
           status: 400,
-          headers: { 
-            ...corsHeaders,
-            'Content-Type': 'application/json'
-          }
+          headers: corsHeaders
         }
       );
     }
+
     if (!config.api_token) {
       return new Response(
         JSON.stringify({ error: 'Glide API token not configured' }), 
         { 
           status: 400,
-          headers: { 
-            ...corsHeaders,
-            'Content-Type': 'application/json'
-          }
+          headers: corsHeaders
         }
       );
     }
@@ -136,7 +125,13 @@ serve(async (req) => {
 
     if (queueError) {
       console.error('Queue error:', queueError);
-      throw queueError;
+      return new Response(
+        JSON.stringify({ error: queueError.message }), 
+        { 
+          status: 500,
+          headers: corsHeaders
+        }
+      );
     }
 
     console.log(`Found ${queueItems?.length || 0} pending sync items`);
@@ -202,12 +197,7 @@ serve(async (req) => {
         success: true,
         data: result
       }),
-      { 
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json'
-        }
-      }
+      { headers: corsHeaders }
     );
 
   } catch (error) {
@@ -220,10 +210,7 @@ serve(async (req) => {
       }),
       { 
         status: 500,
-        headers: { 
-          ...corsHeaders,
-          'Content-Type': 'application/json'
-        }
+        headers: corsHeaders
       }
     );
   }
