@@ -3,11 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { GlideAPI } from "./glideApi.ts";
 import { mapSupabaseToGlide, mapGlideToSupabase } from "./productMapper.ts";
 import type { GlideSyncQueueItem, TelegramMedia } from "./types.ts";
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { corsHeaders } from "./cors.ts";
 
 serve(async (req: Request) => {
   // Handle CORS preflight requests
@@ -172,13 +168,6 @@ serve(async (req: Request) => {
           updated,
           deleted,
           errors
-        },
-        stats: {
-          processedItems: (records?.length || 0) + (queueItems?.length || 0),
-          skippedItems: 0,
-          errorItems: errors.length,
-          totalTime: 0,
-          details: {}
         }
       };
 
