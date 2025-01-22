@@ -11,12 +11,17 @@ import { MediaItem } from "@/types/media";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Loader2, AlertCircle } from "lucide-react";
 
-interface ChannelData {
-  telegram_data: {
-    chat: {
-      title: string;
-    };
+interface TelegramData {
+  chat: {
+    id?: number;
+    type?: string;
+    title?: string;
   };
+  message_id?: number;
+  chat_id?: number;
+  storage_path?: string;
+  media_group_id?: string;
+  date?: number;
 }
 
 interface FilterOptions {
@@ -48,8 +53,9 @@ const MediaGrid = () => {
           .not('vendor_uid', 'is', null)
       ]);
 
-      const channels = [...new Set((channelsResult.data || []).map(item => 
-        (item as unknown as ChannelData).telegram_data.chat.title).filter(Boolean))];
+      const channels = [...new Set((channelsResult.data || [])
+        .map(item => (item.telegram_data as TelegramData).chat?.title)
+        .filter(Boolean))];
       
       const vendors = [...new Set(vendorsResult.data?.map(item => 
         item.vendor_uid).filter(Boolean) || [])];
