@@ -11,9 +11,14 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  console.log('Received request:', req.method, req.url);
+
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { 
+      headers: corsHeaders,
+      status: 204
+    });
   }
 
   try {
@@ -26,19 +31,43 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
-    // Parse request body
+    // Parse request body with error handling
     let body;
     try {
       body = await req.json();
+      console.log('Received body:', JSON.stringify(body));
     } catch (error) {
       console.error('Error parsing request body:', error);
-      throw new Error('Invalid request body');
+      return new Response(
+        JSON.stringify({ 
+          error: 'Invalid request body',
+          details: error.message 
+        }), 
+        { 
+          status: 400,
+          headers: { 
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
     }
     
     const { operation, tableId } = body;
 
     if (!operation || !tableId) {
-      throw new Error('Missing required parameters: operation and tableId');
+      return new Response(
+        JSON.stringify({ 
+          error: 'Missing required parameters: operation and tableId' 
+        }), 
+        { 
+          status: 400,
+          headers: { 
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
     }
 
     console.log('Starting sync operation:', { operation, tableId });
@@ -49,10 +78,46 @@ serve(async (req) => {
       .eq('id', tableId)
       .maybeSingle();
 
-    if (configError) throw configError;
-    if (!config) throw new Error('Configuration not found');
-    if (!config.supabase_table_name) throw new Error('No Supabase table linked');
-    if (!config.api_token) throw new Error('Glide API token not configured');
+    if (configError) {
+      console.error('Config error:', configError);
+      throw configError;
+    }
+    if (!config) {
+      return new Response(
+        JSON.stringify({ error: 'Configuration not found' }), 
+        { 
+          status: 404,
+          headers: { 
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+    }
+    if (!config.supabase_table_name) {
+      return new Response(
+        JSON.stringify({ error: 'No Supabase table linked' }), 
+        { 
+          status: 400,
+          headers: { 
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+    }
+    if (!config.api_token) {
+      return new Response(
+        JSON.stringify({ error: 'Glide API token not configured' }), 
+        { 
+          status: 400,
+          headers: { 
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+    }
 
     const result: SyncResult = {
       added: 0,
@@ -69,7 +134,10 @@ serve(async (req) => {
       .is('processed_at', null)
       .order('created_at');
 
-    if (queueError) throw queueError;
+    if (queueError) {
+      console.error('Queue error:', queueError);
+      throw queueError;
+    }
 
     console.log(`Found ${queueItems?.length || 0} pending sync items`);
 
