@@ -1,4 +1,4 @@
-import type { GlideMutation, GlideApiRequest, GlideApiResponse } from '../_shared/types.ts';
+import type { GlideMutation, GlideApiRequest, GlideApiResponse } from './types.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 
 class GlideApiError extends Error {
