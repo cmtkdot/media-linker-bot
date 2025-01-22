@@ -48,15 +48,25 @@ export function GlideSyncHeader({ configs, isLoading }: GlideSyncHeaderProps) {
 
       if (error) throw error;
 
+      // Enhanced success toast with detailed stats
       toast({
         title: "Sync Completed",
-        description: `Added: ${data.added}, Updated: ${data.updated}, Deleted: ${data.deleted}`,
+        description: data.summary || `Added: ${data.data.added}, Updated: ${data.data.updated}, Deleted: ${data.data.deleted}`,
       });
 
-      if (data.errors?.length > 0) {
-        console.error('Sync errors:', data.errors);
+      // Show detailed stats in console for debugging
+      console.log('Sync Stats:', {
+        processedItems: data.stats.processedItems,
+        skippedItems: data.stats.skippedItems,
+        errorItems: data.stats.errorItems,
+        totalTime: `${data.stats.totalTime}ms`,
+        details: data.stats.details
+      });
+
+      if (data.data.errors?.length > 0) {
+        console.error('Sync errors:', data.data.errors);
         toast({
-          title: "Sync Completed with Errors",
+          title: `Sync Completed with ${data.stats.errorItems} Errors`,
           description: "Check console for details",
           variant: "destructive",
         });

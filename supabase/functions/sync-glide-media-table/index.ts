@@ -6,7 +6,29 @@ import { mapSupabaseToGlide, mapGlideToSupabase } from './productMapper.ts';
 import { QueueProcessor } from './queueProcessor.ts';
 import type { SyncResult, GlideConfig, GlideSyncQueueItem } from '../_shared/types.ts';
 
+interface SyncStats {
+  processedItems: number;
+  skippedItems: number;
+  errorItems: number;
+  totalTime: number;
+  details: {
+    operation: string;
+    status: string;
+    timestamp: string;
+    error?: string;
+  }[];
+}
+
 serve(async (req) => {
+  const startTime = Date.now();
+  const stats: SyncStats = {
+    processedItems: 0,
+    skippedItems: 0,
+    errorItems: 0,
+    totalTime: 0,
+    details: []
+  };
+
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { 
@@ -18,6 +40,7 @@ serve(async (req) => {
   }
 
   try {
+    console.log('Starting sync operation...');
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
@@ -27,17 +50,17 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
-    // Parse request body with error handling
     let body;
     try {
       body = await req.json();
-      console.log('Received body:', JSON.stringify(body));
+      console.log('Received request body:', JSON.stringify(body));
     } catch (error) {
       console.error('Error parsing request body:', error);
       return new Response(
         JSON.stringify({ 
           error: 'Invalid request body',
-          details: error.message 
+          details: error.message,
+          stats 
         }), 
         { 
           status: 400,
@@ -54,7 +77,8 @@ serve(async (req) => {
     if (!operation || !tableId) {
       return new Response(
         JSON.stringify({ 
-          error: 'Missing required parameters: operation and tableId' 
+          error: 'Missing required parameters: operation and tableId',
+          stats 
         }), 
         { 
           status: 400,
@@ -66,8 +90,7 @@ serve(async (req) => {
       );
     }
 
-    console.log('Starting sync operation:', { operation, tableId });
-
+    console.log(`Fetching configuration for table ID: ${tableId}`);
     const { data: config, error: configError } = await supabase
       .from('glide_config')
       .select('*')
@@ -75,9 +98,12 @@ serve(async (req) => {
       .maybeSingle();
 
     if (configError) {
-      console.error('Config error:', configError);
+      console.error('Configuration error:', configError);
       return new Response(
-        JSON.stringify({ error: configError.message }), 
+        JSON.stringify({ 
+          error: configError.message,
+          stats 
+        }), 
         { 
           status: 500,
           headers: corsHeaders
@@ -87,7 +113,10 @@ serve(async (req) => {
 
     if (!config) {
       return new Response(
-        JSON.stringify({ error: 'Configuration not found' }), 
+        JSON.stringify({ 
+          error: 'Configuration not found',
+          stats 
+        }), 
         { 
           status: 404,
           headers: corsHeaders
@@ -95,25 +124,7 @@ serve(async (req) => {
       );
     }
 
-    if (!config.supabase_table_name) {
-      return new Response(
-        JSON.stringify({ error: 'No Supabase table linked' }), 
-        { 
-          status: 400,
-          headers: corsHeaders
-        }
-      );
-    }
-
-    if (!config.api_token) {
-      return new Response(
-        JSON.stringify({ error: 'Glide API token not configured' }), 
-        { 
-          status: 400,
-          headers: corsHeaders
-        }
-      );
-    }
+    console.log(`Using configuration for table: ${config.table_name}`);
 
     const result: SyncResult = {
       added: 0,
@@ -123,6 +134,7 @@ serve(async (req) => {
     };
 
     // Get unprocessed queue items
+    console.log('Fetching unprocessed queue items...');
     const { data: queueItems, error: queueError } = await supabase
       .from('glide_sync_queue')
       .select('*')
@@ -133,7 +145,10 @@ serve(async (req) => {
     if (queueError) {
       console.error('Queue error:', queueError);
       return new Response(
-        JSON.stringify({ error: queueError.message }), 
+        JSON.stringify({ 
+          error: queueError.message,
+          stats 
+        }), 
         { 
           status: 500,
           headers: corsHeaders
@@ -142,14 +157,35 @@ serve(async (req) => {
     }
 
     console.log(`Found ${queueItems?.length || 0} pending sync items`);
+    
+    if (!queueItems || queueItems.length === 0) {
+      stats.totalTime = Date.now() - startTime;
+      return new Response(
+        JSON.stringify({
+          message: 'No items to sync',
+          result,
+          stats
+        }),
+        { 
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+    }
 
     const glideApi = new GlideAPI(config.app_id, config.table_id, config.api_token);
     const queueProcessor = new QueueProcessor(supabase, config, glideApi);
     
     // Process each queue item
-    for (const item of queueItems || []) {
+    for (const item of queueItems) {
       try {
+        console.log(`Processing item ${item.id} - Operation: ${item.operation}`);
+        const startItemTime = Date.now();
+        
         await queueProcessor.processQueueItem(item, result);
+        stats.processedItems++;
         
         // Mark item as processed
         const { error: updateError } = await supabase
@@ -163,11 +199,29 @@ serve(async (req) => {
         if (updateError) {
           console.error('Error updating queue item:', updateError);
           result.errors.push(`Failed to mark item ${item.id} as processed: ${updateError.message}`);
+          stats.errorItems++;
         }
+
+        stats.details.push({
+          operation: item.operation,
+          status: 'success',
+          timestamp: new Date().toISOString(),
+        });
+
+        console.log(`Completed processing item ${item.id} in ${Date.now() - startItemTime}ms`);
+
       } catch (error) {
-        console.error('Error processing queue item:', error);
+        console.error(`Error processing item ${item.id}:`, error);
         result.errors.push(`Error processing item ${item.id}: ${error.message}`);
+        stats.errorItems++;
         
+        stats.details.push({
+          operation: item.operation,
+          status: 'error',
+          timestamp: new Date().toISOString(),
+          error: error.message
+        });
+
         // Update error information
         const { error: updateError } = await supabase
           .from('glide_sync_queue')
@@ -183,12 +237,19 @@ serve(async (req) => {
       }
     }
 
-    console.log('Sync completed:', result);
+    stats.totalTime = Date.now() - startTime;
+    console.log('Sync completed:', {
+      result,
+      stats,
+      totalTimeMs: stats.totalTime
+    });
 
     return new Response(
       JSON.stringify({
         success: true,
-        data: result
+        data: result,
+        stats,
+        summary: `Processed ${stats.processedItems} items (${result.added} added, ${result.updated} updated, ${result.deleted} deleted) with ${stats.errorItems} errors in ${stats.totalTime}ms`
       }),
       { 
         headers: {
@@ -200,12 +261,14 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Error in sync operation:', error);
+    stats.totalTime = Date.now() - startTime;
     
     return new Response(
       JSON.stringify({
         success: false,
         error: error.message,
-        stack: error.stack
+        stack: error.stack,
+        stats
       }),
       { 
         status: 500,
