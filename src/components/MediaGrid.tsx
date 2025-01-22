@@ -8,6 +8,8 @@ import MediaViewer from "./MediaViewer";
 import MediaSearchBar from "./MediaSearchBar";
 import MediaEditDialog from "./MediaEditDialog";
 import { MediaItem } from "@/types/media";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { Loader2, AlertCircle } from "lucide-react";
 
 interface ChannelData {
   telegram_data: {
@@ -32,7 +34,6 @@ const MediaGrid = () => {
   const [previewItem, setPreviewItem] = useState<MediaItem | null>(null);
   const { toast } = useToast();
 
-  // Query to fetch filter options
   const { data: filterOptions } = useQuery<FilterOptions>({
     queryKey: ['filter-options'],
     queryFn: async () => {
@@ -47,8 +48,8 @@ const MediaGrid = () => {
           .not('vendor_uid', 'is', null)
       ]);
 
-      const channels = [...new Set((channelsResult.data as ChannelData[])?.map(item => 
-        item.telegram_data.chat.title).filter(Boolean) || [])];
+      const channels = [...new Set((channelsResult.data || []).map(item => 
+        (item as unknown as ChannelData).telegram_data.chat.title).filter(Boolean))];
       
       const vendors = [...new Set(vendorsResult.data?.map(item => 
         item.vendor_uid).filter(Boolean) || [])];
@@ -159,15 +160,39 @@ const MediaGrid = () => {
   };
 
   if (isLoading) {
-    return <div className="flex items-center justify-center h-[50vh] text-muted-foreground">Loading media...</div>;
+    return (
+      <Alert 
+        variant="default" 
+        className="flex items-center justify-center h-[50vh]"
+        icon={<Loader2 className="h-4 w-4 animate-spin" />}
+      >
+        <AlertDescription>Loading media...</AlertDescription>
+      </Alert>
+    );
   }
 
   if (error) {
-    return <div className="text-center text-destructive p-4">Error loading media: {error.message}</div>;
+    return (
+      <Alert 
+        variant="error"
+        className="m-4"
+        icon={<AlertCircle className="h-4 w-4" />}
+      >
+        <AlertTitle>Error loading media</AlertTitle>
+        <AlertDescription>{error.message}</AlertDescription>
+      </Alert>
+    );
   }
 
   if (!mediaItems?.length) {
-    return <div className="text-center text-muted-foreground p-4">No media items found</div>;
+    return (
+      <Alert 
+        variant="info"
+        className="m-4"
+      >
+        <AlertDescription>No media items found</AlertDescription>
+      </Alert>
+    );
   }
 
   return (
