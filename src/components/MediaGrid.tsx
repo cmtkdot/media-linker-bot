@@ -9,9 +9,17 @@ import MediaSearchBar from "./MediaSearchBar";
 import MediaEditDialog from "./MediaEditDialog";
 import { MediaItem } from "@/types/media";
 
+// Define a simple interface for filter options to avoid deep type instantiation
 interface FilterOptions {
   channels: string[];
   vendors: string[];
+}
+
+// Define a simple interface for the channel data
+interface ChannelData {
+  chat: {
+    title?: string;
+  };
 }
 
 const MediaGrid = () => {
@@ -39,7 +47,7 @@ const MediaGrid = () => {
         .not('vendor_uid', 'is', null);
 
       const channels = [...new Set(channelsData?.map(item => 
-        item.telegram_data?.chat?.title
+        (item.telegram_data as ChannelData)?.chat?.title
       ).filter(Boolean))];
       
       const vendors = [...new Set(vendorsData?.map(item => 
