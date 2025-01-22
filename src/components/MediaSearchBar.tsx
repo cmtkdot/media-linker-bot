@@ -136,12 +136,12 @@ const MediaSearchBar = ({
         </div>
       </div>
       <div className="flex flex-wrap gap-4">
-        <Select value={selectedChannel} onValueChange={onChannelChange}>
+        <Select value={selectedChannel || "all"} onValueChange={onChannelChange}>
           <SelectTrigger className="w-[200px]">
             <SelectValue placeholder="Filter by channel" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All channels</SelectItem>
+            <SelectItem value="all">All channels</SelectItem>
             {channels.map((channel) => (
               <SelectItem key={channel} value={channel}>
                 {channel}
@@ -150,23 +150,23 @@ const MediaSearchBar = ({
           </SelectContent>
         </Select>
 
-        <Select value={selectedType} onValueChange={onTypeChange}>
+        <Select value={selectedType || "all"} onValueChange={onTypeChange}>
           <SelectTrigger className="w-[200px]">
             <SelectValue placeholder="Filter by type" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All types</SelectItem>
+            <SelectItem value="all">All types</SelectItem>
             <SelectItem value="photo">Photos</SelectItem>
             <SelectItem value="video">Videos</SelectItem>
           </SelectContent>
         </Select>
 
-        <Select value={selectedVendor} onValueChange={onVendorChange}>
+        <Select value={selectedVendor || "all"} onValueChange={onVendorChange}>
           <SelectTrigger className="w-[200px]">
             <SelectValue placeholder="Filter by vendor" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All vendors</SelectItem>
+            <SelectItem value="all">All vendors</SelectItem>
             {vendors.map((vendor) => (
               <SelectItem key={vendor} value={vendor}>
                 {vendor}

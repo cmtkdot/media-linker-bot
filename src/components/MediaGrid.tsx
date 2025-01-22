@@ -12,9 +12,9 @@ import { MediaItem } from "@/types/media";
 const MediaGrid = () => {
   const [view, setView] = useState<'grid' | 'table'>('grid');
   const [search, setSearch] = useState("");
-  const [selectedChannel, setSelectedChannel] = useState("");
-  const [selectedType, setSelectedType] = useState("");
-  const [selectedVendor, setSelectedVendor] = useState("");
+  const [selectedChannel, setSelectedChannel] = useState("all");
+  const [selectedType, setSelectedType] = useState("all");
+  const [selectedVendor, setSelectedVendor] = useState("all");
   const [editItem, setEditItem] = useState<MediaItem | null>(null);
   const [previewItem, setPreviewItem] = useState<MediaItem | null>(null);
   const { toast } = useToast();
@@ -56,15 +56,15 @@ const MediaGrid = () => {
           query = query.or(`caption.ilike.%${search}%,product_name.ilike.%${search}%,product_code.ilike.%${search}%,vendor_uid.ilike.%${search}%`);
         }
 
-        if (selectedChannel) {
+        if (selectedChannel !== "all") {
           query = query.eq('telegram_data->>chat->>title', selectedChannel);
         }
 
-        if (selectedType) {
+        if (selectedType !== "all") {
           query = query.eq('file_type', selectedType);
         }
 
-        if (selectedVendor) {
+        if (selectedVendor !== "all") {
           query = query.eq('vendor_uid', selectedVendor);
         }
 
