@@ -161,23 +161,22 @@ const MediaGrid = () => {
 
   if (isLoading) {
     return (
-      <Alert 
-        variant="default" 
-        className="flex items-center justify-center h-[50vh]"
-        icon={<Loader2 className="h-4 w-4 animate-spin" />}
-      >
-        <AlertDescription>Loading media...</AlertDescription>
-      </Alert>
+      <div className="flex items-center justify-center h-[50vh]">
+        <div className="flex items-center gap-2">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span>Loading media...</span>
+        </div>
+      </div>
     );
   }
 
   if (error) {
     return (
       <Alert 
-        variant="error"
+        variant="destructive"
         className="m-4"
-        icon={<AlertCircle className="h-4 w-4" />}
       >
+        <AlertCircle className="h-4 w-4" />
         <AlertTitle>Error loading media</AlertTitle>
         <AlertDescription>{error.message}</AlertDescription>
       </Alert>
@@ -187,7 +186,7 @@ const MediaGrid = () => {
   if (!mediaItems?.length) {
     return (
       <Alert 
-        variant="info"
+        variant="default"
         className="m-4"
       >
         <AlertDescription>No media items found</AlertDescription>
