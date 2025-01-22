@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
-import MediaCard from "./MediaCard";
+import { ContentCard } from "@/components/ui/content-card";
 import MediaTable from "./MediaTable";
 import MediaViewer from "./MediaViewer";
 import MediaSearchBar from "./MediaSearchBar";
@@ -156,13 +156,19 @@ const MediaGrid = () => {
       />
 
       {view === 'grid' ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
           {mediaItems?.map((item) => (
-            <MediaCard
+            <ContentCard
               key={item.id}
-              item={item}
-              onEdit={setEditItem}
-              onPreview={setPreviewItem}
+              backgroundImage={item.public_url || item.default_public_url}
+              onEdit={() => setEditItem(item)}
+              content={{
+                channelTitle: item.telegram_data?.chat?.title,
+                purchaseDate: item.purchase_date ? new Date(item.purchase_date).toLocaleDateString() : undefined,
+                productName: item.product_name || 'Untitled Product',
+                caption: item.caption
+              }}
+              className="group-hover/card:shadow-2xl transition-all duration-300"
             />
           ))}
         </div>
