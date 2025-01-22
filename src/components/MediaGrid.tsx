@@ -12,12 +12,39 @@ import { MediaItem } from "@/types/media";
 const MediaGrid = () => {
   const [view, setView] = useState<'grid' | 'table'>('grid');
   const [search, setSearch] = useState("");
+  const [selectedChannel, setSelectedChannel] = useState("");
+  const [selectedType, setSelectedType] = useState("");
+  const [selectedVendor, setSelectedVendor] = useState("");
   const [editItem, setEditItem] = useState<MediaItem | null>(null);
   const [previewItem, setPreviewItem] = useState<MediaItem | null>(null);
   const { toast } = useToast();
 
+  // Query to fetch unique channels and vendors for filters
+  const { data: filterOptions } = useQuery({
+    queryKey: ['filter-options'],
+    queryFn: async () => {
+      const { data: channelsData } = await supabase
+        .from('telegram_media')
+        .select('telegram_data->chat->title')
+        .not('telegram_data->chat->title', 'is', null);
+
+      const { data: vendorsData } = await supabase
+        .from('telegram_media')
+        .select('vendor_uid')
+        .not('vendor_uid', 'is', null);
+
+      const channels = [...new Set(channelsData?.map(item => item.telegram_data.chat.title))];
+      const vendors = [...new Set(vendorsData?.map(item => item.vendor_uid))];
+
+      return {
+        channels: channels.filter(Boolean),
+        vendors: vendors.filter(Boolean)
+      };
+    }
+  });
+
   const { data: mediaItems, isLoading, error, refetch } = useQuery({
-    queryKey: ['telegram-media', search],
+    queryKey: ['telegram-media', search, selectedChannel, selectedType, selectedVendor],
     queryFn: async () => {
       try {
         let query = supabase
@@ -27,6 +54,18 @@ const MediaGrid = () => {
 
         if (search) {
           query = query.or(`caption.ilike.%${search}%,product_name.ilike.%${search}%,product_code.ilike.%${search}%,vendor_uid.ilike.%${search}%`);
+        }
+
+        if (selectedChannel) {
+          query = query.eq('telegram_data->>chat->>title', selectedChannel);
+        }
+
+        if (selectedType) {
+          query = query.eq('file_type', selectedType);
+        }
+
+        if (selectedVendor) {
+          query = query.eq('vendor_uid', selectedVendor);
         }
 
         const { data, error: queryError } = await query;
@@ -153,6 +192,14 @@ const MediaGrid = () => {
         view={view}
         onSearchChange={setSearch}
         onViewChange={setView}
+        selectedChannel={selectedChannel}
+        onChannelChange={setSelectedChannel}
+        selectedType={selectedType}
+        onTypeChange={setSelectedType}
+        selectedVendor={selectedVendor}
+        onVendorChange={setSelectedVendor}
+        channels={filterOptions?.channels || []}
+        vendors={filterOptions?.vendors || []}
       />
 
       {view === 'grid' ? (
@@ -175,7 +222,10 @@ const MediaGrid = () => {
           ))}
         </div>
       ) : (
-        <MediaTable data={mediaItems} onEdit={setEditItem} />
+        <MediaTable 
+          data={mediaItems} 
+          onEdit={setEditItem} 
+        />
       )}
 
       <MediaEditDialog
