@@ -362,10 +362,21 @@ export type Database = {
       }
     }
     Functions: {
+      count_missing_thumbnails: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          total_videos: number
+          missing_thumbnails: number
+        }[]
+      }
       create_glide_sync_table: {
         Args: {
           table_name: string
         }
+        Returns: undefined
+      }
+      generate_missing_thumbnails: {
+        Args: Record<PropertyKey, never>
         Returns: undefined
       }
       get_all_tables: {

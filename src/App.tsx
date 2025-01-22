@@ -10,6 +10,7 @@ import Products from "./pages/Products";
 import GlideSync from "./pages/GlideSync";
 import GlideConnections from "./pages/GlideConnections";
 import DatabaseChat from "./pages/DatabaseChat";
+import Settings from "./pages/Settings";
 import DashboardLayout from "@/components/DashboardLayout";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -75,6 +76,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <DatabaseChat />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/settings"
+              element={
+                <ProtectedRoute>
+                  <Settings />
                 </ProtectedRoute>
               }
             />
