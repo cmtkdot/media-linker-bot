@@ -8,22 +8,12 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
+import { MediaItem } from "@/types/media";
 
 interface MediaViewerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  media: {
-    public_url: string;
-    default_public_url: string;
-    file_type: string;
-    caption?: string;
-    product_name?: string;
-    product_code?: string;
-    quantity?: number;
-    vendor_uid?: string;
-    purchase_date?: string;
-    notes?: string;
-  } | null;
+  media: MediaItem | null;
 }
 
 const MediaViewer = ({ open, onOpenChange, media }: MediaViewerProps) => {

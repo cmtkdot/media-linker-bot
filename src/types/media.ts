@@ -1,3 +1,5 @@
+export type MediaFileType = 'photo' | 'video' | 'document' | 'animation';
+
 export interface MediaItem {
   id: string;
   file_id: string;
@@ -23,4 +25,23 @@ export interface MediaItem {
   };
   message_url?: string;
   glide_app_url?: string;
+}
+
+export interface SupabaseMediaItem extends Omit<MediaItem, 'file_type'> {
+  file_type: string;
+}
+
+export interface MediaSearchBarProps {
+  search: string;
+  onSearchChange: (value: string) => void;
+  view: 'grid' | 'table';
+  onViewChange: (view: 'grid' | 'table') => void;
+  selectedChannel: string;
+  onChannelChange: (channel: string) => void;
+  selectedType: string;
+  onTypeChange: (type: string) => void;
+  selectedVendor: string;
+  onVendorChange: (vendor: string) => void;
+  channels: string[];
+  vendors: string[];
 }
