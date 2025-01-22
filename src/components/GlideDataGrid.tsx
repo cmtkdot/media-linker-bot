@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, Pencil, Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
-import type { GlideConfig, Database } from "@/integrations/supabase/types";
+import type { GlideConfig } from "@/types/glide";
 
 type ValidTableName = "messages" | "failed_webhook_updates" | "glide_config" | "glide_sync_queue" | "telegram_media";
 

@@ -27,13 +27,6 @@ export interface GlideTableSchema {
   media_json: { type: "string"; name: "NL5gM" };
 }
 
-export interface SyncResult {
-  added: number;
-  updated: number;
-  deleted: number;
-  errors: string[];
-}
-
 export interface GlideConfig {
   id: string;
   app_id: string;
@@ -44,6 +37,13 @@ export interface GlideConfig {
   updated_at: string;
   active: boolean;
   supabase_table_name: string;
+}
+
+export interface SyncResult {
+  added: number;
+  updated: number;
+  deleted: number;
+  errors: string[];
 }
 
 export interface GlideSyncQueueItem {

@@ -1,8 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
-import { GlideAPI } from '../../glide-app/api.ts';
-import { corsHeaders } from '../../glide-app/utils.ts';
-import { mapSupabaseToGlide, mapGlideToSupabase } from '../../glide-app/mapper.ts';
+import { GlideAPI } from './glideApi.ts';
+import { corsHeaders } from './cors.ts';
+import { mapSupabaseToGlide, mapGlideToSupabase } from './productMapper.ts';
 import type { SyncResult, GlideConfig, GlideSyncQueueItem } from '../_shared/types.ts';
 
 serve(async (req) => {
