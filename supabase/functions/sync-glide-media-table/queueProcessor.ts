@@ -22,6 +22,7 @@ export class QueueProcessor {
 
           const mappedData = mapSupabaseToGlide(item.new_data);
           const response = await this.glideApi.addRow(mappedData);
+          console.log('Glide API response:', response);
 
           if (response.rowIDs?.[0]) {
             // Update the telegram_media record with the new row ID
@@ -35,6 +36,9 @@ export class QueueProcessor {
 
             if (updateError) throw updateError;
             result.added++;
+            console.log('Successfully added row and updated telegram_media_row_id:', response.rowIDs[0]);
+          } else {
+            throw new Error('No row ID returned from Glide API');
           }
           break;
         }
@@ -45,7 +49,8 @@ export class QueueProcessor {
           }
 
           const mappedData = mapSupabaseToGlide(item.new_data);
-          await this.glideApi.updateRow(item.new_data.telegram_media_row_id, mappedData);
+          const response = await this.glideApi.updateRow(item.new_data.telegram_media_row_id, mappedData);
+          console.log('Glide API update response:', response);
 
           // Update last_synced_at in Supabase
           const { error: updateError } = await this.supabase
@@ -55,6 +60,7 @@ export class QueueProcessor {
 
           if (updateError) throw updateError;
           result.updated++;
+          console.log('Successfully updated row in Glide');
           break;
         }
 
@@ -63,8 +69,10 @@ export class QueueProcessor {
             throw new Error('No Glide row ID found for DELETE operation');
           }
 
-          await this.glideApi.deleteRow(item.old_data.telegram_media_row_id);
+          const response = await this.glideApi.deleteRow(item.old_data.telegram_media_row_id);
+          console.log('Glide API delete response:', response);
           result.deleted++;
+          console.log('Successfully deleted row from Glide');
           break;
         }
 

@@ -6,6 +6,8 @@ export class GlideAPI {
   ) {}
 
   private async makeRequest(method: string, body: any) {
+    console.log('Making Glide API request:', { method, body });
+    
     const response = await fetch('https://api.glideapp.io/api/function/mutateTables', {
       method: 'POST',
       headers: {
@@ -25,10 +27,13 @@ export class GlideAPI {
 
     if (!response.ok) {
       const errorText = await response.text();
+      console.error('Glide API error:', { status: response.status, error: errorText });
       throw new Error(`Glide API error: ${response.status} ${errorText}`);
     }
 
-    return response.json();
+    const data = await response.json();
+    console.log('Glide API response:', data);
+    return data;
   }
 
   async addRow(data: Record<string, any>) {
