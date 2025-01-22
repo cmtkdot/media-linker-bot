@@ -39,7 +39,7 @@ const MediaGridFilters = ({
             <SelectValue placeholder="Select channel" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All channels</SelectItem>
+            <SelectItem value="all">All channels</SelectItem>
             {channels.map((channel) => (
               <SelectItem key={channel} value={channel}>
                 {channel}
@@ -52,7 +52,7 @@ const MediaGridFilters = ({
             <SelectValue placeholder="Select type" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All types</SelectItem>
+            <SelectItem value="all">All types</SelectItem>
             <SelectItem value="photo">Photos</SelectItem>
             <SelectItem value="video">Videos</SelectItem>
           </SelectContent>
@@ -62,7 +62,7 @@ const MediaGridFilters = ({
             <SelectValue placeholder="Select vendor" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All vendors</SelectItem>
+            <SelectItem value="all">All vendors</SelectItem>
             {vendors.map((vendor) => (
               <SelectItem key={vendor} value={vendor}>
                 {vendor}
