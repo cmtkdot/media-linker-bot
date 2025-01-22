@@ -1,8 +1,8 @@
 import {
-  ColumnDef,
   flexRender,
   getCoreRowModel,
   useReactTable,
+  type ColumnDef,
 } from "@tanstack/react-table";
 
 import {
@@ -17,16 +17,29 @@ import {
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
+  onRowSelectionChange?: (selectedRows: string[]) => void;
 }
 
 export function DataTable<TData, TValue>({
   columns,
   data,
+  onRowSelectionChange,
 }: DataTableProps<TData, TValue>) {
   const table = useReactTable({
     data,
     columns,
     getCoreRowModel: getCoreRowModel(),
+    onRowSelectionChange: (updater) => {
+      const nextState = typeof updater === 'function' ? updater(table.getState().rowSelection) : updater;
+      const selectedRows = Object.entries(nextState)
+        .filter(([_, selected]) => selected)
+        .map(([key]) => key);
+      onRowSelectionChange?.(selectedRows);
+      table.setRowSelection(nextState);
+    },
+    state: {
+      rowSelection: {},
+    },
   });
 
   return (
@@ -66,7 +79,10 @@ export function DataTable<TData, TValue>({
             ))
           ) : (
             <TableRow>
-              <TableCell colSpan={columns.length} className="h-24 text-center">
+              <TableCell
+                colSpan={columns.length}
+                className="h-24 text-center"
+              >
                 No results.
               </TableCell>
             </TableRow>

@@ -1,7 +1,30 @@
+"use client";
+
 import { ColumnDef } from "@tanstack/react-table";
-import type { GlideSyncQueueItem } from "@/types/glide";
+import { Checkbox } from "@/components/ui/checkbox";
+import { format } from "date-fns";
+import { GlideSyncQueueItem } from "@/types/glide";
 
 export const columns: ColumnDef<GlideSyncQueueItem>[] = [
+  {
+    id: "select",
+    header: ({ table }) => (
+      <Checkbox
+        checked={table.getIsAllPageRowsSelected()}
+        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+        aria-label="Select all"
+      />
+    ),
+    cell: ({ row }) => (
+      <Checkbox
+        checked={row.getIsSelected()}
+        onCheckedChange={(value) => row.toggleSelected(!!value)}
+        aria-label="Select row"
+      />
+    ),
+    enableSorting: false,
+    enableHiding: false,
+  },
   {
     accessorKey: "table_name",
     header: "Table",
@@ -14,16 +37,8 @@ export const columns: ColumnDef<GlideSyncQueueItem>[] = [
     accessorKey: "created_at",
     header: "Created At",
     cell: ({ row }) => {
-      const date = row.getValue("created_at");
-      return date ? new Date(date as string).toLocaleString() : "N/A";
-    },
-  },
-  {
-    accessorKey: "processed_at",
-    header: "Processed At",
-    cell: ({ row }) => {
-      const date = row.getValue("processed_at");
-      return date ? new Date(date as string).toLocaleString() : "Pending";
+      const date = row.getValue("created_at") as string;
+      return date ? format(new Date(date), "PPpp") : "N/A";
     },
   },
   {
