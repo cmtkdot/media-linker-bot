@@ -7,13 +7,9 @@ import type { GlideSyncQueueItem, TelegramMedia } from "./types.ts";
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Content-Type': 'application/json'
 };
 
 serve(async (req: Request) => {
-  console.log('Received request:', req.method, req.url);
-
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -22,15 +18,11 @@ serve(async (req: Request) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    
-    if (!supabaseUrl || !supabaseServiceKey) {
-      throw new Error('Missing required environment variables');
-    }
-
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    
+
     const { operation, tableId, recordIds } = await req.json();
-    console.log('Request payload:', { operation, tableId, recordIds });
+
+    console.log('Received sync request:', { operation, tableId, recordIds });
 
     if (!operation) {
       throw new Error('Operation is required');
@@ -44,10 +36,7 @@ serve(async (req: Request) => {
         .eq('id', tableId)
         .single();
 
-      if (configError) {
-        console.error('Config error:', configError);
-        throw configError;
-      }
+      if (configError) throw configError;
 
       if (!config.active || !config.supabase_table_name) {
         throw new Error('Glide configuration is not active or table is not linked');
@@ -75,10 +64,7 @@ serve(async (req: Request) => {
 
       const { data: records, error: recordsError } = await query;
 
-      if (recordsError) {
-        console.error('Records error:', recordsError);
-        throw recordsError;
-      }
+      if (recordsError) throw recordsError;
 
       console.log(`Found ${records?.length || 0} records to sync`);
 
@@ -87,7 +73,6 @@ serve(async (req: Request) => {
       let deleted = 0;
       const errors: string[] = [];
 
-      // Process each record
       for (const record of records || []) {
         try {
           // Map Supabase data to Glide format
@@ -122,14 +107,10 @@ serve(async (req: Request) => {
         .is('processed_at', null)
         .order('created_at', { ascending: true });
 
-      if (queueError) {
-        console.error('Queue error:', queueError);
-        throw queueError;
-      }
+      if (queueError) throw queueError;
 
       console.log(`Found ${queueItems?.length || 0} queue items to process`);
 
-      // Process each queue item
       for (const item of queueItems || []) {
         try {
           switch (item.operation) {
@@ -197,7 +178,10 @@ serve(async (req: Request) => {
 
       return new Response(
         JSON.stringify(response),
-        { headers: corsHeaders }
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200 
+        }
       );
     }
 
@@ -212,7 +196,7 @@ serve(async (req: Request) => {
         error: error.message
       }),
       { 
-        headers: corsHeaders,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400
       }
     );
