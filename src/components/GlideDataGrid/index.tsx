@@ -7,6 +7,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import type { GlideSyncQueueItem, GlideConfig } from "@/types/glide";
+import type { Database } from "@/integrations/supabase/types";
 
 interface GlideDataGridProps {
   configs: GlideConfig[];
@@ -27,7 +28,9 @@ export function GlideDataGrid({ configs }: GlideDataGridProps) {
         .order('created_at', { ascending: false });
       
       if (error) throw error;
-      return data as GlideSyncQueueItem[];
+      
+      // Cast the data to the correct type
+      return (data as unknown as GlideSyncQueueItem[]) || [];
     }
   });
 

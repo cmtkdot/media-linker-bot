@@ -76,7 +76,6 @@ export interface TelegramMedia {
   analyzed_content?: Record<string, any>;
   purchase_order_uid?: string;
   default_public_url?: string;
-  telegram_media_row_id?: string;
 }
 
 export interface SyncResult {
