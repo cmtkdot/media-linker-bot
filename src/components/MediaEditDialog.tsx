@@ -46,6 +46,60 @@ const MediaEditDialog = ({ editItem, onClose, onSave, onItemChange, formatDate }
     }
   };
 
+  const updateTelegramMessage = async (updates: any) => {
+    if (!editItem?.telegram_data) return;
+
+    try {
+      const { data, error } = await supabase.functions.invoke('update-telegram-message', {
+        body: {
+          messageId: editItem.telegram_data.message_id,
+          chatId: editItem.telegram_data.chat_id,
+          updates
+        }
+      });
+
+      if (error) throw error;
+
+      console.log('Telegram message updated:', data);
+    } catch (error) {
+      console.error('Error updating Telegram message:', error);
+      toast({
+        title: "Warning",
+        description: "Changes saved but failed to update Telegram message.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSave = async () => {
+    if (!editItem) return;
+
+    try {
+      // First save to Supabase
+      await onSave();
+
+      // Then update Telegram message
+      await updateTelegramMessage({
+        caption: editItem.caption,
+        // Add other fields as needed
+      });
+
+      toast({
+        title: "Changes saved",
+        description: "The media item and Telegram message have been updated successfully.",
+      });
+
+      onClose();
+    } catch (error) {
+      console.error('Error saving changes:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save changes.",
+        variant: "destructive",
+      });
+    }
+  };
+
   if (!editItem) return null;
 
   return (
@@ -148,7 +202,7 @@ const MediaEditDialog = ({ editItem, onClose, onSave, onItemChange, formatDate }
             <Button variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button onClick={onSave}>
+            <Button onClick={handleSave}>
               Save changes
             </Button>
           </div>
