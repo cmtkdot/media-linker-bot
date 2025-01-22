@@ -31,16 +31,42 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
   const [isPlaying, setIsPlaying] = React.useState(false);
   const videoRef = React.useRef<HTMLVideoElement>(null);
 
+  // Cleanup function for video element
+  React.useEffect(() => {
+    return () => {
+      if (videoRef.current) {
+        videoRef.current.pause();
+        videoRef.current.removeAttribute('src');
+        videoRef.current.load();
+      }
+    };
+  }, []);
+
   const handleVideoClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (videoRef.current) {
-      if (isPlaying) {
-        videoRef.current.pause();
-        videoRef.current.currentTime = 0;
-      } else {
-        videoRef.current.play();
+      try {
+        if (isPlaying) {
+          videoRef.current.pause();
+          videoRef.current.currentTime = 0;
+        } else {
+          // Reset video source before playing to prevent stale state
+          if (!videoRef.current.src) {
+            videoRef.current.src = item.public_url || item.default_public_url;
+          }
+          const playPromise = videoRef.current.play();
+          if (playPromise !== undefined) {
+            playPromise.catch((error) => {
+              console.error("Video playback error:", error);
+              setIsPlaying(false);
+            });
+          }
+        }
+        setIsPlaying(!isPlaying);
+      } catch (error) {
+        console.error("Video interaction error:", error);
+        setIsPlaying(false);
       }
-      setIsPlaying(!isPlaying);
     }
   };
 
@@ -67,11 +93,11 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
           <div className="relative h-full cursor-pointer group" onClick={handleVideoClick}>
             <video
               ref={videoRef}
-              src={item.public_url || item.default_public_url}
               className="object-cover w-full h-full"
               muted
               playsInline
               poster={item.default_public_url}
+              preload="none"
             />
             {!isPlaying && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/40 group-hover:bg-black/60 transition-colors">
