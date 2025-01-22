@@ -47,7 +47,7 @@ export function ImageSwiper({ items, className, ...props }: ImageSwiperProps) {
     }
   };
 
-  const renderMediaItem = (item: MediaItem, index: number) => {
+  const renderMediaItem = (item: MediaItem) => {
     const displayUrl = item.thumbnail_url || item.public_url || item.default_public_url;
 
     if (item.file_type === 'video') {
@@ -57,7 +57,7 @@ export function ImageSwiper({ items, className, ...props }: ImageSwiperProps) {
           {!isPlaying && (
             <img
               src={displayUrl}
-              alt={item.caption || `Video ${index + 1}`}
+              alt={item.caption || `Video`}
               className="absolute inset-0 w-full h-full object-cover pointer-events-none"
             />
           )}
@@ -90,11 +90,15 @@ export function ImageSwiper({ items, className, ...props }: ImageSwiperProps) {
     return (
       <img
         src={displayUrl}
-        alt={item.caption || `Image ${index + 1}`}
+        alt={item.caption || `Image`}
         className="h-full w-full object-cover pointer-events-none"
       />
     );
   };
+
+  if (!items?.length) {
+    return null;
+  }
 
   return (
     <div
@@ -160,7 +164,7 @@ export function ImageSwiper({ items, className, ...props }: ImageSwiperProps) {
             key={item.id}
             className="h-full w-full shrink-0 overflow-hidden bg-neutral-800 object-cover first:rounded-l-[inherit] last:rounded-r-[inherit]"
           >
-            {renderMediaItem(item, i)}
+            {renderMediaItem(item)}
           </motion.div>
         ))}
       </motion.div>

@@ -4,43 +4,35 @@ import { format } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ImageSwiper } from "@/components/ui/image-swiper";
 import { MediaItem } from "@/types/media";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 const Products = () => {
-  const [products, setProducts] = useState<MediaItem[]>([]);
-  const supabase = useSupabaseClient();
-
-  useEffect(() => {
-    const fetchProducts = async () => {
+  const { data: products } = useQuery<MediaItem[]>({
+    queryKey: ['products'],
+    queryFn: async () => {
       const { data, error } = await supabase
         .from("telegram_media")
         .select("*")
         .order("created_at", { ascending: false });
 
-      if (error) {
-        console.error("Error fetching products:", error);
-        return;
-      }
-
-      setProducts(data || []);
-    };
-
-    fetchProducts();
-  }, [supabase]);
+      if (error) throw error;
+      return data;
+    }
+  });
 
   const groupMediaByProduct = (media: MediaItem[]) => {
-    const groups = media.reduce((acc, item) => {
+    return media.reduce((acc: Record<string, MediaItem[]>, item) => {
       const key = item.product_code || "uncategorized";
       if (!acc[key]) {
         acc[key] = [];
       }
       acc[key].push(item);
       return acc;
-    }, {} as Record<string, MediaItem[]>);
-
-    return Object.values(groups);
+    }, {});
   };
 
-  const productGroups = groupMediaByProduct(products);
+  const productGroups = products ? Object.values(groupMediaByProduct(products)) : [];
 
   return (
     <div className="container mx-auto py-8 px-4">
@@ -48,12 +40,11 @@ const Products = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {productGroups.map((group, index) => {
           const mainProduct = group[0];
-          const images = group.map(item => item.public_url || item.default_public_url).filter(Boolean) as string[];
           
           return (
             <Card key={index} className="overflow-hidden">
               <CardContent className="p-0">
-                <ImageSwiper images={images} className="aspect-square" />
+                <ImageSwiper items={group} className="aspect-square" />
               </CardContent>
               <CardHeader className="space-y-4">
                 <CardTitle className="text-2xl font-bold">
