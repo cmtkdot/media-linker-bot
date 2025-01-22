@@ -40,7 +40,7 @@ const MediaGrid = () => {
       ]);
 
       const channels = [...new Set(channelsResult.data?.map(item => 
-        item.telegram_data?.chat?.title).filter(Boolean) || [])];
+        item.telegram_data?.chat?.title as string).filter(Boolean) || [])];
       
       const vendors = [...new Set(vendorsResult.data?.map(item => 
         item.vendor_uid).filter(Boolean) || [])];
