@@ -1,8 +1,9 @@
 import React from "react";
 import { Card } from "@/components/ui/card";
-import { Play } from "lucide-react";
+import { Play, Edit } from "lucide-react";
 import { MediaItem } from "@/types/media";
 import { Dispatch, SetStateAction } from "react";
+import { Button } from "@/components/ui/button";
 
 interface MediaCardProps {
   item: MediaItem;
@@ -27,32 +28,40 @@ const MediaCard = ({ item, onPreview, onEdit }: MediaCardProps) => {
     return item.public_url || item.default_public_url;
   };
 
-  const handleVideoClick = async (e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent card click when clicking video controls
-    if (!videoRef.current) return;
-
-    try {
-      if (isPlaying) {
-        await videoRef.current.pause();
-        videoRef.current.currentTime = 0;
-      } else {
+  const handleMouseEnter = async () => {
+    if (item.file_type === 'video' && videoRef.current) {
+      try {
         videoRef.current.src = getVideoUrl();
         const playPromise = videoRef.current.play();
         if (playPromise !== undefined) {
           await playPromise;
+          setIsPlaying(true);
         }
+      } catch (error) {
+        console.error("Video playback error:", error);
       }
-      setIsPlaying(!isPlaying);
-    } catch (error) {
-      console.error("Video playback error:", error);
+    }
+  };
+
+  const handleMouseLeave = () => {
+    if (item.file_type === 'video' && videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.currentTime = 0;
       setIsPlaying(false);
     }
+  };
+
+  const handleEditClick = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent card click
+    onEdit(item);
   };
 
   return (
     <Card 
       className="group relative overflow-hidden bg-card hover:shadow-lg transition-all duration-300 rounded-xl border-0 cursor-pointer" 
-      onClick={() => onPreview()}
+      onClick={onPreview}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
       {/* Media Section - Fixed aspect ratio container */}
       <div className="relative aspect-square w-full">
@@ -70,16 +79,13 @@ const MediaCard = ({ item, onPreview, onEdit }: MediaCardProps) => {
               playsInline
               preload="none"
             />
-            <div 
-              className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors cursor-pointer"
-              onClick={handleVideoClick}
-            >
-              {!isPlaying && (
+            {!isPlaying && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors">
                 <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center">
                   <Play className="h-6 w-6 text-black" />
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </>
         ) : (
           <img
@@ -88,6 +94,18 @@ const MediaCard = ({ item, onPreview, onEdit }: MediaCardProps) => {
             className="absolute inset-0 w-full h-full object-cover"
           />
         )}
+
+        {/* Edit Button Overlay */}
+        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          <Button
+            variant="secondary"
+            size="icon"
+            className="h-8 w-8 bg-white/90 hover:bg-white"
+            onClick={handleEditClick}
+          >
+            <Edit className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       {/* Info Section */}
