@@ -31,10 +31,6 @@ interface MediaCardProps {
 }
 
 const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
-  const [isPlaying, setIsPlaying] = React.useState(false);
-  const [showVideo, setShowVideo] = React.useState(false);
-  const videoRef = React.useRef<HTMLVideoElement>(null);
-
   // Get the display URL for the media item
   const getDisplayUrl = () => {
     if (item.file_type === 'video') {
@@ -43,74 +39,26 @@ const MediaCard = ({ item, onEdit, onPreview }: MediaCardProps) => {
     return item.public_url || item.default_public_url;
   };
 
-  const handleVideoClick = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!videoRef.current) return;
-
-    try {
-      if (isPlaying) {
-        await videoRef.current.pause();
-        videoRef.current.currentTime = 0;
-        setShowVideo(false);
-      } else {
-        setShowVideo(true);
-        // Set source and play
-        videoRef.current.src = item.public_url || item.default_public_url;
-        const playPromise = videoRef.current.play();
-        if (playPromise !== undefined) {
-          await playPromise;
-        }
-      }
-      setIsPlaying(!isPlaying);
-    } catch (error) {
-      console.error("Video playback error:", error);
-      setIsPlaying(false);
-      setShowVideo(false);
-    }
-  };
-
   return (
     <Card 
-      className="group relative overflow-hidden bg-card hover:shadow-lg transition-all duration-300 rounded-xl border-0 flex flex-col h-full" 
+      className="group relative overflow-hidden bg-card hover:shadow-lg transition-all duration-300 rounded-xl border-0" 
       onClick={() => onPreview(item)}
     >
-      {/* Media Section */}
-      <div className="aspect-square relative">
-        {item.file_type === 'video' ? (
-          <div className="relative h-full cursor-pointer group" onClick={handleVideoClick}>
-            {/* Thumbnail Image */}
-            {!showVideo && (
-              <img
-                src={getDisplayUrl()}
-                alt={item.caption || "Video thumbnail"}
-                className="absolute inset-0 w-full h-full object-cover"
-              />
-            )}
-            
-            {/* Video Element */}
-            <video
-              ref={videoRef}
-              className={`absolute inset-0 object-cover w-full h-full ${showVideo ? 'opacity-100' : 'opacity-0'}`}
-              muted
-              playsInline
-              preload="none"
-            />
-
-            {/* Play Button Overlay */}
-            {!isPlaying && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors">
-                <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <Play className="h-6 w-6 text-black" />
-                </div>
-              </div>
-            )}
+      {/* Media Section - Fixed aspect ratio container */}
+      <div className="relative aspect-square w-full">
+        <img
+          src={getDisplayUrl()}
+          alt={item.caption || "Media item"}
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+        
+        {/* Video Play Indicator */}
+        {item.file_type === 'video' && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors">
+            <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center">
+              <Play className="h-6 w-6 text-black" />
+            </div>
           </div>
-        ) : (
-          <img
-            src={getDisplayUrl()}
-            alt={item.caption || "Media item"}
-            className="object-cover w-full h-full"
-          />
         )}
       </div>
 
