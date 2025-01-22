@@ -3,6 +3,8 @@ import { Loader2, Database, XCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/components/ui/use-toast";
 import { Card } from "@/components/ui/card";
+import { useSupabaseClient } from "@supabase/auth-helpers-react";
+import { useSessionContext } from "@supabase/auth-helpers-react";
 
 const DatabaseChat = () => {
   const [iframeUrl, setIframeUrl] = useState("");
@@ -10,37 +12,36 @@ const DatabaseChat = () => {
   const [error, setError] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<'checking' | 'success' | 'error'>('checking');
   const { toast } = useToast();
+  const supabase = useSupabaseClient();
+  const { session } = useSessionContext();
 
   useEffect(() => {
     const initializeChatbot = async () => {
+      if (!session?.user) {
+        setError("Please login to use the database chat");
+        setIsLoading(false);
+        return;
+      }
+
       try {
         setConnectionStatus('checking');
         
-        // Replace this with your actual API key and endpoint
-        const response = await fetch("https://www.askyourdatabase.com/api/chatbot/v2/session", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${import.meta.env.VITE_AYD_API_KEY}`,
-          },
-          body: JSON.stringify({
-            chatbotId: "ffa05499087f66d554e38ff4fadf4972",
-            name: "User", // Replace with actual user name from your auth system
-            email: "user@example.com", // Replace with actual user email from your auth system
-          }),
+        const { data, error: functionError } = await supabase.functions.invoke('create-ayd-session', {
+          body: {
+            name: session.user.email,
+            email: session.user.email,
+          }
         });
 
-        if (!response.ok) {
-          throw new Error("Failed to initialize chatbot session");
+        if (functionError) {
+          throw functionError;
         }
 
-        const { url } = await response.json();
-
-        if (!url) {
+        if (!data?.url) {
           throw new Error("Invalid chatbot session URL");
         }
 
-        setIframeUrl(url);
+        setIframeUrl(data.url);
         setConnectionStatus('success');
         toast({
           title: "Connection Successful",
@@ -61,7 +62,7 @@ const DatabaseChat = () => {
     };
 
     initializeChatbot();
-  }, [toast]);
+  }, [toast, supabase, session]);
 
   const renderConnectionStatus = () => {
     switch (connectionStatus) {

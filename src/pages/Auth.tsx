@@ -80,13 +80,37 @@ const Auth = () => {
   }, [navigate, toast]);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-md space-y-4">
-        <div className="text-center space-y-2">
-          <h1 className="text-2xl font-bold">Welcome to Media Manager</h1>
-          <p className="text-gray-500">Please sign in to continue</p>
+    <div className="min-h-screen relative overflow-hidden bg-black flex items-center justify-center p-4">
+      {/* Animated background */}
+      <div className="absolute inset-0 w-full h-full">
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-600/20 via-purple-900/20 to-black animate-gradient">
+          {/* Animated particles */}
+          <div className="absolute inset-0">
+            <div className="absolute top-1/4 left-1/4 w-32 h-32 bg-blue-500/30 rounded-full blur-3xl animate-float"></div>
+            <div className="absolute top-3/4 right-1/4 w-40 h-40 bg-purple-500/30 rounded-full blur-3xl animate-float delay-1000"></div>
+            <div className="absolute bottom-1/4 left-1/2 w-36 h-36 bg-indigo-500/30 rounded-full blur-3xl animate-float delay-2000"></div>
+          </div>
+          
+          {/* Grid overlay */}
+          <div className="absolute inset-0 bg-grid"></div>
         </div>
-        <div className="bg-white p-6 rounded-lg shadow-sm">
+        
+        {/* Animated borders */}
+        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-500 to-transparent animate-pulse"></div>
+        <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-purple-500 to-transparent animate-pulse"></div>
+      </div>
+
+      {/* Login container */}
+      <div className="relative max-w-md w-full">
+        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-lg blur-xl animate-pulse"></div>
+        <div className="relative backdrop-blur-xl bg-black/40 rounded-lg border border-white/10 p-8 shadow-2xl">
+          {/* Logo and Title */}
+          <div className="flex flex-col items-center justify-center gap-4 mb-8">
+            <h1 className="text-3xl font-bold text-white">Media Manager</h1>
+            <p className="text-white/60">Sign in to continue</p>
+          </div>
+
+          {/* Auth component */}
           <SupabaseAuth
             supabaseClient={supabase}
             appearance={{
@@ -94,15 +118,41 @@ const Auth = () => {
               variables: {
                 default: {
                   colors: {
-                    brand: '#000000',
-                    brandAccent: '#666666',
+                    brand: "#3b82f6",
+                    brandAccent: "#2563eb",
+                    defaultButtonBackground: "rgba(0,0,0,0.4)",
+                    defaultButtonBackgroundHover: "rgba(0,0,0,0.6)",
+                    inputBackground: "rgba(0, 0, 0, 0.2)",
+                    inputBorder: "rgba(255, 255, 255, 0.1)",
+                    inputBorderHover: "rgba(59, 130, 246, 0.5)",
+                    inputBorderFocus: "#3b82f6",
                   },
+                },
+              },
+              className: {
+                container: "text-white",
+                label: "text-white",
+                button: "bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white transition-all duration-200",
+                input: "bg-black/20 border-white/10 text-white placeholder:text-white/50 focus:border-blue-500/50 transition-all duration-200",
+                anchor: "text-blue-400 hover:text-blue-300 transition-colors",
+                divider: "text-white/50",
+                message: "text-white",
+              },
+              style: {
+                input: {
+                  color: 'white',
                 },
               },
             }}
             providers={[]}
           />
         </div>
+      </div>
+
+      {/* Additional animated elements */}
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute bottom-4 left-4 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl animate-pulse"></div>
+        <div className="absolute top-4 right-4 w-24 h-24 bg-purple-500/10 rounded-full blur-2xl animate-pulse"></div>
       </div>
     </div>
   );
