@@ -1,9 +1,9 @@
 import { Json } from "@/integrations/supabase/types";
 
 export interface TelegramChat {
+  id?: number;
   type?: string;
   title?: string;
-  id?: number;
   username?: string;
 }
 
@@ -32,11 +32,8 @@ export interface MediaItem {
   default_public_url: string | null;
   thumbnail_url?: string | null;
   file_type: MediaFileType;
-  mime_type?: string;
-  file_size?: number;
-  width?: number;
-  height?: number;
-  duration?: number;
+  file_id: string;
+  file_unique_id: string;
   caption?: string | null;
   product_code?: string | null;
   product_name?: string | null;
@@ -50,6 +47,8 @@ export interface MediaItem {
   analyzed_content?: AnalyzedContent;
   created_at: string;
   updated_at?: string;
+  glide_data: Record<string, any>;
+  media_metadata: Record<string, any>;
 }
 
 export interface SupabaseMediaItem {
@@ -58,11 +57,8 @@ export interface SupabaseMediaItem {
   default_public_url: string | null;
   thumbnail_url?: string | null;
   file_type: string;
-  mime_type?: string;
-  file_size?: number;
-  width?: number;
-  height?: number;
-  duration?: number;
+  file_id: string;
+  file_unique_id: string;
   caption?: string | null;
   product_code?: string | null;
   product_name?: string | null;
@@ -73,7 +69,44 @@ export interface SupabaseMediaItem {
   message_url?: string | null;
   chat_url?: string | null;
   telegram_data: Record<string, any>;
-  analyzed_content: Record<string, any> | null;
+  analyzed_content?: Record<string, any>;
   created_at: string;
   updated_at?: string;
+  glide_data: Record<string, any>;
+  media_metadata: Record<string, any>;
+}
+
+export interface MediaSearchBarProps {
+  search: string;
+  setSearch: (value: string) => void;
+  filterOptions?: {
+    channels: string[];
+    vendors: string[];
+  };
+  selectedChannel: string;
+  setSelectedChannel: (value: string) => void;
+  selectedType: string;
+  setSelectedType: (value: string) => void;
+  selectedVendor: string;
+  setSelectedVendor: (value: string) => void;
+}
+
+export interface MediaViewerProps {
+  mediaItems: MediaItem[];
+  setPreviewItem: (item: MediaItem | null) => void;
+  setEditItem: (item: MediaItem | null) => void;
+}
+
+export interface MediaTableProps {
+  mediaItems: MediaItem[];
+  setPreviewItem: (item: MediaItem | null) => void;
+  setEditItem: (item: MediaItem | null) => void;
+}
+
+export interface MediaEditDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  editItem: MediaItem | null;
+  onItemChange: (field: keyof MediaItem, value: MediaItemValue) => void;
+  onSave: () => Promise<void>;
 }
