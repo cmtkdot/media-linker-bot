@@ -6,16 +6,25 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    console.log('Starting AYD session creation...');
+    
+    // Parse request body
     const { name, email } = await req.json();
+    
+    if (!name || !email) {
+      throw new Error('Name and email are required');
+    }
 
     // Get the API key from Supabase secrets
     const AYD_API_KEY = Deno.env.get('AYD_API_KEY');
     if (!AYD_API_KEY) {
+      console.error('AYD_API_KEY is not configured');
       throw new Error('AYD_API_KEY is not set');
     }
 
@@ -28,7 +37,7 @@ serve(async (req) => {
         'Authorization': `Bearer ${AYD_API_KEY}`,
       },
       body: JSON.stringify({
-        chatbotid: 'ffa05499087f66d554e38ff4fadf4972', // Changed from chatbotId to chatbotid
+        chatbotid: 'ffa05499087f66d554e38ff4fadf4972',
         name,
         email,
       }),
@@ -45,24 +54,33 @@ serve(async (req) => {
     }
 
     const data = await response.json();
-    console.log('Chatbot session created:', data);
+    console.log('Chatbot session created successfully:', data);
 
     return new Response(
       JSON.stringify(data),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      { 
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json' 
+        },
         status: 200,
       },
     );
   } catch (error) {
     console.error('Error in create-ayd-session:', error);
+    
+    // Return a structured error response
     return new Response(
       JSON.stringify({ 
         error: error.message,
-        details: error.stack
+        details: error.stack,
+        timestamp: new Date().toISOString()
       }),
       {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json' 
+        },
         status: 500,
       },
     );
