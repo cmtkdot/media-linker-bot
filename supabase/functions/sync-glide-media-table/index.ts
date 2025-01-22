@@ -185,7 +185,12 @@ serve(async (req) => {
         success: true,
         data: result
       }),
-      { headers: corsHeaders }
+      { 
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        }
+      }
     );
 
   } catch (error) {

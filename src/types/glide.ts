@@ -1,3 +1,5 @@
+import { Json } from "@/integrations/supabase/types";
+
 export interface GlideTableSchema {
   id: { type: "string"; name: "UkkMS" };
   file_id: { type: "string"; name: "9Bod8" };
@@ -43,8 +45,8 @@ export interface GlideSyncQueueItem {
   table_name: string;
   record_id: string;
   operation: 'INSERT' | 'UPDATE' | 'DELETE';
-  old_data: Record<string, any> | null;
-  new_data: Record<string, any> | null;
+  old_data: Json | null;
+  new_data: Json | null;
   created_at?: string | null;
   processed_at?: string | null;
   error?: string | null;
