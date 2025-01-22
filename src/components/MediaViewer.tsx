@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -7,7 +7,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { ExternalLink, X, MessageSquare, Users } from "lucide-react";
+import { ExternalLink, X, MessageSquare, Users, Play, Pause } from "lucide-react";
 
 interface MediaViewerProps {
   open: boolean;
@@ -36,11 +36,33 @@ interface MediaViewerProps {
 }
 
 const MediaViewer = ({ open, onOpenChange, media }: MediaViewerProps) => {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  
   if (!media) return null;
 
   const mediaUrl = media.public_url || media.default_public_url;
   const telegramType = media.telegram_data?.chat?.type;
   const telegramTitle = media.telegram_data?.chat?.title;
+
+  const handleVideoPlayback = async () => {
+    if (!videoRef.current) return;
+
+    try {
+      if (isPlaying) {
+        videoRef.current.pause();
+      } else {
+        const playPromise = videoRef.current.play();
+        if (playPromise !== undefined) {
+          await playPromise;
+        }
+      }
+      setIsPlaying(!isPlaying);
+    } catch (error) {
+      console.error("Video playback error:", error);
+      setIsPlaying(false);
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -65,18 +87,34 @@ const MediaViewer = ({ open, onOpenChange, media }: MediaViewerProps) => {
               minHeight: '300px'
             }}>
               {media.file_type === "video" ? (
-                <video
-                  src={mediaUrl}
-                  className="h-full w-full object-contain"
-                  controls
-                  autoPlay
-                  onError={(e) => {
-                    const video = e.target as HTMLVideoElement;
-                    if (video.src !== media.default_public_url) {
-                      video.src = media.default_public_url;
-                    }
-                  }}
-                />
+                <div className="relative w-full h-full">
+                  <video
+                    ref={videoRef}
+                    src={mediaUrl}
+                    className="h-full w-full object-contain"
+                    poster={media.default_public_url}
+                    playsInline
+                    onEnded={() => setIsPlaying(false)}
+                    onError={(e) => {
+                      const video = e.target as HTMLVideoElement;
+                      if (video.src !== media.default_public_url) {
+                        video.src = media.default_public_url;
+                      }
+                    }}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white/90 hover:bg-white rounded-full"
+                    onClick={handleVideoPlayback}
+                  >
+                    {isPlaying ? (
+                      <Pause className="h-6 w-6 text-black" />
+                    ) : (
+                      <Play className="h-6 w-6 text-black" />
+                    )}
+                  </Button>
+                </div>
               ) : (
                 <img
                   src={mediaUrl}
