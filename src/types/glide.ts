@@ -1,3 +1,5 @@
+import { Json } from "@/integrations/supabase/types";
+
 export interface GlideTableSchema {
   id: { name: 'UkkMS', type: 'string' };
   file_id: { name: '9Bod8', type: 'string' };
