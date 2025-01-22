@@ -1,4 +1,4 @@
-import { GlideTableSchema, TelegramMedia } from './types.ts';
+import { GlideTableSchema, TelegramMedia } from '../_shared/types.ts';
 
 export function mapSupabaseToGlide(supabaseRow: TelegramMedia): Record<string, any> {
   const schema = GlideTableSchema;

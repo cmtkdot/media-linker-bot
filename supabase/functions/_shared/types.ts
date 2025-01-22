@@ -91,3 +91,83 @@ export interface GlideResponse {
   rowIDs?: string[];
   error?: string;
 }
+
+export interface WebhookUpdate {
+  update_id: number;
+  message?: TelegramMessage;
+  edited_message?: TelegramMessage;
+  channel_post?: TelegramMessage;
+  edited_channel_post?: TelegramMessage;
+}
+
+export interface TelegramMessage {
+  message_id: number;
+  from?: TelegramUser;
+  sender_chat?: TelegramChat;
+  chat: TelegramChat;
+  date: number;
+  text?: string;
+  caption?: string;
+  photo?: TelegramPhotoSize[];
+  video?: TelegramVideo;
+  document?: TelegramDocument;
+  animation?: TelegramAnimation;
+  media_group_id?: string;
+}
+
+export interface TelegramUser {
+  id: number;
+  is_bot: boolean;
+  first_name: string;
+  last_name?: string;
+  username?: string;
+}
+
+export interface TelegramChat {
+  id: number;
+  type: string;
+  title?: string;
+  username?: string;
+  first_name?: string;
+  last_name?: string;
+}
+
+export interface TelegramPhotoSize {
+  file_id: string;
+  file_unique_id: string;
+  width: number;
+  height: number;
+  file_size?: number;
+}
+
+export interface TelegramVideo {
+  file_id: string;
+  file_unique_id: string;
+  width: number;
+  height: number;
+  duration: number;
+  thumb?: TelegramPhotoSize;
+  mime_type?: string;
+  file_size?: number;
+}
+
+export interface TelegramDocument {
+  file_id: string;
+  file_unique_id: string;
+  thumb?: TelegramPhotoSize;
+  file_name?: string;
+  mime_type?: string;
+  file_size?: number;
+}
+
+export interface TelegramAnimation {
+  file_id: string;
+  file_unique_id: string;
+  width: number;
+  height: number;
+  duration: number;
+  thumb?: TelegramPhotoSize;
+  file_name?: string;
+  mime_type?: string;
+  file_size?: number;
+}
