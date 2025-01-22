@@ -1,10 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
+import { corsHeaders } from "../_shared/cors.ts";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+const BATCH_SIZE = 10;
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -26,7 +24,8 @@ serve(async (req) => {
     const { data: missingGlideRecords, error } = await supabase
       .from('telegram_media')
       .select('*')
-      .is('telegram_media_row_id', null);
+      .is('telegram_media_row_id', null)
+      .limit(BATCH_SIZE);
 
     if (error) {
       console.error('Error fetching records:', error);
@@ -84,11 +83,21 @@ serve(async (req) => {
       }
     }
 
-    console.log(`Successfully processed records:`, {
-      added: addedCount,
-      skipped: skippedCount,
-      errors: errors.length
-    });
+    // Trigger the sync-glide-media-table function if records were added
+    if (addedCount > 0) {
+      try {
+        await fetch(`${supabaseUrl}/functions/v1/sync-glide-media-table`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${supabaseServiceKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ operation: 'processSyncQueue' })
+        });
+      } catch (error) {
+        console.error('Error triggering sync function:', error);
+      }
+    }
 
     return new Response(
       JSON.stringify({
