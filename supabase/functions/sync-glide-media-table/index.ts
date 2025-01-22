@@ -3,7 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import { GlideAPI } from '../../glide-app/api.ts';
 import { corsHeaders } from '../../glide-app/utils.ts';
 import { mapSupabaseToGlide, mapGlideToSupabase } from '../../glide-app/mapper.ts';
-import type { SyncResult, GlideConfig, GlideSyncQueueItem } from '../../glide-app/types.ts';
+import type { SyncResult, GlideConfig, GlideSyncQueueItem } from '../_shared/types.ts';
 
 serve(async (req) => {
   console.log('Received request:', req.method, req.url);
