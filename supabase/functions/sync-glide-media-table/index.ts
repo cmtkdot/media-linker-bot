@@ -7,9 +7,13 @@ import type { GlideSyncQueueItem, TelegramMedia } from "./types.ts";
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Content-Type': 'application/json'
 };
 
 serve(async (req: Request) => {
+  console.log('Received request:', req.method, req.url);
+
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -18,11 +22,15 @@ serve(async (req: Request) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error('Missing required environment variables');
+    }
+
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
+    
     const { operation, tableId, recordIds } = await req.json();
-
-    console.log('Received sync request:', { operation, tableId, recordIds });
+    console.log('Request payload:', { operation, tableId, recordIds });
 
     if (!operation) {
       throw new Error('Operation is required');
@@ -37,6 +45,7 @@ serve(async (req: Request) => {
         .single();
 
       if (configError) {
+        console.error('Config error:', configError);
         throw configError;
       }
 
@@ -67,6 +76,7 @@ serve(async (req: Request) => {
       const { data: records, error: recordsError } = await query;
 
       if (recordsError) {
+        console.error('Records error:', recordsError);
         throw recordsError;
       }
 
@@ -113,6 +123,7 @@ serve(async (req: Request) => {
         .order('created_at', { ascending: true });
 
       if (queueError) {
+        console.error('Queue error:', queueError);
         throw queueError;
       }
 
@@ -186,10 +197,7 @@ serve(async (req: Request) => {
 
       return new Response(
         JSON.stringify(response),
-        { 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 200 
-        }
+        { headers: corsHeaders }
       );
     }
 
@@ -204,7 +212,7 @@ serve(async (req: Request) => {
         error: error.message
       }),
       { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: corsHeaders,
         status: 400
       }
     );
