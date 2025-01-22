@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { AuthError, AuthApiError } from "@supabase/supabase-js";
-import { EvervaultCard, Icon } from "@/components/ui/evervault-card";
+import { EvervaultCard } from "@/components/ui/evervault-card";
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -85,6 +85,11 @@ const Auth = () => {
 
   return (
     <div className="min-h-screen relative overflow-hidden bg-black flex items-center justify-center p-4">
+      {/* Background Evervault Card */}
+      <div className="absolute inset-0 w-full h-full">
+        <EvervaultCard className="w-full h-full transform scale-150" />
+      </div>
+
       {/* Animated background */}
       <div className="absolute inset-0 w-full h-full">
         <div className="absolute inset-0 bg-gradient-to-br from-blue-600/20 via-purple-900/20 to-black animate-gradient">
@@ -110,9 +115,11 @@ const Auth = () => {
         <div className="relative backdrop-blur-xl bg-black/40 rounded-lg border border-white/10 p-8 shadow-2xl">
           {/* Logo and Title */}
           <div className="flex flex-col items-center justify-center gap-4 mb-8">
-            <div className="w-32 h-32">
-              <EvervaultCard text="X" className="transform scale-75" />
-            </div>
+            <img 
+              src="/lovable-uploads/7770cb52-31d2-40b0-8b5b-0822783c71ef.png" 
+              alt="Xdelo Logo" 
+              className="h-12 w-auto"
+            />
             <p className="text-white/60">Sign in to continue</p>
           </div>
 
