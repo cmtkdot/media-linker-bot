@@ -58,7 +58,10 @@ const MediaGrid = () => {
       ]);
 
       const channels = [...new Set((channelsResult.data || [])
-        .map(item => (item as TelegramMediaResponse).telegram_data.chat?.title)
+        .map(item => {
+          const response = item as unknown as TelegramMediaResponse;
+          return response.telegram_data.chat?.title;
+        })
         .filter(Boolean))];
       
       const vendors = [...new Set(vendorsResult.data?.map(item => 
