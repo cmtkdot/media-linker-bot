@@ -17,7 +17,8 @@ const MediaCard = ({ item, onPreview, onEdit }: MediaCardProps) => {
 
   const getDisplayUrl = () => {
     if (item.file_type === 'video') {
-      return item.thumbnail_url || item.default_public_url;
+      // First try to use thumbnail_url, then fallback to other URLs
+      return item.thumbnail_url || item.public_url || item.default_public_url;
     }
     return item.public_url || item.default_public_url;
   };
