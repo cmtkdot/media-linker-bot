@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { Loader2, Database, XCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import { Card } from "@/components/ui/card";
 import { useSupabaseClient } from "@supabase/auth-helpers-react";
 import { useSessionContext } from "@supabase/auth-helpers-react";
+import { AnimatedList } from "@/components/ui/animated-list";
 
 const DatabaseChat = () => {
   const [iframeUrl, setIframeUrl] = useState("");
@@ -65,29 +66,34 @@ const DatabaseChat = () => {
   }, [toast, supabase, session]);
 
   const renderConnectionStatus = () => {
-    switch (connectionStatus) {
-      case 'checking':
-        return (
-          <Alert className="mb-4">
-            <Database className="h-4 w-4" />
-            <AlertDescription className="flex items-center ml-2">
-              Initializing database chat...
-              <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-            </AlertDescription>
-          </Alert>
-        );
-      case 'success':
-        return null;
-      case 'error':
-        return (
-          <Alert variant="destructive" className="mb-4">
-            <XCircle className="h-4 w-4" />
-            <AlertDescription className="ml-2">
-              Failed to connect to database chat. Please try again later.
-            </AlertDescription>
-          </Alert>
-        );
+    const statusItems = [];
+
+    if (connectionStatus === 'checking') {
+      statusItems.push(
+        <Alert key="checking" className="mb-4 backdrop-blur-lg bg-background/80 border border-border/50">
+          <Database className="h-4 w-4" />
+          <AlertDescription className="flex items-center ml-2">
+            Initializing database chat...
+            <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+          </AlertDescription>
+        </Alert>
+      );
+    } else if (connectionStatus === 'error') {
+      statusItems.push(
+        <Alert key="error" variant="destructive" className="mb-4 backdrop-blur-lg bg-destructive/10 border-destructive/50">
+          <XCircle className="h-4 w-4" />
+          <AlertDescription className="ml-2">
+            Failed to connect to database chat. Please try again later.
+          </AlertDescription>
+        </Alert>
+      );
     }
+
+    return statusItems.length > 0 ? (
+      <AnimatedList delay={2000}>
+        {statusItems}
+      </AnimatedList>
+    ) : null;
   };
 
   if (isLoading) {
@@ -100,8 +106,13 @@ const DatabaseChat = () => {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-[600px] text-destructive">
-        {error}
+      <div className="flex items-center justify-center min-h-[600px]">
+        <AnimatedList>
+          <Alert variant="destructive" className="backdrop-blur-lg bg-destructive/10 border-destructive/50">
+            <XCircle className="h-4 w-4" />
+            <AlertDescription className="ml-2">{error}</AlertDescription>
+          </Alert>
+        </AnimatedList>
       </div>
     );
   }
