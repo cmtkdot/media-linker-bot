@@ -1,14 +1,11 @@
-import React, { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
-import MediaTable from "./MediaTable";
-import MediaViewer from "./MediaViewer";
-import MediaSearchBar from "./MediaSearchBar";
-import MediaEditDialog from "./MediaEditDialog";
 import { MediaItem, SupabaseMediaItem, MediaFileType } from "@/types/media";
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { Loader2, AlertCircle } from "lucide-react";
+import MediaGridFilters from "./MediaGridFilters";
+import MediaGridContent from "./MediaGridContent";
+import MediaEditDialog from "./MediaEditDialog";
 
 const MediaGrid = () => {
   const [view, setView] = useState<'grid' | 'table'>('grid');
@@ -71,10 +68,10 @@ const MediaGrid = () => {
       const { data, error: queryError } = await query;
       if (queryError) throw queryError;
 
-      return (data || []).map((item: SupabaseMediaItem): MediaItem => ({
+      return (data || []).map((item) => ({
         ...item,
         file_type: item.file_type as MediaFileType,
-        telegram_data: item.telegram_data as any,
+        telegram_data: item.telegram_data as Record<string, any>,
         analyzed_content: item.analyzed_content ? {
           text: item.analyzed_content.text as string,
           labels: item.analyzed_content.labels as string[],
@@ -83,37 +80,6 @@ const MediaGrid = () => {
       }));
     }
   });
-
-  useEffect(() => {
-    const channel = supabase
-      .channel('schema-db-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'telegram_media'
-        },
-        (payload) => {
-          refetch();
-          const eventMessages = {
-            INSERT: 'New media item added',
-            UPDATE: 'Media item updated',
-            DELETE: 'Media item deleted'
-          };
-          
-          toast({
-            title: eventMessages[payload.eventType as keyof typeof eventMessages],
-            description: "The media list has been updated.",
-          });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [refetch, toast]);
 
   const handleEdit = async () => {
     if (!editItem) return;
@@ -140,6 +106,7 @@ const MediaGrid = () => {
       });
 
       setEditItem(null);
+      refetch();
     } catch (error) {
       console.error('Error updating media:', error);
       toast({
@@ -150,35 +117,6 @@ const MediaGrid = () => {
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-[50vh]">
-        <div className="flex items-center gap-2">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          <span>Loading media...</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <Alert variant="destructive" className="m-4">
-        <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Error loading media</AlertTitle>
-        <AlertDescription>{(error as Error).message}</AlertDescription>
-      </Alert>
-    );
-  }
-
-  if (!mediaItems?.length) {
-    return (
-      <Alert variant="default" className="m-4">
-        <AlertDescription>No media items found</AlertDescription>
-      </Alert>
-    );
-  }
-
   const formatDate = (date: string | null) => {
     if (!date) return null;
     return date.split('T')[0];
@@ -186,7 +124,7 @@ const MediaGrid = () => {
 
   return (
     <div className="space-y-4 px-4 py-4">
-      <MediaSearchBar 
+      <MediaGridFilters
         search={search}
         onSearchChange={setSearch}
         view={view}
@@ -201,20 +139,17 @@ const MediaGrid = () => {
         vendors={filterOptions?.vendors || []}
       />
       
-      {view === 'grid' ? (
-        <MediaViewer 
-          open={!!previewItem}
-          onOpenChange={(open) => !open && setPreviewItem(null)}
-          media={previewItem}
-        />
-      ) : (
-        <MediaTable 
-          data={mediaItems}
-          onEdit={setEditItem}
-        />
-      )}
+      <MediaGridContent
+        view={view}
+        isLoading={isLoading}
+        error={error as Error | null}
+        mediaItems={mediaItems}
+        previewItem={previewItem}
+        onPreviewChange={(open) => !open && setPreviewItem(null)}
+        onEdit={setEditItem}
+      />
 
-      <MediaEditDialog 
+      <MediaEditDialog
         editItem={editItem}
         onClose={() => setEditItem(null)}
         onItemChange={(field, value) => setEditItem(prev => prev ? {...prev, [field]: value} : null)}

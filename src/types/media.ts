@@ -42,7 +42,7 @@ export interface MediaItem {
   notes?: string | null;
   message_url?: string | null;
   chat_url?: string | null;
-  telegram_data: TelegramData;
+  telegram_data: Record<string, any>;
   analyzed_content?: AnalyzedContent;
   created_at: string;
   updated_at?: string;
