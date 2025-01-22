@@ -3,6 +3,8 @@
 import { ColumnDef } from "@tanstack/react-table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { format } from "date-fns";
+import { Button } from "@/components/ui/button";
+import { Trash2 } from "lucide-react";
 import { GlideSyncQueueItem } from "@/types/glide";
 
 export const columns: ColumnDef<GlideSyncQueueItem>[] = [
@@ -45,5 +47,26 @@ export const columns: ColumnDef<GlideSyncQueueItem>[] = [
     accessorKey: "error",
     header: "Error",
     cell: ({ row }) => row.getValue("error") || "None",
+  },
+  {
+    id: "actions",
+    cell: ({ row }) => {
+      const item = row.original;
+      return (
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (typeof row.original.onDelete === 'function') {
+              row.original.onDelete(item.id);
+            }
+          }}
+          className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      );
+    },
   },
 ];

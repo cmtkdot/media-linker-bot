@@ -1,13 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { DataTable } from "@/components/ui/data-table";
 import { columns } from "./columns";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
-import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import type { GlideSyncQueueItem, GlideConfig } from "@/types/glide";
-import type { Database } from "@/integrations/supabase/types";
 
 interface GlideDataGridProps {
   configs: GlideConfig[];
@@ -17,8 +16,9 @@ export function GlideDataGrid({ configs }: GlideDataGridProps) {
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-  const { data: syncQueue, isLoading, refetch } = useQuery({
+  const { data: syncQueue, isLoading } = useQuery({
     queryKey: ['glide-sync-queue'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -29,10 +29,61 @@ export function GlideDataGrid({ configs }: GlideDataGridProps) {
       
       if (error) throw error;
       
-      // Cast the data to the correct type
-      return (data || []) as GlideSyncQueueItem[];
+      return (data || []).map(item => ({
+        ...item,
+        onDelete: handleDelete
+      })) as GlideSyncQueueItem[];
     }
   });
+
+  // Subscribe to real-time changes
+  useEffect(() => {
+    const channel = supabase
+      .channel('glide-sync-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'glide_sync_queue'
+        },
+        () => {
+          // Refetch data when changes occur
+          queryClient.invalidateQueries({ queryKey: ['glide-sync-queue'] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
+
+  const handleDelete = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('glide_sync_queue')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Record deleted",
+        description: "The sync queue record has been removed.",
+      });
+
+      // Remove from selected rows if it was selected
+      setSelectedRows(prev => prev.filter(rowId => rowId !== id));
+    } catch (error) {
+      console.error('Error deleting record:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete the record.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const handleSync = async (recordIds?: string[]) => {
     if (!configs[0]?.id) {
@@ -54,10 +105,7 @@ export function GlideDataGrid({ configs }: GlideDataGridProps) {
         }
       });
 
-      if (error) {
-        console.error('Sync error:', error);
-        throw error;
-      }
+      if (error) throw error;
 
       toast({
         title: "Sync Completed",
@@ -73,8 +121,8 @@ export function GlideDataGrid({ configs }: GlideDataGridProps) {
         });
       }
 
-      // Refresh the queue after sync
-      refetch();
+      // Clear selected rows after successful sync
+      setSelectedRows([]);
     } catch (error) {
       console.error('Sync error:', error);
       toast({

@@ -51,6 +51,7 @@ export interface GlideSyncQueueItem {
   processed_at?: string | null;
   error?: string | null;
   retry_count?: number;
+  onDelete?: (id: string) => void;
 }
 
 export interface TelegramMedia {
