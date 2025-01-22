@@ -83,9 +83,9 @@ export function GlideSyncHeader({ configs, isLoading }: GlideSyncHeaderProps) {
   return (
     <div className="flex items-center justify-between">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight">Glide Sync</h2>
+        <h2 className="text-2xl font-bold tracking-tight">Glide Telegram Media Sync</h2>
         <p className="text-muted-foreground">
-          Manage and sync your Glide configurations
+          Sync Telegram media files and metadata between Supabase and Glide
         </p>
       </div>
       <Button
