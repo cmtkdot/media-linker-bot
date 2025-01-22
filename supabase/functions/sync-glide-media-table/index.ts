@@ -22,22 +22,27 @@ serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get active Glide configuration
-    const { data: config, error: configError } = await supabase
+    // Get active Glide configurations
+    const { data: configs, error: configError } = await supabase
       .from('glide_config')
       .select('*')
-      .eq('active', true)
-      .single();
+      .eq('active', true);
 
     if (configError) {
       throw configError;
     }
 
-    if (!config.active || !config.supabase_table_name) {
+    if (!configs || configs.length === 0) {
       throw new Error('No active Glide configuration found');
     }
 
+    // Use the first active config
+    const config = configs[0];
     console.log('Using Glide config:', config);
+
+    if (!config.supabase_table_name) {
+      throw new Error('No table name specified in Glide configuration');
+    }
 
     // Initialize Glide API client
     const glideApi = new GlideAPI(
