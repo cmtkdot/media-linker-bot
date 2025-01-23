@@ -19,6 +19,26 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
       has_caption: !!message.caption
     });
 
+    // First check if message already exists
+    const { data: existingMessage } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('message_id', message.message_id)
+      .eq('chat_id', message.chat.id)
+      .maybeSingle();
+
+    if (existingMessage) {
+      console.log('Message already exists:', {
+        message_id: message.message_id,
+        chat_id: message.chat.id
+      });
+      return {
+        success: true,
+        message: 'Message already processed',
+        messageId: existingMessage.id
+      };
+    }
+
     // Generate message URL
     const chatId = message.chat.id.toString();
     const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
@@ -35,7 +55,7 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
       }
     }
 
-    // Create or update message record with retry
+    // Create message record with retry
     const messageRecord = await withDatabaseRetry(async () => {
       const messageData = {
         message_id: message.message_id,
@@ -57,38 +77,24 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
         retry_count: 0
       };
 
-      const { data: existingMessage } = await supabase
+      const { data, error: insertError } = await supabase
         .from('messages')
-        .select('*')
-        .eq('message_id', message.message_id)
-        .eq('chat_id', message.chat.id)
-        .maybeSingle();
+        .insert([messageData])
+        .select()
+        .single();
 
-      if (existingMessage) {
-        const { data, error: updateError } = await supabase
-          .from('messages')
-          .update(messageData)
-          .eq('id', existingMessage.id)
-          .select()
-          .single();
-
-        if (updateError) throw updateError;
-        return data;
-      } else {
-        const { data, error: insertError } = await supabase
-          .from('messages')
-          .insert([messageData])
-          .select()
-          .single();
-
-        if (insertError) throw insertError;
-        return data;
+      if (insertError) {
+        console.error('Error inserting message:', insertError);
+        throw insertError;
       }
+
+      return data;
     }, 0, `create_message_${message.message_id}`);
 
     // Process media files if present
     const hasMedia = message.photo || message.video || message.document || message.animation;
     if (hasMedia && messageRecord) {
+      console.log('Processing media for message:', messageRecord.id);
       await processMediaFiles(message, messageRecord, supabase, botToken);
     }
 
@@ -113,6 +119,23 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
       message_id: message?.message_id,
       chat_id: message?.chat?.id
     });
+
+    // Store failed webhook update for retry
+    try {
+      await supabase
+        .from('failed_webhook_updates')
+        .insert({
+          message_id: message?.message_id,
+          chat_id: message?.chat?.id,
+          error_message: error.message,
+          error_stack: error.stack,
+          message_data: update,
+          status: 'failed'
+        });
+    } catch (dbError) {
+      console.error('Failed to store failed webhook update:', dbError);
+    }
+
     throw error;
   }
 }
