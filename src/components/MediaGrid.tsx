@@ -9,6 +9,13 @@ interface TelegramData {
   chat?: {
     title?: string;
   };
+  message_data?: {
+    video?: {
+      thumb?: {
+        file_unique_id?: string;
+      };
+    };
+  };
 }
 
 interface QueryResult {
@@ -59,7 +66,6 @@ const MediaGrid = () => {
           .not('vendor_uid', 'is', null)
       ]);
 
-      // Extract unique channel titles from telegram_data
       const channels = [...new Set(channelsResult.data?.map(item => {
         const data = item.telegram_data as TelegramData;
         return data?.chat?.title;
@@ -125,20 +131,37 @@ const MediaGrid = () => {
       
       if (queryError) throw queryError;
 
-      return (queryResult as QueryResult[]).map((item): MediaItem => ({
-        ...item,
-        file_type: item.file_type as MediaItem['file_type'],
-        telegram_data: item.telegram_data || {},
-        glide_data: item.glide_data || {},
-        media_metadata: item.media_metadata || {},
-        analyzed_content: item.analyzed_content ? {
-          text: item.analyzed_content.text || '',
-          labels: item.analyzed_content.labels || [],
-          objects: item.analyzed_content.objects || []
-        } : undefined,
-        created_at: item.created_at,
-        updated_at: item.updated_at
-      }));
+      return (queryResult as QueryResult[]).map((item): MediaItem => {
+        // Determine the best thumbnail URL for videos
+        let thumbnailUrl = item.thumbnail_url;
+        if (item.file_type === 'video' && !thumbnailUrl) {
+          // Try to get from video metadata
+          const videoThumbId = item.telegram_data?.message_data?.video?.thumb?.file_unique_id;
+          if (videoThumbId) {
+            thumbnailUrl = `https://kzfamethztziwqiocbwz.supabase.co/storage/v1/object/public/media/${videoThumbId}.jpg`;
+          }
+          // Fallback to default if no thumbnail
+          if (!thumbnailUrl) {
+            thumbnailUrl = item.default_public_url;
+          }
+        }
+
+        return {
+          ...item,
+          file_type: item.file_type as MediaItem['file_type'],
+          telegram_data: item.telegram_data || {},
+          glide_data: item.glide_data || {},
+          media_metadata: item.media_metadata || {},
+          thumbnail_url: thumbnailUrl,
+          analyzed_content: item.analyzed_content ? {
+            text: item.analyzed_content.text || '',
+            labels: item.analyzed_content.labels || [],
+            objects: item.analyzed_content.objects || []
+          } : undefined,
+          created_at: item.created_at,
+          updated_at: item.updated_at
+        };
+      });
     }
   });
 
