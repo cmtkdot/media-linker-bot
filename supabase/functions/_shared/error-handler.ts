@@ -1,9 +1,8 @@
-import { calculateBackoffDelay, delay } from './retry-utils.ts';
-import { MAX_RETRY_ATTEMPTS } from './constants.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 export enum ErrorType {
   DATABASE_TIMEOUT = 'DATABASE_TIMEOUT',
-  NETWORK = 'NETWORK',
+  DATABASE_CONNECTION = 'DATABASE_CONNECTION',
   VALIDATION = 'VALIDATION',
   MEDIA_PROCESSING = 'MEDIA_PROCESSING',
   STORAGE = 'STORAGE',
@@ -11,11 +10,11 @@ export enum ErrorType {
   UNKNOWN = 'UNKNOWN'
 }
 
-export interface ProcessingError extends Error {
-  type: ErrorType;
+interface ErrorHandlerResult {
+  success: boolean;
+  error: string;
   retryCount: number;
-  messageId?: string;
-  originalError?: any;
+  shouldContinue?: boolean;
 }
 
 function classifyError(error: any): ErrorType {
@@ -25,17 +24,17 @@ function classifyError(error: any): ErrorType {
   if (error.code === '57014' || error.message?.includes('timeout')) {
     return ErrorType.DATABASE_TIMEOUT;
   }
-  if (error.message?.includes('network') || error.code === 'ECONNREFUSED') {
-    return ErrorType.NETWORK;
+  if (error.code === '08006' || error.message?.includes('connection')) {
+    return ErrorType.DATABASE_CONNECTION;
   }
-  if (error.message?.includes('validation') || error.code === '23514') {
+  if (error.message?.includes('validation')) {
     return ErrorType.VALIDATION;
   }
-  if (error.message?.includes('media') || error.code === 'MEDIA_ERROR') {
-    return ErrorType.MEDIA_PROCESSING;
-  }
-  if (error.message?.includes('storage') || error.code === 'STORAGE_ERROR') {
+  if (error.message?.includes('storage')) {
     return ErrorType.STORAGE;
+  }
+  if (error.message?.includes('media')) {
+    return ErrorType.MEDIA_PROCESSING;
   }
   return ErrorType.UNKNOWN;
 }
@@ -45,14 +44,15 @@ export async function handleProcessingError(
   error: any,
   messageRecord: any,
   retryCount: number,
-  shouldThrow = false
-): Promise<{ success: boolean; error: string; retryCount: number; shouldContinue: boolean }> {
+  shouldRetry: boolean
+): Promise<ErrorHandlerResult> {
   const errorType = classifyError(error);
-  
-  console.error(`Processing error (${errorType}):`, {
-    error: error.message,
-    retry_count: retryCount,
-    message_id: messageRecord?.id || 'unknown'
+  console.log('Processing error:', {
+    type: errorType,
+    message: error.message,
+    code: error.code,
+    retryCount,
+    messageId: messageRecord?.id
   });
 
   try {
@@ -60,49 +60,68 @@ export async function handleProcessingError(
     if (errorType === ErrorType.DUPLICATE_MESSAGE && messageRecord) {
       console.log('Handling duplicate message case, checking for telegram media records...');
       
-      const { data: existingMessage } = await supabase
-        .from('messages')
-        .select('id')
-        .eq('message_id', messageRecord.message_id)
-        .eq('chat_id', messageRecord.chat_id)
-        .maybeSingle();
-
-      if (existingMessage) {
-        const { data: telegramMedia } = await supabase
-          .from('telegram_media')
+      try {
+        const { data: existingMessage, error: messageError } = await supabase
+          .from('messages')
           .select('id')
-          .eq('message_id', existingMessage.id)
-          .limit(1);
+          .eq('message_id', messageRecord.message_id)
+          .eq('chat_id', messageRecord.chat_id)
+          .maybeSingle();
 
-        // If no telegram media exists, we should continue processing
-        if (!telegramMedia || telegramMedia.length === 0) {
-          console.log('No telegram media found for duplicate message, continuing processing...');
-          return {
-            success: true,
-            error: '',
-            retryCount,
-            shouldContinue: true
-          };
+        if (messageError) {
+          console.error('Error fetching existing message:', messageError);
+          throw messageError;
         }
+
+        if (existingMessage) {
+          const { data: telegramMedia, error: mediaError } = await supabase
+            .from('telegram_media')
+            .select('id')
+            .eq('message_id', existingMessage.id)
+            .limit(1);
+
+          if (mediaError) {
+            console.error('Error fetching telegram media:', mediaError);
+            throw mediaError;
+          }
+
+          // If no telegram media exists, we should continue processing
+          if (!telegramMedia || telegramMedia.length === 0) {
+            console.log('No telegram media found for duplicate message, continuing processing...');
+            return {
+              success: true,
+              error: '',
+              retryCount,
+              shouldContinue: true
+            };
+          }
+        }
+      } catch (dbError) {
+        console.error('Database error while checking for duplicates:', dbError);
+        // Continue with error handling flow
       }
     }
 
     // Update error tracking
+    const errorData = {
+      message_id: messageRecord?.message_id,
+      chat_id: messageRecord?.chat_id,
+      error_message: error.message || 'Unknown error',
+      error_stack: error.stack,
+      retry_count: retryCount,
+      last_retry_at: new Date().toISOString(),
+      message_data: messageRecord,
+      status: shouldRetry ? 'pending_retry' : 'failed'
+    };
+
     const { error: updateError } = await supabase
       .from('failed_webhook_updates')
-      .upsert({
-        message_id: messageRecord?.message_id,
-        chat_id: messageRecord?.chat_id,
-        error_message: error.message,
-        error_stack: error.stack,
-        retry_count: retryCount,
-        message_data: messageRecord?.message_data || {},
-        status: retryCount >= MAX_RETRY_ATTEMPTS ? 'failed' : 'pending',
-        last_retry_at: new Date().toISOString()
+      .upsert([errorData], {
+        onConflict: 'message_id,chat_id'
       });
 
     if (updateError) {
-      console.error('Error logging failed webhook:', updateError);
+      console.error('Error updating failed_webhook_updates:', updateError);
     }
 
     // Update message status if we have a message record
@@ -110,10 +129,10 @@ export async function handleProcessingError(
       const { error: messageUpdateError } = await supabase
         .from('messages')
         .update({
+          status: shouldRetry ? 'pending_retry' : 'failed',
+          processing_error: error.message,
           retry_count: retryCount,
-          last_retry_at: new Date().toISOString(),
-          status: retryCount >= MAX_RETRY_ATTEMPTS ? 'failed' : 'pending',
-          processing_error: `${errorType}: ${error.message}`,
+          last_retry_at: new Date().toISOString()
         })
         .eq('id', messageRecord.id);
 
@@ -122,56 +141,18 @@ export async function handleProcessingError(
       }
     }
 
-    // Handle specific error types
-    switch (errorType) {
-      case ErrorType.DATABASE_TIMEOUT:
-      case ErrorType.NETWORK:
-        const backoffDelay = calculateBackoffDelay(retryCount);
-        console.log(`Waiting ${backoffDelay}ms before retry...`);
-        await delay(backoffDelay);
-        break;
-      
-      case ErrorType.VALIDATION:
-      case ErrorType.MEDIA_PROCESSING:
-      case ErrorType.STORAGE:
-        // These errors might need manual intervention
-        if (retryCount >= MAX_RETRY_ATTEMPTS) {
-          console.error('Critical error requiring manual review:', {
-            type: errorType,
-            message: error.message,
-            message_id: messageRecord?.id
-          });
-        }
-        break;
-    }
-
-    if (shouldThrow || retryCount >= MAX_RETRY_ATTEMPTS) {
-      const finalError = new Error(`Failed after ${retryCount} attempts. Last error: ${error.message}`);
-      (finalError as ProcessingError).type = errorType;
-      (finalError as ProcessingError).retryCount = retryCount;
-      throw finalError;
-    }
-
     return {
       success: false,
-      error: error.message,
+      error: error.message || 'Unknown error',
       retryCount,
-      shouldContinue: retryCount < MAX_RETRY_ATTEMPTS
+      shouldContinue: false
     };
-  } catch (handlingError) {
-    console.error('Error in handleProcessingError:', {
-      error: handlingError.message,
-      original_error: error.message,
-      message_id: messageRecord?.id || 'unknown'
-    });
-    
-    if (shouldThrow) {
-      throw handlingError;
-    }
-    
+
+  } catch (handlerError) {
+    console.error('Error in error handler:', handlerError);
     return {
       success: false,
-      error: handlingError.message,
+      error: `Error handler failed: ${handlerError.message}`,
       retryCount,
       shouldContinue: false
     };
