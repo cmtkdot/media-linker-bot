@@ -7,7 +7,6 @@ interface MediaCardProps {
   item: MediaItem;
   onPreview: () => void;
   onEdit: (item: MediaItem) => void;
-  hasMultipleMedia?: boolean;
 }
 
 const MediaCard = ({ item, onPreview, onEdit }: MediaCardProps) => {
