@@ -101,43 +101,58 @@ export const createNewMediaRecord = async (
 
 export const generateThumbnails = async (supabase: any) => {
   try {
-    // First, update videos without thumbnails to use default_public_url
-    const { error: updateError } = await supabase
+    // First, identify videos without thumbnails
+    const { data: videosWithoutThumbnails, error: fetchError } = await supabase
       .from('telegram_media')
-      .update({ thumbnail_url: null })
+      .select('*')
       .eq('file_type', 'video')
       .is('thumbnail_url', null);
 
-    if (updateError) throw updateError;
-
-    // Then, for videos in media groups, try to get thumbnail from associated photo
-    const { data: mediaGroups, error: fetchError } = await supabase
-      .from('telegram_media')
-      .select('telegram_data->media_group_id')
-      .eq('file_type', 'video')
-      .eq('thumbnail_url', null)
-      .not('telegram_data->media_group_id', 'is', null);
-
     if (fetchError) throw fetchError;
 
-    // Update each video in media groups with photo thumbnails
-    for (const item of mediaGroups || []) {
-      const mediaGroupId = item.telegram_data?.media_group_id;
-      if (!mediaGroupId) continue;
+    // Process each video
+    for (const video of videosWithoutThumbnails || []) {
+      let thumbnailUrl = null;
 
-      const { data: photos } = await supabase
-        .from('telegram_media')
-        .select('public_url')
-        .eq('telegram_data->media_group_id', mediaGroupId)
-        .eq('file_type', 'photo')
-        .limit(1);
+      // Try to get thumbnail from Telegram metadata
+      const videoThumb = video.telegram_data?.message_data?.video?.thumb;
+      if (videoThumb?.file_unique_id) {
+        const { data } = supabase
+          .storage
+          .from('media')
+          .getPublicUrl(`${videoThumb.file_unique_id}.jpg`);
+        thumbnailUrl = data?.publicUrl;
+      }
 
-      if (photos?.[0]?.public_url) {
+      // If no Telegram thumbnail, try media group photos
+      if (!thumbnailUrl && video.telegram_data?.media_group_id) {
+        const { data: photos } = await supabase
+          .from('telegram_media')
+          .select('public_url')
+          .eq('telegram_data->media_group_id', video.telegram_data.media_group_id)
+          .eq('file_type', 'photo')
+          .limit(1);
+
+        if (photos?.[0]?.public_url) {
+          thumbnailUrl = photos[0].public_url;
+        }
+      }
+
+      // If still no thumbnail, try metadata
+      if (!thumbnailUrl && video.media_metadata?.thumbnail_path) {
+        const { data } = supabase
+          .storage
+          .from('media')
+          .getPublicUrl(video.media_metadata.thumbnail_path);
+        thumbnailUrl = data?.publicUrl;
+      }
+
+      // Update the video record with the best available thumbnail
+      if (thumbnailUrl) {
         await supabase
           .from('telegram_media')
-          .update({ thumbnail_url: photos[0].public_url })
-          .eq('telegram_data->media_group_id', mediaGroupId)
-          .eq('file_type', 'video');
+          .update({ thumbnail_url: thumbnailUrl })
+          .eq('id', video.id);
       }
     }
 
