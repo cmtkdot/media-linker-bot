@@ -4,11 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2 } from "lucide-react";
+import { Loader2, RefreshCw } from "lucide-react";
 
 const Settings = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isSyncingCaptions, setIsSyncingCaptions] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -86,6 +87,50 @@ const Settings = () => {
     }
   };
 
+  const handleSyncCaptions = async () => {
+    setIsSyncingCaptions(true);
+    try {
+      const { data: mediaGroups, error: fetchError } = await supabase
+        .from('telegram_media')
+        .select('telegram_data->media_group_id')
+        .not('telegram_data->media_group_id', 'is', null)
+        .distinct();
+
+      if (fetchError) throw fetchError;
+
+      let syncedGroups = 0;
+      for (const group of mediaGroups || []) {
+        const mediaGroupId = group.media_group_id;
+        if (!mediaGroupId) continue;
+
+        const { error: syncError } = await supabase
+          .rpc('sync_media_group_captions', { media_group_id: mediaGroupId });
+
+        if (syncError) {
+          console.error(`Error syncing group ${mediaGroupId}:`, syncError);
+          continue;
+        }
+        syncedGroups++;
+      }
+
+      await queryClient.invalidateQueries({ queryKey: ['telegram-media'] });
+
+      toast({
+        title: "Caption Sync Complete",
+        description: `Successfully synced captions for ${syncedGroups} media groups`,
+      });
+    } catch (error: any) {
+      console.error('Error in caption sync:', error);
+      toast({
+        title: "Caption Sync Failed",
+        description: error.message || "Failed to sync captions",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSyncingCaptions(false);
+    }
+  };
+
   return (
     <div className="container mx-auto p-6">
       <h1 className="text-3xl font-bold mb-6">Settings</h1>
@@ -127,6 +172,35 @@ const Settings = () => {
                 </Button>
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-2">
+          <CardHeader>
+            <CardTitle>Caption Sync</CardTitle>
+            <CardDescription>
+              Manually sync captions across media groups to ensure consistency
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button 
+              onClick={handleSyncCaptions}
+              disabled={isSyncingCaptions}
+              className="w-full"
+              size="lg"
+            >
+              {isSyncingCaptions ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Syncing Captions...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Sync Media Group Captions
+                </>
+              )}
+            </Button>
           </CardContent>
         </Card>
 
