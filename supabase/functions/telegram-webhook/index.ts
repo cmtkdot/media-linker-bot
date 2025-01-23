@@ -3,12 +3,13 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from "../_shared/cors.ts";
 import { handleWebhookUpdate } from "../_shared/webhook-handler.ts";
 import { withDatabaseRetry } from "../_shared/database-retry.ts";
+import { analyzeCaptionWithAI } from "../_shared/caption-analyzer.ts";
+import { processMediaFiles } from "../_shared/media-processor.ts";
 
 serve(async (req) => {
   console.log('Received webhook request:', req.method);
 
   if (req.method === 'OPTIONS') {
-    console.log('Handling CORS preflight request');
     return new Response(null, { headers: corsHeaders });
   }
 
@@ -19,13 +20,12 @@ serve(async (req) => {
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
     if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_WEBHOOK_SECRET || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      console.error('Missing required environment variables');
       throw new Error('Missing required environment variables');
     }
 
+    // Validate webhook secret
     const webhookSecret = req.headers.get('X-Telegram-Bot-Api-Secret-Token');
     if (webhookSecret !== TELEGRAM_WEBHOOK_SECRET) {
-      console.error('Invalid webhook secret received');
       return new Response(
         JSON.stringify({ error: 'Invalid webhook secret' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
@@ -34,181 +34,106 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const update = await req.json();
-    
+    const message = update.message || update.channel_post;
+
+    if (!message) {
+      return new Response(
+        JSON.stringify({ ok: true, message: 'No message to process' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     console.log('Processing Telegram update:', {
       update_id: update.update_id,
-      message_id: update.message?.message_id,
-      chat_id: update.message?.chat?.id,
-      message_type: update.message?.photo ? 'photo' : 
-                   update.message?.video ? 'video' : 
-                   update.message?.document ? 'document' : 
-                   update.message?.animation ? 'animation' : 'unknown'
+      message_id: message.message_id,
+      chat_id: message.chat.id,
+      has_caption: !!message.caption,
+      media_group_id: message.media_group_id
     });
 
-    const result = await handleWebhookUpdate(update, supabase, TELEGRAM_BOT_TOKEN);
+    // Generate message URL
+    const chatId = message.chat.id.toString();
+    const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
 
-    const message = update.message || update.channel_post;
-    if (message) {
-      const chatId = message.chat.id.toString();
-      const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
-
-      const { data: messageRecord } = await withDatabaseRetry(async () => {
-        return await supabase
-          .from('messages')
-          .select('*')
-          .eq('message_id', message.message_id)
-          .eq('chat_id', message.chat.id)
-          .maybeSingle();
-      });
-
-      if (messageRecord) {
-        let fileId, fileUniqueId, fileType;
-        if (message.photo) {
-          const photo = message.photo[message.photo.length - 1];
-          fileId = photo.file_id;
-          fileUniqueId = photo.file_unique_id;
-          fileType = 'photo';
-        } else if (message.video) {
-          fileId = message.video.file_id;
-          fileUniqueId = message.video.file_unique_id;
-          fileType = 'video';
-        } else if (message.document) {
-          fileId = message.document.file_id;
-          fileUniqueId = message.document.file_unique_id;
-          fileType = 'document';
-        } else if (message.animation) {
-          fileId = message.animation.file_id;
-          fileUniqueId = message.animation.file_unique_id;
-          fileType = 'animation';
-        }
-
-        if (fileId && fileUniqueId) {
-          const { data: existingMedia } = await withDatabaseRetry(async () => {
-            return await supabase
-              .from('telegram_media')
-              .select('*')
-              .eq('file_unique_id', fileUniqueId)
-              .maybeSingle();
-          });
-
-          const messageCreatedAt = new Date(messageRecord.created_at);
-          
-          const { data: storageData } = await withDatabaseRetry(async () => {
-            return await supabase.storage
-              .from('media')
-              .list('', {
-                search: fileUniqueId
-              });
-          });
-
-          let publicUrl;
-          if (storageData && storageData.length > 0) {
-            const { data } = await supabase.storage
-              .from('media')
-              .getPublicUrl(storageData[0].name);
-            publicUrl = data.publicUrl;
-          } else {
-            publicUrl = fileType === 'photo' 
-              ? `https://kzfamethztziwqiocbwz.supabase.co/storage/v1/object/public/media/${fileUniqueId}.jpg`
-              : `https://kzfamethztziwqiocbwz.supabase.co/storage/v1/object/public/media/${fileUniqueId}.MOV`;
-          }
-          
-          if (existingMedia) {
-            const mediaCreatedAt = new Date(existingMedia.created_at);
-            
-            if (messageCreatedAt > mediaCreatedAt) {
-              console.log('Updating existing telegram_media record:', existingMedia.id);
-              
-              await withDatabaseRetry(async () => {
-                const { error: updateError } = await supabase
-                  .from('telegram_media')
-                  .update({
-                    file_id: fileId,
-                    message_id: messageRecord.id,
-                    caption: messageRecord.caption,
-                    product_name: messageRecord.product_name,
-                    product_code: messageRecord.product_code,
-                    quantity: messageRecord.quantity,
-                    vendor_uid: messageRecord.vendor_uid,
-                    purchase_date: messageRecord.purchase_date,
-                    notes: messageRecord.notes,
-                    analyzed_content: messageRecord.analyzed_content,
-                    public_url: publicUrl,
-                    message_url: messageUrl,
-                    telegram_data: {
-                      message_id: message.message_id,
-                      chat_id: message.chat.id,
-                      media_group_id: message.media_group_id,
-                      date: message.date,
-                      caption: message.caption
-                    },
-                    updated_at: new Date().toISOString()
-                  })
-                  .eq('id', existingMedia.id);
-
-                if (updateError) {
-                  console.error('Error updating telegram_media record:', updateError);
-                  throw updateError;
-                }
-              });
-              
-              console.log('Successfully updated telegram_media record:', existingMedia.id);
-            } else {
-              console.log('Skipping update as message is older than existing media record');
-            }
-          } else {
-            console.log('Creating new telegram_media record for message:', messageRecord.id);
-            
-            await withDatabaseRetry(async () => {
-              const { error: insertError } = await supabase
-                .from('telegram_media')
-                .insert({
-                  file_id: fileId,
-                  file_unique_id: fileUniqueId,
-                  file_type: fileType,
-                  message_id: messageRecord.id,
-                  caption: messageRecord.caption,
-                  product_name: messageRecord.product_name,
-                  product_code: messageRecord.product_code,
-                  quantity: messageRecord.quantity,
-                  vendor_uid: messageRecord.vendor_uid,
-                  purchase_date: messageRecord.purchase_date,
-                  notes: messageRecord.notes,
-                  analyzed_content: messageRecord.analyzed_content,
-                  public_url: publicUrl,
-                  message_url: messageUrl,
-                  telegram_data: {
-                    message_id: message.message_id,
-                    chat_id: message.chat.id,
-                    media_group_id: message.media_group_id,
-                    date: message.date,
-                    caption: message.caption
-                  },
-                  created_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString()
-                });
-
-              if (insertError) {
-                console.error('Error creating telegram_media record:', insertError);
-                throw insertError;
-              }
-            });
-            
-            console.log('Successfully created telegram_media record for message:', messageRecord.id);
-          }
-        }
+    // Analyze caption if present
+    let analyzedContent = null;
+    if (message.caption) {
+      try {
+        console.log('Analyzing caption:', message.caption);
+        analyzedContent = await analyzeCaptionWithAI(message.caption, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+        console.log('Caption analysis result:', analyzedContent);
+      } catch (error) {
+        console.error('Error analyzing caption:', error);
       }
     }
-    
+
+    // Create or update message record with retry
+    const messageData = {
+      message_id: message.message_id,
+      chat_id: message.chat.id,
+      sender_info: message.from || message.sender_chat || {},
+      message_type: determineMessageType(message),
+      message_data: message,
+      caption: message.caption,
+      media_group_id: message.media_group_id,
+      message_url: messageUrl,
+      analyzed_content: analyzedContent,
+      product_name: analyzedContent?.product_name || null,
+      product_code: analyzedContent?.product_code || null,
+      quantity: analyzedContent?.quantity || null,
+      vendor_uid: analyzedContent?.vendor_uid || null,
+      purchase_date: analyzedContent?.purchase_date || null,
+      notes: analyzedContent?.notes || null,
+      status: 'pending',
+      retry_count: 0
+    };
+
+    const { data: messageRecord, error: messageError } = await withDatabaseRetry(async () => {
+      const { data: existingMessage } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('message_id', message.message_id)
+        .eq('chat_id', message.chat.id)
+        .maybeSingle();
+
+      if (existingMessage) {
+        return await supabase
+          .from('messages')
+          .update(messageData)
+          .eq('id', existingMessage.id)
+          .select()
+          .single();
+      } else {
+        return await supabase
+          .from('messages')
+          .insert([messageData])
+          .select()
+          .single();
+      }
+    });
+
+    if (messageError) {
+      throw messageError;
+    }
+
+    // Process media files if present
+    if (hasMedia(message) && messageRecord) {
+      await processMediaFiles(message, messageRecord, supabase, TELEGRAM_BOT_TOKEN);
+    }
+
     console.log('Successfully processed update:', {
       update_id: update.update_id,
-      message_id: update.message?.message_id,
-      chat_id: update.message?.chat?.id,
-      result
+      message_id: message.message_id,
+      chat_id: message.chat.id,
+      record_id: messageRecord?.id
     });
-    
+
     return new Response(
-      JSON.stringify({ ok: true, result }),
+      JSON.stringify({ 
+        ok: true, 
+        message: 'Update processed successfully',
+        messageId: messageRecord?.id 
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
@@ -231,3 +156,15 @@ serve(async (req) => {
     );
   }
 });
+
+function determineMessageType(message: any): string {
+  if (message.photo && message.photo.length > 0) return 'photo';
+  if (message.video) return 'video';
+  if (message.document) return 'document';
+  if (message.animation) return 'animation';
+  return 'unknown';
+}
+
+function hasMedia(message: any): boolean {
+  return !!(message.photo || message.video || message.document || message.animation);
+}
