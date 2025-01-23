@@ -1,97 +1,119 @@
 import { calculateBackoffDelay, delay } from './retry-utils.ts';
 import { MAX_RETRY_ATTEMPTS } from './constants.ts';
 
+export enum ErrorType {
+  DATABASE_TIMEOUT = 'DATABASE_TIMEOUT',
+  NETWORK = 'NETWORK',
+  VALIDATION = 'VALIDATION',
+  MEDIA_PROCESSING = 'MEDIA_PROCESSING',
+  STORAGE = 'STORAGE',
+  UNKNOWN = 'UNKNOWN'
+}
+
+export interface ProcessingError extends Error {
+  type: ErrorType;
+  retryCount: number;
+  messageId?: string;
+  originalError?: any;
+}
+
+function classifyError(error: any): ErrorType {
+  if (error.code === '57014' || error.message?.includes('timeout')) {
+    return ErrorType.DATABASE_TIMEOUT;
+  }
+  if (error.message?.includes('network') || error.code === 'ECONNREFUSED') {
+    return ErrorType.NETWORK;
+  }
+  if (error.message?.includes('validation') || error.code === '23514') {
+    return ErrorType.VALIDATION;
+  }
+  if (error.message?.includes('media') || error.code === 'MEDIA_ERROR') {
+    return ErrorType.MEDIA_PROCESSING;
+  }
+  if (error.message?.includes('storage') || error.code === 'STORAGE_ERROR') {
+    return ErrorType.STORAGE;
+  }
+  return ErrorType.UNKNOWN;
+}
+
 export async function handleProcessingError(
   supabase: any,
   error: any,
   messageRecord: any,
   retryCount: number,
   shouldThrow = false
-) {
-  console.error(`Attempt ${retryCount + 1} failed:`, {
+): Promise<{ success: boolean; error: string; retryCount: number; shouldContinue: boolean }> {
+  const errorType = classifyError(error);
+  
+  console.error(`Processing error (${errorType}):`, {
     error: error.message,
-    stack: error.stack,
-    message_id: messageRecord?.id || 'unknown',
-    retry_count: retryCount
+    retry_count: retryCount,
+    message_id: messageRecord?.id || 'unknown'
   });
 
   try {
-    // First try to update existing record
+    // Update error tracking
     const { error: updateError } = await supabase
       .from('failed_webhook_updates')
-      .update({
+      .upsert({
+        message_id: messageRecord?.message_id,
+        chat_id: messageRecord?.chat_id,
         error_message: error.message,
         error_stack: error.stack,
         retry_count: retryCount,
         message_data: messageRecord?.message_data || {},
         status: retryCount >= MAX_RETRY_ATTEMPTS ? 'failed' : 'pending',
-        last_retry_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .match({ 
-        message_id: messageRecord?.message_id,
-        chat_id: messageRecord?.chat_id 
+        last_retry_at: new Date().toISOString()
       });
 
-    // If no record exists or update failed, create a new one
     if (updateError) {
-      const { error: insertError } = await supabase
-        .from('failed_webhook_updates')
-        .insert({
-          message_id: messageRecord?.message_id,
-          chat_id: messageRecord?.chat_id,
-          error_message: error.message,
-          error_stack: error.stack,
-          retry_count: retryCount,
-          message_data: messageRecord?.message_data || {},
-          status: retryCount >= MAX_RETRY_ATTEMPTS ? 'failed' : 'pending',
-          last_retry_at: new Date().toISOString()
-        });
-
-      if (insertError) {
-        console.error('Error logging failed webhook:', {
-          error: insertError,
-          message_id: messageRecord?.id || 'unknown'
-        });
-      }
+      console.error('Error logging failed webhook:', updateError);
     }
 
     // Update message status if we have a message record
     if (messageRecord?.id) {
-      const { error: updateMessageError } = await supabase
+      const { error: messageUpdateError } = await supabase
         .from('messages')
         .update({
           retry_count: retryCount,
           last_retry_at: new Date().toISOString(),
           status: retryCount >= MAX_RETRY_ATTEMPTS ? 'failed' : 'pending',
-          processing_error: error.message,
-          updated_at: new Date().toISOString()
+          processing_error: `${errorType}: ${error.message}`,
         })
         .eq('id', messageRecord.id);
 
-      if (updateMessageError) {
-        console.error('Error updating message status:', updateMessageError);
+      if (messageUpdateError) {
+        console.error('Error updating message status:', messageUpdateError);
       }
     }
 
-    // Handle rate limiting
-    if (error.message?.includes('Too Many Requests') || error.code === 429) {
-      const backoffDelay = calculateBackoffDelay(retryCount);
-      console.log(`Rate limited. Waiting ${backoffDelay}ms before retry...`);
-      await delay(backoffDelay);
-    } else if (retryCount < MAX_RETRY_ATTEMPTS) {
-      await delay(1000);
+    // Handle specific error types
+    switch (errorType) {
+      case ErrorType.DATABASE_TIMEOUT:
+      case ErrorType.NETWORK:
+        const backoffDelay = calculateBackoffDelay(retryCount);
+        console.log(`Waiting ${backoffDelay}ms before retry...`);
+        await delay(backoffDelay);
+        break;
+      
+      case ErrorType.VALIDATION:
+      case ErrorType.MEDIA_PROCESSING:
+      case ErrorType.STORAGE:
+        // These errors might need manual intervention
+        if (retryCount >= MAX_RETRY_ATTEMPTS) {
+          console.error('Critical error requiring manual review:', {
+            type: errorType,
+            message: error.message,
+            message_id: messageRecord?.id
+          });
+        }
+        break;
     }
 
-    // Only throw if explicitly requested or max retries reached
     if (shouldThrow || retryCount >= MAX_RETRY_ATTEMPTS) {
-      console.error('Max retry attempts reached or error throw requested:', {
-        message_id: messageRecord?.id || 'unknown',
-        total_attempts: retryCount,
-        should_throw: shouldThrow
-      });
       const finalError = new Error(`Failed after ${retryCount} attempts. Last error: ${error.message}`);
-      finalError.retryCount = retryCount;
+      (finalError as ProcessingError).type = errorType;
+      (finalError as ProcessingError).retryCount = retryCount;
       throw finalError;
     }
 
