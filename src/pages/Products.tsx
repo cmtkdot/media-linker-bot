@@ -11,9 +11,9 @@ import { useToast } from "@/components/ui/use-toast";
 import { Json } from "@/integrations/supabase/types";
 
 interface AnalyzedContent {
-  text?: string;
-  labels?: string[];
-  objects?: string[];
+  text: string;
+  labels: string[];
+  objects: string[];
 }
 
 const Products = () => {
@@ -33,8 +33,13 @@ const Products = () => {
       if (error) throw error;
 
       return data.map((item): MediaItem => {
-        // Safely parse analyzed_content
-        let analyzedContent: AnalyzedContent | undefined;
+        // Safely parse analyzed_content with required properties and default values
+        let analyzedContent: AnalyzedContent = {
+          text: '',
+          labels: [],
+          objects: []
+        };
+
         if (item.analyzed_content && typeof item.analyzed_content === 'object') {
           const content = item.analyzed_content as Record<string, unknown>;
           analyzedContent = {
