@@ -497,6 +497,7 @@ export type Database = {
           glide_data: Json
           id: string
           last_synced_at: string | null
+          media_group_id: string | null
           media_metadata: Json
           message_id: string | null
           message_url: string | null
@@ -528,6 +529,7 @@ export type Database = {
           glide_data?: Json
           id?: string
           last_synced_at?: string | null
+          media_group_id?: string | null
           media_metadata?: Json
           message_id?: string | null
           message_url?: string | null
@@ -559,6 +561,7 @@ export type Database = {
           glide_data?: Json
           id?: string
           last_synced_at?: string | null
+          media_group_id?: string | null
           media_metadata?: Json
           message_id?: string | null
           message_url?: string | null
@@ -737,9 +740,23 @@ export type Database = {
           has_telegram_thumb: boolean
         }[]
       }
+      sync_all_media_groups: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          media_group_id: string
+          synced_items: number
+          status: string
+        }[]
+      }
       sync_media_group_captions: {
         Args: {
           media_group_id: string
+        }
+        Returns: undefined
+      }
+      sync_media_group_content: {
+        Args: {
+          p_media_group_id: string
         }
         Returns: undefined
       }
