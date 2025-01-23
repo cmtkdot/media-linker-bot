@@ -20,7 +20,7 @@ export async function processMediaFile(
   });
 
   // Check for existing media first
-  const { data: existingMedia } = await withDatabaseRetry(
+  const { data: existingMedia, error: checkError } = await withDatabaseRetry(
     async () => {
       return await supabase
         .from('telegram_media')
@@ -34,6 +34,20 @@ export async function processMediaFile(
 
   if (existingMedia) {
     console.log('Media already exists:', existingMedia);
+    
+    // Update the existing record with new message_id if available
+    if (messageRecord?.id) {
+      const { error: updateError } = await supabase
+        .from('telegram_media')
+        .update({ message_id: messageRecord.id })
+        .eq('id', existingMedia.id)
+        .eq('file_unique_id', mediaFile.file_unique_id);
+
+      if (updateError) {
+        console.error('Error updating existing media:', updateError);
+      }
+    }
+    
     return existingMedia;
   }
 
@@ -69,7 +83,7 @@ export async function processMediaFile(
     .from('media')
     .getPublicUrl(uniqueFileName);
 
-  // Create media record with retry, allowing null message_id
+  // Create media record with retry, using ON CONFLICT DO UPDATE
   const { data: mediaRecord, error: insertError } = await withDatabaseRetry(
     async () => {
       const insertData = {
@@ -97,7 +111,10 @@ export async function processMediaFile(
 
       return await supabase
         .from('telegram_media')
-        .insert([insertData])
+        .upsert(insertData, { 
+          onConflict: 'file_unique_id',
+          ignoreDuplicates: false 
+        })
         .select()
         .single();
     },
