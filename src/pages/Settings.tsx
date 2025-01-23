@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 const Settings = () => {
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -26,17 +27,14 @@ const Settings = () => {
     try {
       console.log('Starting thumbnail generation...');
       
-      // Call the Supabase function to generate thumbnails
       const { error: genError } = await supabase.rpc('generate_missing_thumbnails');
       if (genError) {
         console.error('Error generating thumbnails:', genError);
         throw genError;
       }
 
-      // Wait a moment for the changes to propagate
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      // Refetch the stats and invalidate any queries that might show media
       await refetch();
       await queryClient.invalidateQueries({ queryKey: ['telegram-media'] });
       
@@ -55,6 +53,33 @@ const Settings = () => {
       });
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleSyncWithGlide = async () => {
+    setIsSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-missing-rows-to-glide');
+      
+      if (error) throw error;
+
+      toast({
+        title: "Sync Completed",
+        description: `Found ${data.differences_found} records to sync`,
+      });
+
+      // Invalidate queries to refresh data
+      await queryClient.invalidateQueries({ queryKey: ['telegram-media'] });
+      
+    } catch (error) {
+      console.error('Error syncing with Glide:', error);
+      toast({
+        title: "Sync Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -88,6 +113,25 @@ const Settings = () => {
                   {isGenerating ? "Generating..." : "Generate Thumbnails"}
                 </Button>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Glide Sync</CardTitle>
+            <CardDescription>
+              Check for differences between Supabase and Glide data and sync if necessary
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex justify-end">
+              <Button 
+                onClick={handleSyncWithGlide}
+                disabled={isSyncing}
+              >
+                {isSyncing ? "Syncing..." : "Sync with Glide"}
+              </Button>
             </div>
           </CardContent>
         </Card>
