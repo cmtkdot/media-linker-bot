@@ -280,6 +280,7 @@ export type Database = {
         Row: {
           analyzed_content: Json | null
           caption: string | null
+          chat_url: string | null
           created_at: string
           default_public_url: string | null
           extracted_media_group_id: string | null
@@ -312,6 +313,7 @@ export type Database = {
         Insert: {
           analyzed_content?: Json | null
           caption?: string | null
+          chat_url?: string | null
           created_at?: string
           default_public_url?: string | null
           extracted_media_group_id?: string | null
@@ -344,6 +346,7 @@ export type Database = {
         Update: {
           analyzed_content?: Json | null
           caption?: string | null
+          chat_url?: string | null
           created_at?: string
           default_public_url?: string | null
           extracted_media_group_id?: string | null
