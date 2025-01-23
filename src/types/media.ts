@@ -27,6 +27,7 @@ export interface MediaItem {
   glide_app_url?: string;
   created_at: string;
   updated_at: string;
+  telegram_media_row_id?: string;
 }
 
 export interface MediaSearchBarProps {
