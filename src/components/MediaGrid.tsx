@@ -4,32 +4,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { MediaItem } from "@/types/media";
 import MediaGridFilters from "./MediaGridFilters";
 import MediaGridContent from "./MediaGridContent";
-
-interface QueryResult {
-  id: string;
-  file_id: string;
-  file_unique_id: string;
-  file_type: string;
-  public_url: string | null;
-  default_public_url: string | null;
-  thumbnail_url: string | null;
-  caption: string | null;
-  product_name: string | null;
-  product_code: string | null;
-  vendor_uid: string | null;
-  purchase_date: string | null;
-  notes: string | null;
-  telegram_data: Record<string, any>;
-  glide_data: Record<string, any>;
-  media_metadata: Record<string, any>;
-  analyzed_content: {
-    text?: string;
-    labels?: string[];
-    objects?: string[];
-  } | null;
-  created_at: string;
-  updated_at: string;
-}
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/use-toast";
+import { RefreshCw, Loader2 } from "lucide-react";
 
 const MediaGrid = () => {
   const [view, setView] = useState<'grid' | 'table'>('grid');
@@ -38,6 +15,8 @@ const MediaGrid = () => {
   const [selectedType, setSelectedType] = useState("all");
   const [selectedVendor, setSelectedVendor] = useState("all");
   const [selectedSort, setSelectedSort] = useState("created_desc");
+  const [isSyncing, setIsSyncing] = useState(false);
+  const { toast } = useToast();
 
   const { data: filterOptions } = useQuery({
     queryKey: ['filter-options'],
@@ -86,7 +65,6 @@ const MediaGrid = () => {
         query = query.eq('vendor_uid', selectedVendor);
       }
 
-      // Add sorting
       const [sortField, sortDirection] = selectedSort.split('_');
       switch (sortField) {
         case 'created':
@@ -115,7 +93,7 @@ const MediaGrid = () => {
       
       if (queryError) throw queryError;
 
-      return (queryResult as QueryResult[]).map((item): MediaItem => ({
+      return (queryResult as any[]).map((item): MediaItem => ({
         ...item,
         file_type: item.file_type as MediaItem['file_type'],
         telegram_data: item.telegram_data || {},
@@ -132,24 +110,70 @@ const MediaGrid = () => {
     }
   });
 
+  const handleSync = async () => {
+    setIsSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-media-groups');
+
+      if (error) throw error;
+
+      await refetch();
+
+      toast({
+        title: "Media Groups Sync Complete",
+        description: `Updated ${data.updated_groups} groups and synced ${data.synced_media} media items`,
+      });
+    } catch (error: any) {
+      console.error('Error in media groups sync:', error);
+      toast({
+        title: "Sync Failed",
+        description: error.message || "Failed to sync media groups",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   return (
     <div className="space-y-4 px-4 py-4">
-      <MediaGridFilters
-        search={search}
-        onSearchChange={setSearch}
-        view={view}
-        onViewChange={setView}
-        selectedChannel={selectedChannel}
-        onChannelChange={setSelectedChannel}
-        selectedType={selectedType}
-        onTypeChange={setSelectedType}
-        selectedVendor={selectedVendor}
-        onVendorChange={setSelectedVendor}
-        selectedSort={selectedSort}
-        onSortChange={setSelectedSort}
-        channels={filterOptions?.channels || []}
-        vendors={filterOptions?.vendors || []}
-      />
+      <div className="flex justify-between items-center">
+        <MediaGridFilters
+          search={search}
+          onSearchChange={setSearch}
+          view={view}
+          onViewChange={setView}
+          selectedChannel={selectedChannel}
+          onChannelChange={setSelectedChannel}
+          selectedType={selectedType}
+          onTypeChange={setSelectedType}
+          selectedVendor={selectedVendor}
+          onVendorChange={setSelectedVendor}
+          selectedSort={selectedSort}
+          onSortChange={setSelectedSort}
+          channels={filterOptions?.channels || []}
+          vendors={filterOptions?.vendors || []}
+        />
+        <Button 
+          onClick={handleSync}
+          disabled={isSyncing}
+          variant="outline"
+          size="sm"
+          className="ml-2"
+        >
+          {isSyncing ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Syncing...
+            </>
+          ) : (
+            <>
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Sync Media Groups
+            </>
+          )}
+        </Button>
+      </div>
       
       <MediaGridContent
         items={mediaItems || []}
