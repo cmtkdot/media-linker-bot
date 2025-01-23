@@ -288,7 +288,7 @@ export type Database = {
           priority?: number | null
           processed_at?: string | null
           retry_count?: number | null
-          status: string
+          status?: string
           updated_at?: string | null
         }
         Update: {
@@ -367,7 +367,7 @@ export type Database = {
         Update: {
           analyzed_content?: Json | null
           caption?: string | null
-          chat_id: number
+          chat_id?: number
           created_at?: string
           id?: string
           last_retry_at?: string | null
@@ -406,7 +406,7 @@ export type Database = {
           check_type: string
           created_at?: string | null
           details?: Json | null
-          id: string
+          id?: string
           last_check_time?: string | null
           status: string
         }
@@ -438,7 +438,7 @@ export type Database = {
           created_at?: string | null
           end_time?: string | null
           error_count?: number | null
-          id: string
+          id?: string
           metadata?: Json | null
           operation_type: string
           records_processed?: number | null
@@ -610,12 +610,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      get_all_tables: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          table_name: string
-        }[]
-      }
       generate_missing_thumbnails: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -760,7 +754,7 @@ export type Tables<
   TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
     ? keyof (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
         Database[PublicTableNameOrOptions["schema"]]["Views"])
-    : never,
+    : never = never,
 > = PublicTableNameOrOptions extends { schema: keyof Database }
   ? (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
       Database[PublicTableNameOrOptions["schema"]]["Views"])[TableName] extends {
