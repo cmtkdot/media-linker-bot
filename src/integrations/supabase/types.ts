@@ -206,7 +206,7 @@ export type Database = {
       }
       media_groups: {
         Row: {
-          analyzed_content: Json | null
+          analyzed_content: Json
           caption: string | null
           created_at: string | null
           id: string
@@ -223,7 +223,7 @@ export type Database = {
           vendor_uid: string | null
         }
         Insert: {
-          analyzed_content?: Json | null
+          analyzed_content?: Json
           caption?: string | null
           created_at?: string | null
           id?: string
@@ -240,7 +240,7 @@ export type Database = {
           vendor_uid?: string | null
         }
         Update: {
-          analyzed_content?: Json | null
+          analyzed_content?: Json
           caption?: string | null
           created_at?: string | null
           id?: string
@@ -610,16 +610,6 @@ export type Database = {
           updated_at: string
           vendor_uid: string | null
         }
-      }
-      process_media_sync_queue: {
-        Args: {
-          batch_size?: number
-        }
-        Returns: {
-          processed_count: number
-          success_count: number
-          error_count: number
-        }[]
       }
       regenerate_all_video_thumbnails: {
         Args: Record<PropertyKey, never>
