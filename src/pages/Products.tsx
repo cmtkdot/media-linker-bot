@@ -30,9 +30,17 @@ const Products = () => {
         file_type: item.file_type as MediaItem['file_type'],
         telegram_data: item.telegram_data as Record<string, any>,
         analyzed_content: item.analyzed_content ? {
-          text: String(item.analyzed_content.text || ''),
-          labels: Array.isArray(item.analyzed_content.labels) ? item.analyzed_content.labels : [],
-          objects: Array.isArray(item.analyzed_content.objects) ? item.analyzed_content.objects : []
+          text: typeof item.analyzed_content === 'object' && item.analyzed_content !== null 
+            ? String(item.analyzed_content.text || '') 
+            : '',
+          labels: typeof item.analyzed_content === 'object' && item.analyzed_content !== null && 
+            Array.isArray(item.analyzed_content.labels) 
+            ? item.analyzed_content.labels 
+            : [],
+          objects: typeof item.analyzed_content === 'object' && item.analyzed_content !== null && 
+            Array.isArray(item.analyzed_content.objects) 
+            ? item.analyzed_content.objects 
+            : []
         } : undefined,
         glide_data: item.glide_data as Record<string, any>,
         media_metadata: item.media_metadata as Record<string, any>
