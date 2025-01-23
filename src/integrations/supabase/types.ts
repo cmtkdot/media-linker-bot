@@ -9,84 +9,6 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      failed_media_operations: {
-        Row: {
-          created_at: string | null
-          error_message: string | null
-          file_unique_id: string
-          id: string
-          last_retry: string | null
-          operation_data: Json
-          retry_count: number | null
-          status: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          error_message?: string | null
-          file_unique_id: string
-          id?: string
-          last_retry?: string | null
-          operation_data: Json
-          retry_count?: number | null
-          status?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          error_message?: string | null
-          file_unique_id?: string
-          id?: string
-          last_retry?: string | null
-          operation_data?: Json
-          retry_count?: number | null
-          status?: string | null
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
-      failed_webhook_updates: {
-        Row: {
-          chat_id: number | null
-          created_at: string
-          error_message: string
-          error_stack: string | null
-          id: string
-          last_retry_at: string | null
-          message_data: Json | null
-          message_id: number | null
-          retry_count: number | null
-          status: string | null
-          updated_at: string
-        }
-        Insert: {
-          chat_id?: number | null
-          created_at?: string
-          error_message: string
-          error_stack?: string | null
-          id?: string
-          last_retry_at?: string | null
-          message_data?: Json | null
-          message_id?: number | null
-          retry_count?: number | null
-          status?: string | null
-          updated_at?: string
-        }
-        Update: {
-          chat_id?: number | null
-          created_at?: string
-          error_message?: string
-          error_stack?: string | null
-          id?: string
-          last_retry_at?: string | null
-          message_data?: Json | null
-          message_id?: number | null
-          retry_count?: number | null
-          status?: string | null
-          updated_at?: string
-        }
-        Relationships: []
-      }
       glide_config: {
         Row: {
           active: boolean | null
@@ -266,65 +188,6 @@ export type Database = {
           vendor_uid?: string | null
         }
         Relationships: []
-      }
-      media_processing_queue: {
-        Row: {
-          batch_id: string | null
-          correlation_id: string | null
-          created_at: string | null
-          error_message: string | null
-          file_unique_id: string | null
-          id: string
-          last_retry_at: string | null
-          max_retries: number | null
-          media_data: Json
-          message_id: string | null
-          priority: number | null
-          processed_at: string | null
-          retry_count: number | null
-          status: string
-        }
-        Insert: {
-          batch_id?: string | null
-          correlation_id?: string | null
-          created_at?: string | null
-          error_message?: string | null
-          file_unique_id?: string | null
-          id?: string
-          last_retry_at?: string | null
-          max_retries?: number | null
-          media_data: Json
-          message_id?: string | null
-          priority?: number | null
-          processed_at?: string | null
-          retry_count?: number | null
-          status?: string
-        }
-        Update: {
-          batch_id?: string | null
-          correlation_id?: string | null
-          created_at?: string | null
-          error_message?: string | null
-          file_unique_id?: string | null
-          id?: string
-          last_retry_at?: string | null
-          max_retries?: number | null
-          media_data?: Json
-          message_id?: string | null
-          priority?: number | null
-          processed_at?: string | null
-          retry_count?: number | null
-          status?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "media_processing_queue_message_id_fkey"
-            columns: ["message_id"]
-            isOneToOne: false
-            referencedRelation: "messages"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       messages: {
         Row: {
@@ -523,52 +386,49 @@ export type Database = {
           },
         ]
       }
-      webhook_processing_queue: {
+      unified_processing_queue: {
         Row: {
-          batch_id: string | null
           chat_id: number | null
           correlation_id: string | null
           created_at: string | null
+          data: Json
           error_message: string | null
           id: string
-          last_retry_at: string | null
           max_retries: number | null
-          message_data: Json
           message_id: number | null
           priority: number | null
           processed_at: string | null
+          queue_type: string
           retry_count: number | null
           status: string
         }
         Insert: {
-          batch_id?: string | null
           chat_id?: number | null
           correlation_id?: string | null
           created_at?: string | null
+          data?: Json
           error_message?: string | null
           id?: string
-          last_retry_at?: string | null
           max_retries?: number | null
-          message_data: Json
           message_id?: number | null
           priority?: number | null
           processed_at?: string | null
+          queue_type: string
           retry_count?: number | null
           status?: string
         }
         Update: {
-          batch_id?: string | null
           chat_id?: number | null
           correlation_id?: string | null
           created_at?: string | null
+          data?: Json
           error_message?: string | null
           id?: string
-          last_retry_at?: string | null
           max_retries?: number | null
-          message_data?: Json
           message_id?: number | null
           priority?: number | null
           processed_at?: string | null
+          queue_type?: string
           retry_count?: number | null
           status?: string
         }
