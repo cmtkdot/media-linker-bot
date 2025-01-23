@@ -26,25 +26,21 @@ const MediaGridContent = ({ items = [], view, isLoading, error, onMediaUpdate }:
     setEditItem(item);
   };
 
-  const handlePrevious = () => {
-    if (!selectedMedia) return;
-    const currentIndex = items.findIndex(item => item.id === selectedMedia.id);
-    if (currentIndex > 0) {
-      setSelectedMedia(items[currentIndex - 1]);
+  // Group media items by media_group_id
+  const groupedItems = items.reduce<Record<string, MediaItem[]>>((acc, item) => {
+    const groupId = item.telegram_data?.media_group_id || item.id;
+    if (!acc[groupId]) {
+      acc[groupId] = [];
     }
-  };
+    acc[groupId].push(item);
+    return acc;
+  }, {});
 
-  const handleNext = () => {
-    if (!selectedMedia) return;
-    const currentIndex = items.findIndex(item => item.id === selectedMedia.id);
-    if (currentIndex < items.length - 1) {
-      setSelectedMedia(items[currentIndex + 1]);
-    }
-  };
-
-  const getCurrentIndex = () => {
-    if (!selectedMedia) return -1;
-    return items.findIndex(item => item.id === selectedMedia.id);
+  // Get related media for the selected item
+  const getRelatedMedia = (item: MediaItem): MediaItem[] => {
+    const groupId = item.telegram_data?.media_group_id;
+    if (!groupId) return [item];
+    return groupedItems[groupId] || [item];
   };
 
   if (isLoading) {
@@ -59,6 +55,9 @@ const MediaGridContent = ({ items = [], view, isLoading, error, onMediaUpdate }:
     return <div className="text-center py-8">No media items found</div>;
   }
 
+  // Get unique groups (show one card per group)
+  const uniqueGroups = Object.values(groupedItems).map(group => group[0]);
+
   return (
     <>
       <div className={
@@ -66,12 +65,13 @@ const MediaGridContent = ({ items = [], view, isLoading, error, onMediaUpdate }:
           ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" 
           : "space-y-4"
       }>
-        {items.map((item) => (
+        {uniqueGroups.map((item) => (
           <MediaCard
             key={item.id}
             item={item}
             onPreview={() => handleView(item)}
             onEdit={handleEdit}
+            hasMultipleMedia={getRelatedMedia(item).length > 1}
           />
         ))}
       </div>
@@ -80,10 +80,7 @@ const MediaGridContent = ({ items = [], view, isLoading, error, onMediaUpdate }:
         open={viewerOpen}
         onOpenChange={setViewerOpen}
         media={selectedMedia}
-        onPrevious={handlePrevious}
-        onNext={handleNext}
-        hasPrevious={getCurrentIndex() > 0}
-        hasNext={getCurrentIndex() < items.length - 1}
+        relatedMedia={selectedMedia ? getRelatedMedia(selectedMedia) : []}
       />
 
       <MediaEditDialog
