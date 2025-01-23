@@ -1,14 +1,20 @@
+"use client";
+
 import { useEffect, useState } from "react";
-import { Loader2, Database, XCircle } from "lucide-react";
+import { Loader2, Database, XCircle, Bot } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
-import { Card } from "@/components/ui/card";
 import { useSupabaseClient } from "@supabase/auth-helpers-react";
 import { useSessionContext } from "@supabase/auth-helpers-react";
 import { AnimatedList } from "@/components/ui/animated-list";
-import { AuroraBackground } from "@/components/ui/aurora-background";
+import {
+  ExpandableChat,
+  ExpandableChatHeader,
+  ExpandableChatBody,
+  ExpandableChatFooter,
+} from "@/components/ui/expandable-chat";
 
-const DatabaseChat = () => {
+export function DatabaseExpandableChat() {
   const [iframeUrl, setIframeUrl] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -100,7 +106,7 @@ const DatabaseChat = () => {
   const renderContent = () => {
     if (isLoading) {
       return (
-        <div className="flex items-center justify-center min-h-screen">
+        <div className="flex items-center justify-center h-full">
           <Loader2 className="w-8 h-8 animate-spin" />
         </div>
       );
@@ -108,7 +114,7 @@ const DatabaseChat = () => {
 
     if (error) {
       return (
-        <div className="flex items-center justify-center min-h-screen">
+        <div className="flex items-center justify-center h-full">
           <AnimatedList>
             <Alert variant="destructive" className="backdrop-blur-lg bg-destructive/10 border-destructive/50">
               <XCircle className="h-4 w-4" />
@@ -120,32 +126,37 @@ const DatabaseChat = () => {
     }
 
     return (
-      <div className="min-h-screen py-8">
-        <div className="container mx-auto px-4">
-          <Card className="p-6 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-            <h1 className="text-2xl font-bold mb-4">Database Chat</h1>
-            {renderConnectionStatus()}
-            <div className="relative rounded-lg overflow-hidden bg-muted">
-              {connectionStatus === 'success' && iframeUrl && (
-                <iframe
-                  className="w-full border-0"
-                  style={{ height: "calc(100vh - 300px)", minHeight: "600px" }}
-                  src={iframeUrl}
-                  allow="clipboard-write"
-                />
-              )}
-            </div>
-          </Card>
-        </div>
-      </div>
+      <>
+        <ExpandableChatHeader className="flex-col text-center justify-center">
+          <h1 className="text-xl font-semibold">Database Chat ✨</h1>
+          <p className="text-sm text-muted-foreground">
+            Ask me anything about your data
+          </p>
+        </ExpandableChatHeader>
+
+        <ExpandableChatBody>
+          {renderConnectionStatus()}
+          <div className="relative rounded-lg overflow-hidden bg-muted h-full">
+            {connectionStatus === 'success' && iframeUrl && (
+              <iframe
+                className="w-full h-full border-0"
+                src={iframeUrl}
+                allow="clipboard-write"
+              />
+            )}
+          </div>
+        </ExpandableChatBody>
+      </>
     );
   };
 
   return (
-    <AuroraBackground showRadialGradient={false}>
+    <ExpandableChat
+      size="lg"
+      position="bottom-right"
+      icon={<Bot className="h-6 w-6" />}
+    >
       {renderContent()}
-    </AuroraBackground>
+    </ExpandableChat>
   );
-};
-
-export default DatabaseChat;
+} 
