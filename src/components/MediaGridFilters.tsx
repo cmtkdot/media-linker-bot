@@ -22,6 +22,8 @@ const MediaGridFilters = ({
   onTypeChange,
   selectedVendor,
   onVendorChange,
+  selectedSort,
+  onSortChange,
   channels,
   vendors,
 }: MediaSearchBarProps) => {
@@ -68,6 +70,25 @@ const MediaGridFilters = ({
                 {vendor}
               </SelectItem>
             ))}
+          </SelectContent>
+        </Select>
+        <Select value={selectedSort} onValueChange={onSortChange}>
+          <SelectTrigger className="w-[180px] h-9">
+            <SelectValue placeholder="Sort by" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="created_desc">Newest first</SelectItem>
+            <SelectItem value="created_asc">Oldest first</SelectItem>
+            <SelectItem value="purchase_desc">Purchase date (newest)</SelectItem>
+            <SelectItem value="purchase_asc">Purchase date (oldest)</SelectItem>
+            <SelectItem value="name_asc">Product name (A-Z)</SelectItem>
+            <SelectItem value="name_desc">Product name (Z-A)</SelectItem>
+            <SelectItem value="caption_asc">Caption (A-Z)</SelectItem>
+            <SelectItem value="caption_desc">Caption (Z-A)</SelectItem>
+            <SelectItem value="code_asc">Product code (A-Z)</SelectItem>
+            <SelectItem value="code_desc">Product code (Z-A)</SelectItem>
+            <SelectItem value="vendor_asc">Vendor (A-Z)</SelectItem>
+            <SelectItem value="vendor_desc">Vendor (Z-A)</SelectItem>
           </SelectContent>
         </Select>
       </div>

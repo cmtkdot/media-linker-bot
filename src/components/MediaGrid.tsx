@@ -37,6 +37,7 @@ const MediaGrid = () => {
   const [selectedChannel, setSelectedChannel] = useState("all");
   const [selectedType, setSelectedType] = useState("all");
   const [selectedVendor, setSelectedVendor] = useState("all");
+  const [selectedSort, setSelectedSort] = useState("created_desc");
 
   const { data: filterOptions } = useQuery({
     queryKey: ['filter-options'],
@@ -63,7 +64,7 @@ const MediaGrid = () => {
   });
 
   const { data: mediaItems, isLoading, error, refetch } = useQuery<MediaItem[]>({
-    queryKey: ['telegram-media', search, selectedChannel, selectedType, selectedVendor],
+    queryKey: ['telegram-media', search, selectedChannel, selectedType, selectedVendor, selectedSort],
     queryFn: async () => {
       let query = supabase
         .from('telegram_media')
@@ -83,6 +84,31 @@ const MediaGrid = () => {
 
       if (selectedVendor !== "all") {
         query = query.eq('vendor_uid', selectedVendor);
+      }
+
+      // Add sorting
+      const [sortField, sortDirection] = selectedSort.split('_');
+      switch (sortField) {
+        case 'created':
+          query = query.order('created_at', { ascending: sortDirection === 'asc' });
+          break;
+        case 'purchase':
+          query = query.order('purchase_date', { ascending: sortDirection === 'asc' });
+          break;
+        case 'name':
+          query = query.order('product_name', { ascending: sortDirection === 'asc' });
+          break;
+        case 'caption':
+          query = query.order('caption', { ascending: sortDirection === 'asc' });
+          break;
+        case 'code':
+          query = query.order('product_code', { ascending: sortDirection === 'asc' });
+          break;
+        case 'vendor':
+          query = query.order('vendor_uid', { ascending: sortDirection === 'asc' });
+          break;
+        default:
+          query = query.order('created_at', { ascending: false });
       }
 
       const { data: queryResult, error: queryError } = await query;
@@ -119,6 +145,8 @@ const MediaGrid = () => {
         onTypeChange={setSelectedType}
         selectedVendor={selectedVendor}
         onVendorChange={setSelectedVendor}
+        selectedSort={selectedSort}
+        onSortChange={setSelectedSort}
         channels={filterOptions?.channels || []}
         vendors={filterOptions?.vendors || []}
       />

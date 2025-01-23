@@ -29,14 +29,6 @@ export interface MediaItem {
   updated_at: string;
 }
 
-export interface SupabaseMediaItem extends Omit<MediaItem, 'file_type' | 'telegram_data' | 'glide_data' | 'media_metadata' | 'analyzed_content'> {
-  file_type: string;
-  telegram_data: any;
-  glide_data: any;
-  media_metadata: any;
-  analyzed_content?: any;
-}
-
 export interface MediaSearchBarProps {
   search: string;
   onSearchChange: (value: string) => void;
@@ -48,6 +40,8 @@ export interface MediaSearchBarProps {
   onTypeChange: (type: string) => void;
   selectedVendor: string;
   onVendorChange: (vendor: string) => void;
+  selectedSort: string;
+  onSortChange: (sort: string) => void;
   channels: string[];
   vendors: string[];
 }
