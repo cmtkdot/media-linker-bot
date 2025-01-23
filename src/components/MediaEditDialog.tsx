@@ -1,13 +1,12 @@
-import React, { useState } from "react";
+import React from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Trash, Check } from "lucide-react";
+import { Trash } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { MediaItem } from "@/types/media";
-import { Checkbox } from "@/components/ui/checkbox";
 
 interface MediaEditDialogProps {
   editItem: MediaItem | null;
@@ -19,59 +18,11 @@ interface MediaEditDialogProps {
 
 const MediaEditDialog = ({ editItem, onClose, onSave, onItemChange, formatDate }: MediaEditDialogProps) => {
   const { toast } = useToast();
-  const [deleteFromTelegram, setDeleteFromTelegram] = useState(false);
-
-  const deleteFromGlide = async (telegramMediaRowId: string) => {
-    try {
-      const { data, error } = await supabase.functions.invoke('delete-glide-record', {
-        body: { rowId: telegramMediaRowId }
-      });
-
-      if (error) throw error;
-      console.log('Successfully deleted from Glide:', data);
-      return true;
-    } catch (error) {
-      console.error('Error deleting from Glide:', error);
-      throw error;
-    }
-  };
-
-  const deleteFromTelegramChannel = async (messageId: number, chatId: number) => {
-    try {
-      const { data, error } = await supabase.functions.invoke('delete-telegram-message', {
-        body: {
-          messageId,
-          chatId
-        }
-      });
-
-      if (error) throw error;
-      console.log('Successfully deleted from Telegram:', data);
-      return true;
-    } catch (error) {
-      console.error('Error deleting from Telegram:', error);
-      throw error;
-    }
-  };
 
   const handleDelete = async () => {
     if (!editItem) return;
 
     try {
-      // Step 1: Delete from Glide if telegram_media_row_id exists
-      if (editItem.telegram_media_row_id) {
-        await deleteFromGlide(editItem.telegram_media_row_id);
-      }
-
-      // Step 2: Delete from Telegram if checkbox is checked
-      if (deleteFromTelegram && editItem.telegram_data?.message_id && editItem.telegram_data?.chat?.id) {
-        await deleteFromTelegramChannel(
-          editItem.telegram_data.message_id,
-          editItem.telegram_data.chat.id
-        );
-      }
-
-      // Step 3: Delete from Supabase
       const { error } = await supabase
         .from('telegram_media')
         .delete()
@@ -86,7 +37,7 @@ const MediaEditDialog = ({ editItem, onClose, onSave, onItemChange, formatDate }
 
       onClose();
     } catch (error) {
-      console.error('Error in delete flow:', error);
+      console.error('Error deleting media:', error);
       toast({
         title: "Error",
         description: "Failed to delete media item.",
@@ -243,16 +194,6 @@ const MediaEditDialog = ({ editItem, onClose, onSave, onItemChange, formatDate }
               className="col-span-3"
               onChange={(e) => onItemChange('notes', e.target.value)}
             />
-          </div>
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="deleteFromTelegram"
-              checked={deleteFromTelegram}
-              onCheckedChange={(checked) => setDeleteFromTelegram(checked as boolean)}
-            />
-            <Label htmlFor="deleteFromTelegram">
-              Also delete from Telegram channel
-            </Label>
           </div>
         </div>
         <div className="flex justify-between">

@@ -6,7 +6,6 @@ import { SyncErrorType } from '../_shared/sync-logger.ts';
 
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY = 1000; // 1 second
-const DB_TIMEOUT_ERROR = '57014'; // Postgres error code for statement timeout
 
 export class QueueProcessor {
   constructor(
@@ -50,23 +49,6 @@ export class QueueProcessor {
     }
   }
 
-  private async withDatabaseRetry<T>(
-    operation: () => Promise<T>,
-    retryCount = 0
-  ): Promise<T> {
-    try {
-      return await operation();
-    } catch (error) {
-      // Check if it's a database timeout error
-      if (error.code === DB_TIMEOUT_ERROR && retryCount < MAX_RETRIES) {
-        console.log(`Database timeout, retrying (${retryCount + 1}/${MAX_RETRIES})...`);
-        await this.wait(INITIAL_RETRY_DELAY * Math.pow(2, retryCount));
-        return this.withDatabaseRetry(operation, retryCount + 1);
-      }
-      throw error;
-    }
-  }
-
   private async updateQueueItemStatus(
     item: GlideSyncQueueItem,
     status: {
@@ -75,17 +57,15 @@ export class QueueProcessor {
       retry_count?: number;
     }
   ) {
-    return this.withDatabaseRetry(async () => {
-      const { error: updateError } = await this.supabase
-        .from('glide_sync_queue')
-        .update(status)
-        .eq('id', item.id);
+    const { error: updateError } = await this.supabase
+      .from('glide_sync_queue')
+      .update(status)
+      .eq('id', item.id);
 
-      if (updateError) {
-        console.error('Error updating queue item status:', updateError);
-        throw updateError;
-      }
-    });
+    if (updateError) {
+      console.error('Error updating queue item status:', updateError);
+      throw updateError;
+    }
   }
 
   async processQueueItem(item: GlideSyncQueueItem, result: { added: number; updated: number; deleted: number; errors: string[] }) {
@@ -101,49 +81,21 @@ export class QueueProcessor {
           // Map Supabase data to Glide format
           const glideData = mapSupabaseToGlide(item.new_data);
           
-          // Add row to Glide with retry logic and get the row ID
-          const glideResponse = await this.withRetry(
+          // Add row to Glide with retry logic
+          await this.withRetry(
             async () => {
-              return await this.glideApi.addRow(glideData, item.record_id);
+              await this.glideApi.addRow(glideData, item.record_id);
             },
             0,
             { operation: 'insert', itemId: item.id }
           );
-
-          // Update telegram_media with the Glide row ID
-          await this.withDatabaseRetry(async () => {
-            const { error: updateError } = await this.supabase
-              .from('telegram_media')
-              .update({ telegram_media_row_id: glideResponse.rowID })
-              .eq('id', item.record_id);
-
-            if (updateError) {
-              throw new Error(`Failed to update telegram_media_row_id: ${updateError.message}`);
-            }
-          });
-
           result.added++;
           break;
         }
 
         case 'UPDATE': {
-          // Get the current record from telegram_media to ensure we have the telegram_media_row_id
-          const { data: currentRecord, error: fetchError } = await this.supabase
-            .from('telegram_media')
-            .select('telegram_media_row_id')
-            .eq('id', item.record_id)
-            .single();
-
-          if (fetchError) {
-            throw new Error(`Failed to fetch current record: ${fetchError.message}`);
-          }
-
-          if (!currentRecord?.telegram_media_row_id) {
-            throw new Error(`Record ${item.record_id} does not have a Glide row ID`);
-          }
-
-          if (!item.new_data) {
-            throw new Error('New data is required for UPDATE operation');
+          if (!item.new_data || !item.old_data?.telegram_media_row_id) {
+            throw new Error('New data and Glide row ID are required for UPDATE operation');
           }
 
           // Map updated data to Glide format
@@ -152,7 +104,7 @@ export class QueueProcessor {
           // Update existing row in Glide with retry logic
           await this.withRetry(
             async () => {
-              await this.glideApi.updateRow(currentRecord.telegram_media_row_id!, glideData);
+              await this.glideApi.updateRow(item.old_data!.telegram_media_row_id!, glideData);
             },
             0,
             { operation: 'update', itemId: item.id }
@@ -189,55 +141,51 @@ export class QueueProcessor {
       });
 
       // Record performance metrics
-      await this.withDatabaseRetry(async () => {
-        await this.supabase
-          .from('sync_performance_metrics')
-          .insert({
-            operation_type: item.operation,
-            start_time: item.created_at!,
-            end_time: new Date().toISOString(),
-            records_processed: 1,
-            success_count: 1,
-            error_count: 0,
-            correlation_id: item.id,
-            metadata: {
-              table_name: item.table_name,
-              record_id: item.record_id,
-              batch_id: item.batch_id
-            }
-          });
-      });
+      await this.supabase
+        .from('sync_performance_metrics')
+        .insert({
+          operation_type: item.operation,
+          start_time: item.created_at!,
+          end_time: new Date().toISOString(),
+          records_processed: 1,
+          success_count: 1,
+          error_count: 0,
+          correlation_id: item.id,
+          metadata: {
+            table_name: item.table_name,
+            record_id: item.record_id,
+            batch_id: item.batch_id
+          }
+        });
 
     } catch (error) {
       console.error('Error processing queue item:', error);
       result.errors.push(`Error processing item ${item.id}: ${error.message}`);
 
-      // Update error information with retry for database timeouts
+      // Update error information
       await this.updateQueueItemStatus(item, {
         error: error.message,
         retry_count: (item.retry_count || 0) + 1
       });
 
       // Record performance metrics for failed operation
-      await this.withDatabaseRetry(async () => {
-        await this.supabase
-          .from('sync_performance_metrics')
-          .insert({
-            operation_type: item.operation,
-            start_time: item.created_at!,
-            end_time: new Date().toISOString(),
-            records_processed: 1,
-            success_count: 0,
-            error_count: 1,
-            correlation_id: item.id,
-            metadata: {
-              table_name: item.table_name,
-              record_id: item.record_id,
-              batch_id: item.batch_id,
-              error: error.message
-            }
-          });
-      });
+      await this.supabase
+        .from('sync_performance_metrics')
+        .insert({
+          operation_type: item.operation,
+          start_time: item.created_at!,
+          end_time: new Date().toISOString(),
+          records_processed: 1,
+          success_count: 0,
+          error_count: 1,
+          correlation_id: item.id,
+          metadata: {
+            table_name: item.table_name,
+            record_id: item.record_id,
+            batch_id: item.batch_id,
+            error: error.message
+          }
+        });
 
       // If max retries reached, mark as processed to prevent further attempts
       if ((item.retry_count || 0) >= MAX_RETRIES) {
