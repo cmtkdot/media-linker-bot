@@ -1,9 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders } from "../_shared/cors.ts";
-import { processMediaFiles } from "../_shared/media-processor.ts";
-import { delay } from "../_shared/retry-utils.ts";
-import { analyzeCaptionWithAI } from "../_shared/caption-analyzer.ts";
+import { corsHeaders } from "./cors.ts";
+import { processMediaFiles } from "./media-processor.ts";
+import { delay } from "./retry-utils.ts";
+import { analyzeCaptionWithAI } from "./caption-analyzer.ts";
 
 export async function handleWebhookUpdate(update: any, supabase: any, botToken: string) {
   const message = update.message || update.channel_post;
@@ -20,48 +20,6 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
       media_group_id: message.media_group_id,
       has_caption: !!message.caption
     });
-
-    // Handle video thumbnail if present
-    let thumbnailUrl = null;
-    if (message.video?.thumb) {
-      console.log('Video thumbnail found:', message.video.thumb);
-      const { data: storageData } = await supabase.storage
-        .from('media')
-        .list('', {
-          search: message.video.thumb.file_unique_id
-        });
-
-      if (!storageData || storageData.length === 0) {
-        const response = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${message.video.thumb.file_id}`);
-        const fileData = await response.json();
-        
-        if (fileData.ok) {
-          const fileUrl = `https://api.telegram.org/file/bot${botToken}/${fileData.result.file_path}`;
-          const thumbResponse = await fetch(fileUrl);
-          const thumbBuffer = await thumbResponse.arrayBuffer();
-          
-          const fileName = `${message.video.thumb.file_unique_id}.jpg`;
-          const { error: uploadError } = await supabase.storage
-            .from('media')
-            .upload(fileName, thumbBuffer, {
-              contentType: 'image/jpeg',
-              upsert: true
-            });
-
-          if (!uploadError) {
-            const { data: { publicUrl } } = await supabase.storage
-              .from('media')
-              .getPublicUrl(fileName);
-            thumbnailUrl = publicUrl;
-          }
-        }
-      } else {
-        const { data: { publicUrl } } = await supabase.storage
-          .from('media')
-          .getPublicUrl(storageData[0].name);
-        thumbnailUrl = publicUrl;
-      }
-    }
 
     // Generate message URL
     const chatId = message.chat.id.toString();
@@ -99,7 +57,7 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
       vendor_uid: analyzedContent?.vendor_uid || null,
       purchase_date: analyzedContent?.purchase_date || null,
       notes: analyzedContent?.notes || null,
-      thumbnail_url: thumbnailUrl,
+      thumbnail_url: null,
       message_url: messageUrl,
       status: 'pending',
       retry_count: 0
