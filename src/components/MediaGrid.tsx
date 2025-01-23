@@ -87,18 +87,54 @@ const MediaGrid = () => {
       
       if (queryError) throw queryError;
 
-      return (queryResult as QueryResult[]).map((item): MediaItem => ({
-        ...item,
-        file_type: item.file_type as MediaItem['file_type'],
-        telegram_data: item.telegram_data || {},
-        glide_data: item.glide_data || {},
-        media_metadata: item.media_metadata || {},
-        analyzed_content: item.analyzed_content ? {
-          text: item.analyzed_content.text || '',
-          labels: item.analyzed_content.labels || [],
-          objects: item.analyzed_content.objects || []
-        } : undefined
-      }));
+      // Group media items by media_group_id
+      const groupedItems = (queryResult as QueryResult[]).reduce((acc, item) => {
+        const mediaGroupId = item.telegram_data?.media_group_id;
+        if (!mediaGroupId) {
+          acc.set(item.id, [item]);
+          return acc;
+        }
+
+        const existingGroup = Array.from(acc.values()).find(group => 
+          group[0].telegram_data?.media_group_id === mediaGroupId
+        );
+
+        if (existingGroup) {
+          existingGroup.push(item);
+        } else {
+          acc.set(mediaGroupId, [item]);
+        }
+        return acc;
+      }, new Map<string, QueryResult[]>());
+
+      // Convert grouped items to MediaItem[] with related media
+      return Array.from(groupedItems.values()).map(group => {
+        const mainItem = group[0];
+        return {
+          ...mainItem,
+          file_type: mainItem.file_type as MediaItem['file_type'],
+          telegram_data: mainItem.telegram_data || {},
+          glide_data: mainItem.glide_data || {},
+          media_metadata: mainItem.media_metadata || {},
+          analyzed_content: mainItem.analyzed_content ? {
+            text: mainItem.analyzed_content.text || '',
+            labels: mainItem.analyzed_content.labels || [],
+            objects: mainItem.analyzed_content.objects || []
+          } : undefined,
+          related_media: group.slice(1).map(relatedItem => ({
+            ...relatedItem,
+            file_type: relatedItem.file_type as MediaItem['file_type'],
+            telegram_data: relatedItem.telegram_data || {},
+            glide_data: relatedItem.glide_data || {},
+            media_metadata: relatedItem.media_metadata || {},
+            analyzed_content: relatedItem.analyzed_content ? {
+              text: relatedItem.analyzed_content.text || '',
+              labels: relatedItem.analyzed_content.labels || [],
+              objects: relatedItem.analyzed_content.objects || []
+            } : undefined
+          }))
+        } as MediaItem;
+      });
     }
   });
 
