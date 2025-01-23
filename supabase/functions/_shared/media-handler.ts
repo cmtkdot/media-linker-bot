@@ -1,6 +1,7 @@
 import { processMediaFile } from './database-service.ts';
 import { handleProcessingError } from './error-handler.ts';
 import { MAX_RETRY_ATTEMPTS } from './constants.ts';
+import { downloadAndStoreThumbnail } from './thumbnail-handler.ts';
 
 export async function processMedia(
   supabase: any,
@@ -85,6 +86,28 @@ export async function processMedia(
         return existingMediaRecord;
       }
 
+      // Handle video thumbnail if available
+      let thumbnailUrl = null;
+      if (mediaType === 'video' && mediaFile.thumb) {
+        console.log('Processing video thumbnail:', {
+          file_id: mediaFile.thumb.file_id,
+          file_unique_id: mediaFile.thumb.file_unique_id
+        });
+        
+        thumbnailUrl = await downloadAndStoreThumbnail(
+          {
+            file_id: mediaFile.thumb.file_id,
+            file_unique_id: mediaFile.thumb.file_unique_id
+          },
+          botToken,
+          supabase
+        );
+
+        if (thumbnailUrl) {
+          console.log('Successfully processed thumbnail:', thumbnailUrl);
+        }
+      }
+
       // Process the media file even without message_id
       const result = await processMediaFile(
         supabase,
@@ -93,14 +116,18 @@ export async function processMedia(
         message,
         messageRecord || null,
         botToken,
-        productInfo
+        {
+          ...productInfo,
+          thumbnail_url: thumbnailUrl
+        }
       );
 
       console.log('Media processing completed successfully:', {
         file_id: mediaFile.file_id,
         media_type: mediaType,
         result_id: result?.id,
-        has_message_id: !!messageRecord
+        has_message_id: !!messageRecord,
+        thumbnail_url: thumbnailUrl
       });
 
       return result;
