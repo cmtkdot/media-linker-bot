@@ -63,21 +63,6 @@ class DatabaseService {
     });
   }
 
-  async batchUpdateMedia(updates: Array<{ id: string; data: Partial<MediaItem> }>): Promise<void> {
-    return withDatabaseRetry(async () => {
-      for (const batch of this.chunkArray(updates, 10)) {
-        await Promise.all(
-          batch.map(({ id, data }) =>
-            supabase
-              .from('telegram_media')
-              .update(data)
-              .eq('id', id)
-          )
-        );
-      }
-    });
-  }
-
   private chunkArray<T>(array: T[], size: number): T[][] {
     return Array.from({ length: Math.ceil(array.length / size) }, (_, i) =>
       array.slice(i * size, i * size + size)

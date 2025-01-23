@@ -413,72 +413,6 @@ export type Database = {
         }
         Relationships: []
       }
-      sync_health_checks: {
-        Row: {
-          check_type: string
-          created_at: string | null
-          details: Json | null
-          id: string
-          last_check_time: string | null
-          status: string
-        }
-        Insert: {
-          check_type: string
-          created_at?: string | null
-          details?: Json | null
-          id?: string
-          last_check_time?: string | null
-          status: string
-        }
-        Update: {
-          check_type?: string
-          created_at?: string | null
-          details?: Json | null
-          id?: string
-          last_check_time?: string | null
-          status?: string
-        }
-        Relationships: []
-      }
-      sync_performance_metrics: {
-        Row: {
-          correlation_id: string | null
-          created_at: string | null
-          end_time: string | null
-          error_count: number | null
-          id: string
-          metadata: Json | null
-          operation_type: string
-          records_processed: number | null
-          start_time: string
-          success_count: number | null
-        }
-        Insert: {
-          correlation_id?: string | null
-          created_at?: string | null
-          end_time?: string | null
-          error_count?: number | null
-          id?: string
-          metadata?: Json | null
-          operation_type: string
-          records_processed?: number | null
-          start_time: string
-          success_count?: number | null
-        }
-        Update: {
-          correlation_id?: string | null
-          created_at?: string | null
-          end_time?: string | null
-          error_count?: number | null
-          id?: string
-          metadata?: Json | null
-          operation_type?: string
-          records_processed?: number | null
-          start_time?: string
-          success_count?: number | null
-        }
-        Relationships: []
-      }
       telegram_media: {
         Row: {
           analyzed_content: Json | null
@@ -675,16 +609,6 @@ export type Database = {
           synced_messages: number
           unsynced_messages: number
           duplicate_file_ids: number
-        }[]
-      }
-      check_queue_health: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          queue_name: string
-          pending_count: number
-          error_count: number
-          avg_processing_time: unknown
-          oldest_pending_item: string
         }[]
       }
       check_telegram_media_differences: {
