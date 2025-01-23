@@ -1,18 +1,16 @@
 import * as React from "react"
-
-import type {
-  ToastActionElement,
-  ToastProps,
-} from "@/components/ui/toast"
+import type { ToastActionElement, ToastProps } from "@/components/ui/toast"
 
 const TOAST_LIMIT = 1
-const TOAST_REMOVE_DELAY = 1000000
+const TOAST_REMOVE_DELAY = 5000
+const IGNORE_DURATION = 600000 // 10 minutes in milliseconds
 
 type ToasterToast = ToastProps & {
   id: string
   title?: React.ReactNode
   description?: React.ReactNode
   action?: ToastActionElement
+  count?: number
 }
 
 const actionTypes = {
@@ -23,6 +21,7 @@ const actionTypes = {
 } as const
 
 let count = 0
+let ignoreUntil = 0
 
 function genId() {
   count = (count + 1) % Number.MAX_SAFE_INTEGER
@@ -74,9 +73,26 @@ const addToRemoveQueue = (toastId: string) => {
 export const reducer = (state: State, action: Action): State => {
   switch (action.type) {
     case "ADD_TOAST":
+      if (Date.now() < ignoreUntil) {
+        return state
+      }
+
+      // Check if there's an existing toast with the same title
+      const existingToast = state.toasts.find(t => t.title === action.toast.title)
+      if (existingToast) {
+        return {
+          ...state,
+          toasts: state.toasts.map(t =>
+            t.id === existingToast.id
+              ? { ...t, count: (t.count || 1) + 1 }
+              : t
+          ),
+        }
+      }
+
       return {
         ...state,
-        toasts: [action.toast, ...state.toasts].slice(0, TOAST_LIMIT),
+        toasts: [{ ...action.toast, count: 1 }, ...state.toasts].slice(0, TOAST_LIMIT),
       }
 
     case "UPDATE_TOAST":
@@ -147,7 +163,13 @@ function toast({ ...props }: Toast) {
       type: "UPDATE_TOAST",
       toast: { ...props, id },
     })
+  
   const dismiss = () => dispatch({ type: "DISMISS_TOAST", toastId: id })
+
+  const ignore = () => {
+    ignoreUntil = Date.now() + IGNORE_DURATION
+    dismiss()
+  }
 
   dispatch({
     type: "ADD_TOAST",
@@ -162,8 +184,9 @@ function toast({ ...props }: Toast) {
   })
 
   return {
-    id: id,
+    id,
     dismiss,
+    ignore,
     update,
   }
 }

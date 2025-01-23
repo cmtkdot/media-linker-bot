@@ -86,20 +86,35 @@ export class GlideAPI {
     return data;
   }
 
-  private extractRowId(response: GlideApiResponse): string {
-    // Check both possible response formats
-    const rowId = response.rowID || response.Row_ID || response.Row_Id || response.row_id;
-    if (!rowId) {
-      throw new GlideApiError(
-        'Glide API did not return a rowID',
-        undefined,
-        JSON.stringify(response)
-      );
+  private extractRowId(response: any): string {
+    console.log('Extracting rowID from response:', response);
+    
+    // Handle array response
+    if (Array.isArray(response)) {
+      if (response.length === 0) {
+        throw new GlideApiError('Empty response array from Glide API');
+      }
+      const firstItem = response[0];
+      if (typeof firstItem === 'object' && firstItem !== null) {
+        const rowId = firstItem.rowID || firstItem.Row_ID || firstItem.Row_Id || firstItem.row_id;
+        if (rowId) return rowId;
+      }
     }
-    return rowId;
+    
+    // Handle single object response
+    if (typeof response === 'object' && response !== null) {
+      const rowId = response.rowID || response.Row_ID || response.Row_Id || response.row_id;
+      if (rowId) return rowId;
+    }
+
+    throw new GlideApiError(
+      'Could not find rowID in response',
+      undefined,
+      JSON.stringify(response)
+    );
   }
 
-  async addRow(data: GlideMutation['columnValues'], recordId: string) {
+  async addRow(data: GlideMutation['columnValues'], recordId: string): Promise<GlideApiResponse> {
     const response = await this.makeRequest('POST', {
       kind: 'add-row-to-table',
       tableName: this.tableId,
@@ -107,24 +122,7 @@ export class GlideAPI {
     });
 
     const rowId = this.extractRowId(response);
-
-    // Update telegram_media_row_id in Supabase
-    try {
-      const { error } = await this.supabase
-        .from('telegram_media')
-        .update({ telegram_media_row_id: rowId })
-        .eq('id', recordId);
-
-      if (error) {
-        throw error;
-      }
-    } catch (error) {
-      throw new GlideApiError(
-        `Error updating telegram_media_row_id: ${error.message}`
-      );
-    }
-
-    return response;
+    return { rowID: rowId };
   }
 
   async updateRow(rowId: string, data: GlideMutation['columnValues']) {

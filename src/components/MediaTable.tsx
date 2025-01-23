@@ -9,20 +9,21 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Pencil, Trash2 } from "lucide-react";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import MediaViewer from "./MediaViewer";
+import { MediaItem } from "@/types/media";
 
 interface MediaTableProps {
-  data: any[];
-  onEdit: (item: any) => void;
+  data: MediaItem[];
+  onEdit: (item: MediaItem) => void;
 }
 
 const MediaTable = ({ data, onEdit }: MediaTableProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [selectedMedia, setSelectedMedia] = useState<any>(null);
+  const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
   const [viewerOpen, setViewerOpen] = useState(false);
 
   const handleDelete = async (id: string) => {
@@ -55,21 +56,50 @@ const MediaTable = ({ data, onEdit }: MediaTableProps) => {
     return new Date(dateString).toLocaleDateString();
   };
 
-  const handleRowClick = (item: any) => {
+  const handleRowClick = (item: MediaItem) => {
     setSelectedMedia(item);
     setViewerOpen(true);
   };
 
-  const handleVideoError = (video: HTMLVideoElement, defaultUrl: string) => {
-    if (video.src !== defaultUrl) {
-      video.src = defaultUrl;
-    }
-  };
+  const getMediaPreview = (item: MediaItem) => {
+    const previewUrl = item.thumbnail_url || item.public_url || item.default_public_url;
 
-  const handleImageError = (img: HTMLImageElement, defaultUrl: string) => {
-    if (img.src !== defaultUrl) {
-      img.src = defaultUrl;
+    if (item.file_type === 'video') {
+      return (
+        <div className="relative w-16 h-16">
+          <img
+            src={previewUrl}
+            alt={item.caption || "Video thumbnail"}
+            className="w-full h-full object-cover rounded"
+            onError={(e) => {
+              const img = e.target as HTMLImageElement;
+              if (img.src !== item.default_public_url) {
+                img.src = item.default_public_url;
+              }
+            }}
+          />
+          <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+            <div className="w-6 h-6 rounded-full bg-white/90 flex items-center justify-center">
+              <div className="w-0 h-0 border-l-[6px] border-l-black border-y-[4px] border-y-transparent ml-0.5" />
+            </div>
+          </div>
+        </div>
+      );
     }
+
+    return (
+      <img
+        src={previewUrl}
+        alt={item.caption || "Media"}
+        className="w-16 h-16 object-cover rounded"
+        onError={(e) => {
+          const img = e.target as HTMLImageElement;
+          if (img.src !== item.default_public_url) {
+            img.src = item.default_public_url;
+          }
+        }}
+      />
+    );
   };
 
   return (
@@ -98,20 +128,7 @@ const MediaTable = ({ data, onEdit }: MediaTableProps) => {
                 onClick={() => handleRowClick(item)}
               >
                 <TableCell onClick={(e) => e.stopPropagation()}>
-                  {item.file_type === 'video' ? (
-                    <video 
-                      src={item.public_url || item.default_public_url}
-                      className="w-16 h-16 object-cover rounded"
-                      onError={(e) => handleVideoError(e.target as HTMLVideoElement, item.default_public_url)}
-                    />
-                  ) : (
-                    <img
-                      src={item.public_url || item.default_public_url}
-                      alt={item.caption || "Media"}
-                      className="w-16 h-16 object-cover rounded"
-                      onError={(e) => handleImageError(e.target as HTMLImageElement, item.default_public_url)}
-                    />
-                  )}
+                  {getMediaPreview(item)}
                 </TableCell>
                 <TableCell>{item.caption || '-'}</TableCell>
                 <TableCell>{item.product_name || '-'}</TableCell>
