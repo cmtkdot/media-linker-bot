@@ -258,6 +258,57 @@ export type Database = {
         }
         Relationships: []
       }
+      media_sync_queue: {
+        Row: {
+          created_at: string | null
+          error_message: string | null
+          file_unique_id: string
+          id: string
+          last_retry_at: string | null
+          max_retries: number | null
+          next_retry_at: string | null
+          operation_data: Json
+          operation_type: string
+          priority: number | null
+          processed_at: string | null
+          retry_count: number | null
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          error_message?: string | null
+          file_unique_id: string
+          id?: string
+          last_retry_at?: string | null
+          max_retries?: number | null
+          next_retry_at?: string | null
+          operation_data?: Json
+          operation_type: string
+          priority?: number | null
+          processed_at?: string | null
+          retry_count?: number | null
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          error_message?: string | null
+          file_unique_id?: string
+          id?: string
+          last_retry_at?: string | null
+          max_retries?: number | null
+          next_retry_at?: string | null
+          operation_data?: Json
+          operation_type?: string
+          priority?: number | null
+          processed_at?: string | null
+          retry_count?: number | null
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           analyzed_content: Json | null
@@ -581,6 +632,12 @@ export type Database = {
           glide_data: Json
         }[]
       }
+      cleanup_media_sync_queue: {
+        Args: {
+          max_age_hours?: number
+        }
+        Returns: number
+      }
       count_missing_thumbnails: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -651,6 +708,16 @@ export type Database = {
           updated_at: string
           vendor_uid: string | null
         }
+      }
+      process_media_sync_queue: {
+        Args: {
+          batch_size?: number
+        }
+        Returns: {
+          processed_count: number
+          success_count: number
+          error_count: number
+        }[]
       }
       regenerate_all_video_thumbnails: {
         Args: Record<PropertyKey, never>

@@ -104,20 +104,63 @@ serve(async (req) => {
         result = { product_name: productName, ...result };
       }
 
-      console.log('Parsed result:', result);
+      // Normalize and validate the result
+      const normalizedResult = {
+        product_name: result.product_name || null,
+        product_code: result.product_code || null,
+        quantity: result.quantity ? Number(result.quantity) : null,
+        vendor_uid: result.vendor_uid || null,
+        purchase_date: result.purchase_date || null,
+        notes: result.notes || null,
+        analyzed_content: {
+          raw_text: caption,
+          extracted_data: result,
+          confidence: 1.0,
+          timestamp: new Date().toISOString(),
+          model_version: 'gpt-4o-mini'
+        }
+      };
 
-      // Update the telegram_media table with the analyzed content
+      console.log('Normalized result:', normalizedResult);
+
+      // First, update the media_groups table if this is part of a group
+      if (mediaGroupId) {
+        console.log('Updating media group:', mediaGroupId);
+        const { error: mediaGroupError } = await supabase
+          .from('media_groups')
+          .upsert({
+            media_group_id: mediaGroupId,
+            caption: caption,
+            analyzed_content: normalizedResult.analyzed_content,
+            product_name: normalizedResult.product_name,
+            product_code: normalizedResult.product_code,
+            quantity: normalizedResult.quantity,
+            vendor_uid: normalizedResult.vendor_uid,
+            purchase_date: normalizedResult.purchase_date,
+            notes: normalizedResult.notes,
+            sync_status: 'completed'
+          });
+
+        if (mediaGroupError) {
+          console.error('Error updating media_groups:', mediaGroupError);
+          throw mediaGroupError;
+        }
+      }
+
+      // Update individual telegram_media record if messageId is provided
       if (messageId) {
+        console.log('Updating telegram_media for message:', messageId);
         const { error: updateError } = await supabase
           .from('telegram_media')
           .update({
-            analyzed_content: result,
-            product_name: result.product_name,
-            product_code: result.product_code,
-            quantity: result.quantity,
-            vendor_uid: result.vendor_uid,
-            purchase_date: result.purchase_date,
-            notes: result.notes
+            caption: caption,
+            analyzed_content: normalizedResult.analyzed_content,
+            product_name: normalizedResult.product_name,
+            product_code: normalizedResult.product_code,
+            quantity: normalizedResult.quantity,
+            vendor_uid: normalizedResult.vendor_uid,
+            purchase_date: normalizedResult.purchase_date,
+            notes: normalizedResult.notes
           })
           .eq('id', messageId);
 
@@ -127,18 +170,20 @@ serve(async (req) => {
         }
       }
 
-      // If this is part of a media group, update all related media
+      // Update all related media in the group
       if (mediaGroupId) {
+        console.log('Updating all media in group:', mediaGroupId);
         const { error: groupUpdateError } = await supabase
           .from('telegram_media')
           .update({
-            analyzed_content: result,
-            product_name: result.product_name,
-            product_code: result.product_code,
-            quantity: result.quantity,
-            vendor_uid: result.vendor_uid,
-            purchase_date: result.purchase_date,
-            notes: result.notes
+            caption: caption,
+            analyzed_content: normalizedResult.analyzed_content,
+            product_name: normalizedResult.product_name,
+            product_code: normalizedResult.product_code,
+            quantity: normalizedResult.quantity,
+            vendor_uid: normalizedResult.vendor_uid,
+            purchase_date: normalizedResult.purchase_date,
+            notes: normalizedResult.notes
           })
           .eq('telegram_data->>media_group_id', mediaGroupId);
 
@@ -149,7 +194,7 @@ serve(async (req) => {
       }
 
       return new Response(
-        JSON.stringify(result),
+        JSON.stringify(normalizedResult),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     } catch (parseError) {
@@ -158,7 +203,17 @@ serve(async (req) => {
       
       // Fallback: Extract at least the product name
       const productName = caption.split('#')[0].trim() || caption.split('\n')[0].trim() || caption.trim();
-      const fallbackResult = { product_name: productName };
+      const fallbackResult = {
+        product_name: productName,
+        analyzed_content: {
+          raw_text: caption,
+          extracted_data: { product_name: productName },
+          confidence: 0.5,
+          timestamp: new Date().toISOString(),
+          model_version: 'gpt-4o-mini',
+          fallback: true
+        }
+      };
       
       console.log('Using fallback result:', fallbackResult);
       return new Response(
@@ -173,8 +228,20 @@ serve(async (req) => {
       const { caption } = await req.json();
       if (caption) {
         const productName = caption.split('#')[0].trim() || caption.split('\n')[0].trim() || caption.trim();
+        const errorFallbackResult = {
+          product_name: productName,
+          analyzed_content: {
+            raw_text: caption,
+            extracted_data: { product_name: productName },
+            confidence: 0.3,
+            timestamp: new Date().toISOString(),
+            model_version: 'gpt-4o-mini',
+            error: true,
+            fallback: true
+          }
+        };
         return new Response(
-          JSON.stringify({ product_name: productName }),
+          JSON.stringify(errorFallbackResult),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
