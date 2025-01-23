@@ -66,7 +66,6 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
     // Generate message URL
     const chatId = message.chat.id.toString();
     const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
-    const chatUrl = `https://t.me/c/${chatId.substring(4)}`;
 
     // Analyze caption if present
     let analyzedContent = null;
@@ -102,7 +101,6 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
       notes: analyzedContent?.notes || null,
       thumbnail_url: thumbnailUrl,
       message_url: messageUrl,
-      chat_url: chatUrl,
       status: 'pending',
       retry_count: 0
     };
