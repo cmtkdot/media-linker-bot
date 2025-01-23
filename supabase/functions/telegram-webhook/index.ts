@@ -5,10 +5,10 @@ import { handleWebhookUpdate } from "../_shared/webhook-handler.ts";
 import { withDatabaseRetry } from "../_shared/database-retry.ts";
 import { analyzeCaptionWithAI } from "../_shared/caption-analyzer.ts";
 import { processMediaFiles } from "../_shared/media-processor.ts";
-import { extractVideoMetadata, buildMediaMetadata } from "../_shared/metadata-extractor.ts";
+import { extractVideoMetadata } from "../_shared/metadata-extractor.ts";
 import { handleProcessingError } from "../_shared/error-handler.ts";
-import { MAX_RETRY_ATTEMPTS, INITIAL_RETRY_DELAY } from "../_shared/constants.ts";
 import { downloadAndStoreThumbnail } from "../_shared/thumbnail-handler.ts";
+import { handleMessageProcessing } from "../_shared/message-manager.ts";
 
 serve(async (req) => {
   console.log('Received webhook request:', req.method);
@@ -59,26 +59,23 @@ serve(async (req) => {
     const chatId = message.chat.id.toString();
     const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
 
-    // Analyze caption if present - moved earlier in the flow
+    // Early caption analysis and metadata extraction
     let analyzedContent = null;
+    let thumbnailUrl = null;
+    let mediaMetadata = null;
+
+    // Handle caption analysis
     if (message.caption) {
       try {
-        console.log('Analyzing caption:', message.caption);
         analyzedContent = await analyzeCaptionWithAI(message.caption, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-        console.log('Caption analysis result:', analyzedContent);
       } catch (error) {
         console.error('Error analyzing caption:', error);
       }
     }
 
-    // Extract metadata and handle thumbnails early
-    let mediaMetadata = null;
-    let thumbnailUrl = null;
+    // Handle video metadata and thumbnail
     if (message.video) {
       mediaMetadata = extractVideoMetadata(message);
-      console.log('Extracted video metadata:', mediaMetadata);
-      
-      // Handle video thumbnail early
       if (message.video.thumb) {
         try {
           thumbnailUrl = await downloadAndStoreThumbnail(
@@ -86,67 +83,30 @@ serve(async (req) => {
             TELEGRAM_BOT_TOKEN,
             supabase
           );
-          console.log('Generated thumbnail URL:', thumbnailUrl);
         } catch (error) {
           console.error('Error processing thumbnail:', error);
         }
       }
     }
 
-    // Create or update message record with retry
-    const messageRecord = await withDatabaseRetry(async () => {
-      const messageData = {
-        message_id: message.message_id,
-        chat_id: message.chat.id,
-        sender_info: message.from || message.sender_chat || {},
-        message_type: determineMessageType(message),
-        message_data: message,
-        caption: message.caption,
-        media_group_id: message.media_group_id,
-        message_url: messageUrl,
-        analyzed_content: analyzedContent,
-        product_name: analyzedContent?.product_name || null,
-        product_code: analyzedContent?.product_code || null,
-        quantity: analyzedContent?.quantity || null,
-        vendor_uid: analyzedContent?.vendor_uid || null,
-        purchase_date: analyzedContent?.purchase_date || null,
-        notes: analyzedContent?.notes || null,
+    // Process message using shared handler
+    const { messageRecord, success, error } = await handleMessageProcessing(
+      supabase,
+      message,
+      null,
+      {
+        ...analyzedContent,
         thumbnail_url: thumbnailUrl,
-        status: 'pending',
-        retry_count: 0
-      };
-
-      const { data: existingMessage } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('message_id', message.message_id)
-        .eq('chat_id', message.chat.id)
-        .maybeSingle();
-
-      if (existingMessage) {
-        const { data, error } = await supabase
-          .from('messages')
-          .update(messageData)
-          .eq('id', existingMessage.id)
-          .select()
-          .single();
-
-        if (error) throw error;
-        return data;
-      } else {
-        const { data, error } = await supabase
-          .from('messages')
-          .insert([messageData])
-          .select()
-          .single();
-
-        if (error) throw error;
-        return data;
+        message_url: messageUrl
       }
-    }, 0, 'create_message');
+    );
 
-    // Process media files if present
-    if (hasMedia(message) && messageRecord) {
+    if (!success) {
+      throw new Error(error || 'Failed to process message');
+    }
+
+    // Process media if present
+    if (message.photo || message.video || message.document || message.animation) {
       try {
         await processMediaFiles(
           message,
@@ -159,7 +119,6 @@ serve(async (req) => {
             message_url: messageUrl
           }
         );
-        console.log('Successfully processed media files');
       } catch (error) {
         await handleProcessingError(
           supabase,
@@ -170,13 +129,6 @@ serve(async (req) => {
         );
       }
     }
-
-    console.log('Successfully processed update:', {
-      update_id: update.update_id,
-      message_id: message.message_id,
-      chat_id: message.chat.id,
-      record_id: messageRecord?.id
-    });
 
     return new Response(
       JSON.stringify({ 
@@ -206,15 +158,3 @@ serve(async (req) => {
     );
   }
 });
-
-function determineMessageType(message: any): string {
-  if (message.photo && message.photo.length > 0) return 'photo';
-  if (message.video) return 'video';
-  if (message.document) return 'document';
-  if (message.animation) return 'animation';
-  return 'unknown';
-}
-
-function hasMedia(message: any): boolean {
-  return !!(message.photo || message.video || message.document || message.animation);
-}
