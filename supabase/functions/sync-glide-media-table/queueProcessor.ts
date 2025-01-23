@@ -81,14 +81,25 @@ export class QueueProcessor {
           // Map Supabase data to Glide format
           const glideData = mapSupabaseToGlide(item.new_data);
           
-          // Add row to Glide with retry logic
-          await this.withRetry(
+          // Add row to Glide with retry logic and get the row ID
+          const glideResponse = await this.withRetry(
             async () => {
-              await this.glideApi.addRow(glideData, item.record_id);
+              return await this.glideApi.addRow(glideData, item.record_id);
             },
             0,
             { operation: 'insert', itemId: item.id }
           );
+
+          // Update telegram_media with the Glide row ID
+          const { error: updateError } = await this.supabase
+            .from('telegram_media')
+            .update({ telegram_media_row_id: glideResponse.rowID })
+            .eq('id', item.record_id);
+
+          if (updateError) {
+            throw new Error(`Failed to update telegram_media_row_id: ${updateError.message}`);
+          }
+
           result.added++;
           break;
         }
