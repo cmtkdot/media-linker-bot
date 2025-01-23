@@ -10,7 +10,7 @@ interface MediaCardProps {
   hasMultipleMedia?: boolean;
 }
 
-const MediaCard = ({ item, onPreview, onEdit, hasMultipleMedia }: MediaCardProps) => {
+const MediaCard = ({ item, onPreview, onEdit }: MediaCardProps) => {
   return (
     <Card className="group relative overflow-hidden">
       <CardContent className="p-0">
@@ -36,13 +36,6 @@ const MediaCard = ({ item, onPreview, onEdit, hasMultipleMedia }: MediaCardProps
               />
             )}
           </div>
-
-          {/* Multiple media indicator */}
-          {hasMultipleMedia && (
-            <div className="absolute top-2 right-2 bg-black/50 text-white px-2 py-1 rounded-md text-xs">
-              Multiple
-            </div>
-          )}
 
           {/* Hover overlay */}
           <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity">

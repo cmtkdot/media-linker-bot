@@ -20,15 +20,8 @@ const MediaViewer = ({
   relatedMedia = []
 }: MediaViewerProps) => {
   if (!media) return null;
-
-  const allMedia = relatedMedia.length > 0 ? relatedMedia : [media];
   
-  // Sort media items to show photos first
-  const sortedMedia = [...allMedia].sort((a, b) => {
-    if (a.file_type === 'photo' && b.file_type !== 'photo') return -1;
-    if (a.file_type !== 'photo' && b.file_type === 'photo') return 1;
-    return 0;
-  });
+  const mediaItems = [media];
 
   return (
     <GalleryModal
@@ -40,7 +33,7 @@ const MediaViewer = ({
           onOpenChange(false);
         }
       }}
-      mediaItems={sortedMedia}
+      mediaItems={mediaItems}
     />
   );
 };
