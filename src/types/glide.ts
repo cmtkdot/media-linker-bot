@@ -26,10 +26,6 @@ export interface GlideTableSchema {
   purchase_order_uid: { type: "string"; name: "3y8Wt" };
   default_public_url: { type: "uri"; name: "rCJK2" };
   media_json: { type: "string"; name: "NL5gM" };
-  message_url: { type: "uri"; name: "KjP2m" };
-  chat_url: { type: "uri"; name: "Lm3nQ" };
-  thumbnail_url: { type: "uri"; name: "Rt4vX" };
-  glide_app_url: { type: "uri"; name: "Yx9Kp" };
 }
 
 export interface GlideConfig {
@@ -55,8 +51,6 @@ export interface GlideSyncQueueItem {
   processed_at?: string | null;
   error?: string | null;
   retry_count?: number;
-  batch_id?: string;
-  priority?: number;
   onDelete?: (id: string) => void;
 }
 
@@ -106,4 +100,3 @@ export interface GlideApiRequest {
   appID: string;
   mutations: GlideMutation[];
 }
-

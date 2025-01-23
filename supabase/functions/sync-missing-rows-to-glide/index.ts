@@ -1,85 +1,104 @@
-import { serve } from "https://deno.land/std@0.131.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders } from "../_shared/cors.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 
-const GLIDE_API_TOKEN = Deno.env.get('GLIDE_API_TOKEN')!;
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
-serve(async (req: Request) => {
-  // Handle CORS
+serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-    // Get active Glide config
-    const { data: configs, error: configError } = await supabaseClient
-      .from('glide_config')
-      .select('*')
-      .eq('active', true)
-      .limit(1);
-
-    if (configError) throw configError;
-    if (!configs?.length) throw new Error('No active Glide configuration found');
-
-    const config = configs[0];
-
-    // Fetch data from Glide
-    const glideResponse = await fetch('https://api.glideapp.io/api/function/queryTables', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GLIDE_API_TOKEN}`
-      },
-      body: JSON.stringify({
-        appID: config.app_id,
-        queries: [{
-          tableName: config.table_id,
-          utc: true
-        }]
-      })
-    });
-
-    if (!glideResponse.ok) {
-      throw new Error(`Glide API error: ${await glideResponse.text()}`);
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error('Missing Supabase configuration');
     }
 
-    const glideData = await glideResponse.json();
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get differences using the database function
-    const { data: differences, error: diffError } = await supabaseClient
-      .rpc('check_telegram_media_differences');
+    console.log('Fetching records without Glide row ID...');
+    
+    const { data: missingGlideRecords, error } = await supabase
+      .from('telegram_media')
+      .select('*')
+      .is('telegram_media_row_id', null);
 
-    if (diffError) throw diffError;
+    if (error) {
+      console.error('Error fetching records:', error);
+      throw error;
+    }
 
-    // Process differences
-    if (differences?.length > 0) {
-      const batchId = crypto.randomUUID();
-      
-      // Queue the differences for sync
-      await Promise.all(differences.map(async (diff) => {
-        await supabaseClient
+    if (!missingGlideRecords || missingGlideRecords.length === 0) {
+      console.log('No missing Glide records found.');
+      return new Response(
+        JSON.stringify({ message: 'No missing Glide records found.' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log(`Found ${missingGlideRecords.length} records missing Glide row IDs`);
+
+    let addedCount = 0;
+    let skippedCount = 0;
+    const errors = [];
+
+    // Process each record individually to better handle duplicates
+    for (const record of missingGlideRecords) {
+      try {
+        const { error: queueError } = await supabase
           .from('glide_sync_queue')
           .insert({
             table_name: 'telegram_media',
-            record_id: diff.record_id,
-            operation: diff.difference_type === 'missing_in_glide' ? 'INSERT' : 'UPDATE',
-            new_data: diff.supabase_data,
-            old_data: diff.glide_data,
-            priority: 2, // Higher priority for differences
-            batch_id: batchId
+            record_id: record.id,
+            operation: 'INSERT',
+            old_data: null,
+            new_data: record,
+            created_at: new Date().toISOString()
           });
-      }));
+
+        if (queueError) {
+          if (queueError.message?.includes('duplicate key value')) {
+            console.log(`Skipping duplicate record: ${record.id}`);
+            skippedCount++;
+          } else {
+            console.error(`Error queueing record ${record.id}:`, queueError);
+            errors.push({
+              record_id: record.id,
+              error: queueError.message
+            });
+          }
+        } else {
+          addedCount++;
+        }
+      } catch (error) {
+        console.error(`Error processing record ${record.id}:`, error);
+        errors.push({
+          record_id: record.id,
+          error: error.message
+        });
+      }
     }
+
+    console.log(`Successfully processed records:`, {
+      added: addedCount,
+      skipped: skippedCount,
+      errors: errors.length
+    });
 
     return new Response(
       JSON.stringify({
         success: true,
-        differences_found: differences?.length || 0
+        message: `Processed ${missingGlideRecords.length} records. Added: ${addedCount}, Skipped: ${skippedCount}, Errors: ${errors.length}`,
+        details: {
+          added: addedCount,
+          skipped: skippedCount,
+          errors: errors
+        }
       }),
       { 
         headers: {
@@ -90,19 +109,24 @@ serve(async (req: Request) => {
     );
 
   } catch (error) {
-    console.error('Error in sync-missing-rows:', error);
+    console.error('Error in sync operation:', error);
     
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message
+        error: error.message,
+        details: {
+          type: error.code || 'UNKNOWN_ERROR',
+          message: error.message,
+          stack: error.stack
+        }
       }),
       { 
-        headers: {
+        status: 500,
+        headers: { 
           ...corsHeaders,
           'Content-Type': 'application/json'
-        },
-        status: 400
+        }
       }
     );
   }

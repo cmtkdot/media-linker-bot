@@ -112,11 +112,7 @@ ToastDescription.displayName = ToastPrimitives.Description.displayName
 
 type ToastProps = React.ComponentPropsWithoutRef<typeof Toast>
 
-type ToastActionElement = {
-  onClick?: () => void;
-  altText?: string;
-  ignore?: () => void;
-}
+type ToastActionElement = React.ReactElement<typeof ToastAction>
 
 export {
   type ToastProps,

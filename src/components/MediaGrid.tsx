@@ -1,12 +1,37 @@
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { MediaItem } from "@/types/media";
-import MediaGridFilters from "./MediaGridFilters";
-import MediaGridContent from "./MediaGridContent";
-import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
-import { RefreshCw, Loader2 } from "lucide-react";
+import { ContentCard } from "@/components/ui/content-card";
+import MediaTable from "./MediaTable";
+import MediaViewer from "./MediaViewer";
+import MediaSearchBar from "./MediaSearchBar";
+import MediaEditDialog from "./MediaEditDialog";
+import { MediaItem } from "@/types/media";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { Loader2, AlertCircle } from "lucide-react";
+
+interface TelegramData {
+  chat: {
+    id?: number;
+    type?: string;
+    title?: string;
+  };
+  message_id?: number;
+  chat_id?: number;
+  storage_path?: string;
+  media_group_id?: string;
+  date?: number;
+}
+
+interface FilterOptions {
+  channels: string[];
+  vendors: string[];
+}
+
+interface TelegramMediaResponse {
+  telegram_data: TelegramData;
+}
 
 const MediaGrid = () => {
   const [view, setView] = useState<'grid' | 'table'>('grid');
@@ -14,11 +39,11 @@ const MediaGrid = () => {
   const [selectedChannel, setSelectedChannel] = useState("all");
   const [selectedType, setSelectedType] = useState("all");
   const [selectedVendor, setSelectedVendor] = useState("all");
-  const [selectedSort, setSelectedSort] = useState("created_desc");
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [editItem, setEditItem] = useState<MediaItem | null>(null);
+  const [previewItem, setPreviewItem] = useState<MediaItem | null>(null);
   const { toast } = useToast();
 
-  const { data: filterOptions } = useQuery({
+  const { data: filterOptions } = useQuery<FilterOptions>({
     queryKey: ['filter-options'],
     queryFn: async () => {
       const [channelsResult, vendorsResult] = await Promise.all([
@@ -32,8 +57,12 @@ const MediaGrid = () => {
           .not('vendor_uid', 'is', null)
       ]);
 
-      const channels = [...new Set(channelsResult.data?.map(item => 
-        (item.telegram_data as any).chat?.title).filter(Boolean) || [])];
+      const channels = [...new Set((channelsResult.data || [])
+        .map(item => {
+          const response = item as unknown as TelegramMediaResponse;
+          return response.telegram_data.chat?.title;
+        })
+        .filter(Boolean))];
       
       const vendors = [...new Set(vendorsResult.data?.map(item => 
         item.vendor_uid).filter(Boolean) || [])];
@@ -42,12 +71,13 @@ const MediaGrid = () => {
     }
   });
 
-  const { data: mediaItems, isLoading, error, refetch } = useQuery<MediaItem[]>({
-    queryKey: ['telegram-media', search, selectedChannel, selectedType, selectedVendor, selectedSort],
+  const { data: mediaItems, isLoading, error, refetch } = useQuery({
+    queryKey: ['telegram-media', search, selectedChannel, selectedType, selectedVendor],
     queryFn: async () => {
       let query = supabase
         .from('telegram_media')
-        .select('*');
+        .select('*')
+        .order('created_at', { ascending: false });
 
       if (search) {
         query = query.or(`caption.ilike.%${search}%,product_name.ilike.%${search}%,product_code.ilike.%${search}%,vendor_uid.ilike.%${search}%`);
@@ -65,122 +95,167 @@ const MediaGrid = () => {
         query = query.eq('vendor_uid', selectedVendor);
       }
 
-      const [sortField, sortDirection] = selectedSort.split('_');
-      switch (sortField) {
-        case 'created':
-          query = query.order('created_at', { ascending: sortDirection === 'asc' });
-          break;
-        case 'purchase':
-          query = query.order('purchase_date', { ascending: sortDirection === 'asc' });
-          break;
-        case 'name':
-          query = query.order('product_name', { ascending: sortDirection === 'asc' });
-          break;
-        case 'caption':
-          query = query.order('caption', { ascending: sortDirection === 'asc' });
-          break;
-        case 'code':
-          query = query.order('product_code', { ascending: sortDirection === 'asc' });
-          break;
-        case 'vendor':
-          query = query.order('vendor_uid', { ascending: sortDirection === 'asc' });
-          break;
-        default:
-          query = query.order('created_at', { ascending: false });
-      }
-
-      const { data: queryResult, error: queryError } = await query;
+      const { data, error: queryError } = await query;
       
       if (queryError) throw queryError;
-
-      return (queryResult as any[]).map((item): MediaItem => ({
-        ...item,
-        file_type: item.file_type as MediaItem['file_type'],
-        telegram_data: item.telegram_data || {},
-        glide_data: item.glide_data || {},
-        media_metadata: item.media_metadata || {},
-        analyzed_content: item.analyzed_content ? {
-          text: item.analyzed_content.text || '',
-          labels: item.analyzed_content.labels || [],
-          objects: item.analyzed_content.objects || []
-        } : undefined,
-        created_at: item.created_at,
-        updated_at: item.updated_at
-      }));
+      return (data || []) as MediaItem[];
     }
   });
 
-  const handleSync = async () => {
-    setIsSyncing(true);
+  useEffect(() => {
+    const channel = supabase
+      .channel('schema-db-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'telegram_media'
+        },
+        (payload) => {
+          refetch();
+          const eventMessages = {
+            INSERT: 'New media item added',
+            UPDATE: 'Media item updated',
+            DELETE: 'Media item deleted'
+          };
+          
+          toast({
+            title: eventMessages[payload.eventType as keyof typeof eventMessages],
+            description: "The media list has been updated.",
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [refetch, toast]);
+
+  const handleEdit = async () => {
+    if (!editItem) return;
+
     try {
-      const { data, error } = await supabase.functions.invoke('sync-media-groups');
+      const { error } = await supabase
+        .from('telegram_media')
+        .update({
+          caption: editItem.caption,
+          product_name: editItem.product_name,
+          product_code: editItem.product_code,
+          quantity: editItem.quantity,
+          vendor_uid: editItem.vendor_uid,
+          purchase_date: editItem.purchase_date,
+          notes: editItem.notes
+        })
+        .eq('id', editItem.id);
 
       if (error) throw error;
 
-      await refetch();
-
       toast({
-        title: "Media Groups Sync Complete",
-        description: `Updated ${data.updated_groups} groups and synced ${data.synced_media} media items`,
+        title: "Changes saved",
+        description: "The media item has been updated successfully.",
       });
-    } catch (error: any) {
-      console.error('Error in media groups sync:', error);
+
+      setEditItem(null);
+    } catch (error) {
+      console.error('Error updating media:', error);
       toast({
-        title: "Sync Failed",
-        description: error.message || "Failed to sync media groups",
+        title: "Error",
+        description: "Failed to update media item.",
         variant: "destructive",
       });
-    } finally {
-      setIsSyncing(false);
     }
   };
 
-  return (
-    <div className="space-y-4 px-4 py-4">
-      <div className="flex justify-between items-center">
-        <MediaGridFilters
-          search={search}
-          onSearchChange={setSearch}
-          view={view}
-          onViewChange={setView}
-          selectedChannel={selectedChannel}
-          onChannelChange={setSelectedChannel}
-          selectedType={selectedType}
-          onTypeChange={setSelectedType}
-          selectedVendor={selectedVendor}
-          onVendorChange={setSelectedVendor}
-          selectedSort={selectedSort}
-          onSortChange={setSelectedSort}
-          channels={filterOptions?.channels || []}
-          vendors={filterOptions?.vendors || []}
-        />
-        <Button 
-          onClick={handleSync}
-          disabled={isSyncing}
-          variant="outline"
-          size="sm"
-          className="ml-2"
-        >
-          {isSyncing ? (
-            <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Syncing...
-            </>
-          ) : (
-            <>
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Sync Media Groups
-            </>
-          )}
-        </Button>
+  const handleItemChange = (field: keyof MediaItem, value: any) => {
+    setEditItem(prev => prev ? {...prev, [field]: value} : null);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-[50vh]">
+        <div className="flex items-center gap-2">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span>Loading media...</span>
+        </div>
       </div>
-      
-      <MediaGridContent
-        items={mediaItems || []}
+    );
+  }
+
+  if (error) {
+    return (
+      <Alert variant="destructive" className="m-4">
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>Error loading media</AlertTitle>
+        <AlertDescription>{error.message}</AlertDescription>
+      </Alert>
+    );
+  }
+
+  if (!mediaItems?.length) {
+    return (
+      <Alert variant="default" className="m-4">
+        <AlertDescription>No media items found</AlertDescription>
+      </Alert>
+    );
+  }
+
+  return (
+    <div className="space-y-4 px-4 py-6 max-w-[2000px] mx-auto">
+      <MediaSearchBar
+        search={search}
         view={view}
-        isLoading={isLoading}
-        error={error as Error | null}
-        onMediaUpdate={refetch}
+        onSearchChange={setSearch}
+        onViewChange={setView}
+        selectedChannel={selectedChannel}
+        onChannelChange={setSelectedChannel}
+        selectedType={selectedType}
+        onTypeChange={setSelectedType}
+        selectedVendor={selectedVendor}
+        onVendorChange={setSelectedVendor}
+        channels={filterOptions?.channels || []}
+        vendors={filterOptions?.vendors || []}
+      />
+
+      {view === 'grid' ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
+          {mediaItems.map((item) => (
+            <ContentCard
+              key={item.id}
+              backgroundImage={item.public_url || item.default_public_url}
+              onEdit={() => setEditItem(item)}
+              onClick={() => setPreviewItem(item)}
+              content={{
+                channelTitle: item.telegram_data?.chat?.title,
+                purchaseDate: item.purchase_date ? new Date(item.purchase_date).toLocaleDateString() : undefined,
+                productName: item.product_name || 'Untitled Product',
+                caption: item.caption
+              }}
+              isVideo={item.file_type === 'video'}
+              className="group-hover/card:shadow-2xl transition-all duration-300"
+            />
+          ))}
+        </div>
+      ) : (
+        <MediaTable 
+          data={mediaItems} 
+          onEdit={setEditItem} 
+        />
+      )}
+
+      <MediaEditDialog
+        editItem={editItem}
+        onClose={() => setEditItem(null)}
+        onSave={handleEdit}
+        onItemChange={handleItemChange}
+        formatDate={(dateString) => dateString ? new Date(dateString).toISOString().split('T')[0] : null}
+      />
+
+      <MediaViewer
+        open={!!previewItem}
+        onOpenChange={(open) => !open && setPreviewItem(null)}
+        media={previewItem}
       />
     </div>
   );

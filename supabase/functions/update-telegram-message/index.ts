@@ -29,7 +29,7 @@ serve(async (req) => {
       throw new Error('Missing required parameters: messageId and chatId');
     }
 
-    // First verify the message exists and get its current content
+    // First verify the message exists
     const getMessageUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getChat`;
     const chatResponse = await fetch(getMessageUrl, {
       method: 'POST',
@@ -44,39 +44,6 @@ serve(async (req) => {
     if (!chatResponse.ok) {
       console.error('Failed to verify chat:', await chatResponse.text());
       throw new Error('Failed to verify chat exists');
-    }
-
-    // Get current message content
-    const getCurrentMessageUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getMessage`;
-    const currentMessageResponse = await fetch(getCurrentMessageUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        chat_id: chatId,
-        message_id: messageId,
-      }),
-    });
-
-    const currentMessage = await currentMessageResponse.json();
-    
-    // Check if the content is actually different
-    if (currentMessage.ok && 
-        currentMessage.result.caption === updates.caption) {
-      console.log('Message content unchanged, skipping update');
-      return new Response(
-        JSON.stringify({ 
-          success: true, 
-          message: 'No update needed - content unchanged' 
-        }),
-        { 
-          headers: { 
-            ...corsHeaders, 
-            'Content-Type': 'application/json' 
-          } 
-        }
-      );
     }
 
     // Prepare the update data
@@ -105,23 +72,6 @@ serve(async (req) => {
     const result = await updateResponse.json();
     
     if (!updateResponse.ok) {
-      // Handle "message not modified" error gracefully
-      if (result.description?.includes('message is not modified')) {
-        console.log('Message content unchanged (caught from Telegram response)');
-        return new Response(
-          JSON.stringify({ 
-            success: true, 
-            message: 'No update needed - content unchanged' 
-          }),
-          { 
-            headers: { 
-              ...corsHeaders, 
-              'Content-Type': 'application/json' 
-            } 
-          }
-        );
-      }
-      
       console.error('Telegram API error:', result);
       throw new Error(`Failed to update message: ${result.description || updateResponse.statusText}`);
     }

@@ -18,6 +18,7 @@ serve(async (req) => {
       throw new Error('OpenAI API key is not configured');
     }
 
+    // Initialize Supabase client with environment variables
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
@@ -51,23 +52,21 @@ serve(async (req) => {
         messages: [
           {
             role: 'system',
-            content: `You are a JSON extraction assistant. Extract product information from captions. The MOST IMPORTANT field is product_name which should be everything before the # symbol if present, or the first line of text. Other fields are optional but try to extract them if present:
+            content: `Extract product information from captions following these strict rules:
+            1. product_name: Everything before the # symbol, trimmed
+            2. product_code: Text between #and x, excluding any parentheses content
+               - If vendor_uid is found, it should be part of product_code
+            3. quantity: ONLY the number after "x" and before any parentheses
+               - Example: "x 3 (20 behind)" should extract just 3
+               - Ignore any numbers inside parentheses
+            4. vendor_uid: Letters before numbers in the product code
+               - Example: "FISH011625" should extract "FISH"
+            5. purchase_date: Convert 6 digits from code (mmDDyy) to YYYY-MM-DD
+               - Example: "011625" should become "2025-01-16"
+            6. notes: Any text in parentheses () should be captured as notes
+               - Multiple parentheses should be combined with spaces
 
-            Required field:
-            - product_name: Everything before the # symbol, trimmed. If no # symbol, use the first line or full text.
-
-            Optional fields (only include if confident):
-            - product_code: Text between # and x, excluding parentheses. this is usually cannabis strain names
-            - quantity: Number after "x" and before parentheses and any spaces
-            - vendor_uid: Letters before numbers in product code. Common Vendor UID are: [ "WOO\nCARL\nENC\nDNY\nHEFF\nEST\nCUS\nHIP\nBNC\nQB\nKV\nFISH\nQ\nBRAV\nP\nJWD\nBO\nLOTO\nOM\nCMTK\nMRW\nFT\nCHAD\nSHR\nCBN\nSPOB\nPEPE\nTURK\nM\nPBA\nDBRO\nZ\nCHO\nRB\nKPEE\nDINO\nKC\nPRM\nANT\nKNG\nTOM\nFAKE\nFAKEVEN\nERN\nCOO\nBCH\nJM\nWITE\nANDY\nBRC\nBCHO"])
-            - purchase_date: Convert 6 digits from code (mmDDyy) to YYYY-MM-DD if present
-            - notes: Text in parentheses () combined with spaces or any other text after that is not part of the extracted information
-
-            Return ONLY a JSON object with these fields (no markdown).
-            If you can only extract product_name, that's fine - return just that field.
-
-            Example input: "Cherry Runtz #FISH011625 x 3 (20 behind) (fresh batch)"
-            Example output: {"product_name":"Cherry Runtz","product_code":"FISH011625","quantity":3,"vendor_uid":"FISH","purchase_date":"2025-01-16","notes":"20 behind fresh batch"}`
+            Return ONLY a valid JSON object with these exact fields if not available try to extract atleast the product name which should always be present. Never reply with sentences just json data.`
           },
           {
             role: 'user',
@@ -92,75 +91,21 @@ serve(async (req) => {
     }
 
     try {
-      // Remove any markdown formatting if present and parse JSON
-      const cleanContent = data.choices[0].message.content.replace(/```json\n|\n```|```/g, '');
-      let result = JSON.parse(cleanContent);
+      const result = JSON.parse(data.choices[0].message.content.trim());
+      console.log('Parsed result:', result);
 
-      // Ensure we at least have a product name
-      if (!result.product_name && caption) {
-        console.log('Fallback: Extracting product name from caption');
-        // Fallback: Use text before # or first line as product name
-        const productName = caption.split('#')[0].trim() || caption.split('\n')[0].trim() || caption.trim();
-        result = { product_name: productName, ...result };
-      }
-
-      // Normalize and validate the result
-      const normalizedResult = {
-        product_name: result.product_name || null,
-        product_code: result.product_code || null,
-        quantity: result.quantity ? Number(result.quantity) : null,
-        vendor_uid: result.vendor_uid || null,
-        purchase_date: result.purchase_date || null,
-        notes: result.notes || null,
-        analyzed_content: {
-          raw_text: caption,
-          extracted_data: result,
-          confidence: 1.0,
-          timestamp: new Date().toISOString(),
-          model_version: 'gpt-4o-mini'
-        }
-      };
-
-      console.log('Normalized result:', normalizedResult);
-
-      // First, update the media_groups table if this is part of a group
-      if (mediaGroupId) {
-        console.log('Updating media group:', mediaGroupId);
-        const { error: mediaGroupError } = await supabase
-          .from('media_groups')
-          .upsert({
-            media_group_id: mediaGroupId,
-            caption: caption,
-            analyzed_content: normalizedResult.analyzed_content,
-            product_name: normalizedResult.product_name,
-            product_code: normalizedResult.product_code,
-            quantity: normalizedResult.quantity,
-            vendor_uid: normalizedResult.vendor_uid,
-            purchase_date: normalizedResult.purchase_date,
-            notes: normalizedResult.notes,
-            sync_status: 'completed'
-          });
-
-        if (mediaGroupError) {
-          console.error('Error updating media_groups:', mediaGroupError);
-          throw mediaGroupError;
-        }
-      }
-
-      // Update individual telegram_media record if messageId is provided
+      // Update the telegram_media table with the analyzed content
       if (messageId) {
-        console.log('Updating telegram_media for message:', messageId);
         const { error: updateError } = await supabase
           .from('telegram_media')
           .update({
-            caption: caption,
-            analyzed_content: normalizedResult.analyzed_content,
-            product_name: normalizedResult.product_name,
-            product_code: normalizedResult.product_code,
-            quantity: normalizedResult.quantity,
-            vendor_uid: normalizedResult.vendor_uid,
-            purchase_date: normalizedResult.purchase_date,
-            notes: normalizedResult.notes
+            analyzed_content: result,
+            product_name: result.product_name,
+            product_code: result.product_code,
+            quantity: result.quantity,
+            vendor_uid: result.vendor_uid,
+            purchase_date: result.purchase_date,
+            notes: result.notes
           })
           .eq('id', messageId);
 
@@ -170,20 +115,18 @@ serve(async (req) => {
         }
       }
 
-      // Update all related media in the group
+      // If this is part of a media group, update all related media
       if (mediaGroupId) {
-        console.log('Updating all media in group:', mediaGroupId);
         const { error: groupUpdateError } = await supabase
           .from('telegram_media')
           .update({
-            caption: caption,
-            analyzed_content: normalizedResult.analyzed_content,
-            product_name: normalizedResult.product_name,
-            product_code: normalizedResult.product_code,
-            quantity: normalizedResult.quantity,
-            vendor_uid: normalizedResult.vendor_uid,
-            purchase_date: normalizedResult.purchase_date,
-            notes: normalizedResult.notes
+            analyzed_content: result,
+            product_name: result.product_name,
+            product_code: result.product_code,
+            quantity: result.quantity,
+            vendor_uid: result.vendor_uid,
+            purchase_date: result.purchase_date,
+            notes: result.notes
           })
           .eq('telegram_data->>media_group_id', mediaGroupId);
 
@@ -194,64 +137,19 @@ serve(async (req) => {
       }
 
       return new Response(
-        JSON.stringify(normalizedResult),
+        JSON.stringify(result),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     } catch (parseError) {
       console.error('Error parsing OpenAI response:', parseError);
       console.error('Raw response content:', data.choices[0].message.content);
-      
-      // Fallback: Extract at least the product name
-      const productName = caption.split('#')[0].trim() || caption.split('\n')[0].trim() || caption.trim();
-      const fallbackResult = {
-        product_name: productName,
-        analyzed_content: {
-          raw_text: caption,
-          extracted_data: { product_name: productName },
-          confidence: 0.5,
-          timestamp: new Date().toISOString(),
-          model_version: 'gpt-4o-mini',
-          fallback: true
-        }
-      };
-      
-      console.log('Using fallback result:', fallbackResult);
-      return new Response(
-        JSON.stringify(fallbackResult),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      throw new Error(`Failed to parse OpenAI response: ${parseError.message}`);
     }
   } catch (error) {
     console.error('Error in analyze-caption function:', error);
-    // Even in case of error, try to extract at least the product name
-    try {
-      const { caption } = await req.json();
-      if (caption) {
-        const productName = caption.split('#')[0].trim() || caption.split('\n')[0].trim() || caption.trim();
-        const errorFallbackResult = {
-          product_name: productName,
-          analyzed_content: {
-            raw_text: caption,
-            extracted_data: { product_name: productName },
-            confidence: 0.3,
-            timestamp: new Date().toISOString(),
-            model_version: 'gpt-4o-mini',
-            error: true,
-            fallback: true
-          }
-        };
-        return new Response(
-          JSON.stringify(errorFallbackResult),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-    } catch (fallbackError) {
-      console.error('Error in fallback product name extraction:', fallbackError);
-    }
-    
     return new Response(
       JSON.stringify({ 
-        error: error.message,
+        error: `Failed to parse OpenAI response: ${error.message}`,
         details: error.stack
       }),
       { 

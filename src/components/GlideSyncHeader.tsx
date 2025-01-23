@@ -1,35 +1,40 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/components/ui/use-toast";
 import { Loader2 } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import type { GlideConfig } from "@/types/glide";
+import { Link } from "react-router-dom";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+interface GlideConfig {
+  id: string;
+  table_name: string;
+  active: boolean;
+  supabase_table_name: string;
+}
 
 interface GlideSyncHeaderProps {
   configs: GlideConfig[];
   isLoading: boolean;
 }
 
-interface SyncResponse {
-  success: boolean;
-  data?: {
-    added: number;
-    updated: number;
-    deleted: number;
-    errors: string[];
-  };
-  error?: string;
-}
-
 export function GlideSyncHeader({ configs, isLoading }: GlideSyncHeaderProps) {
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isCheckingMissing, setIsCheckingMissing] = useState(false);
+  const [selectedTableId, setSelectedTableId] = useState<string>("");
   const { toast } = useToast();
 
   const handleSync = async () => {
-    if (!configs[0]?.id) {
+    if (!selectedTableId) {
       toast({
-        title: "No configuration found",
-        description: "Please set up a Glide configuration first",
+        title: "No table selected",
+        description: "Please select a table to sync",
         variant: "destructive",
       });
       return;
@@ -37,37 +42,35 @@ export function GlideSyncHeader({ configs, isLoading }: GlideSyncHeaderProps) {
 
     setIsSyncing(true);
     try {
-      const { data, error } = await supabase.functions.invoke<SyncResponse>('sync-glide-media-table', {
-        body: { 
-          operation: 'syncBidirectional', 
-          tableId: configs[0].id 
-        }
+      const { data, error } = await supabase.functions.invoke('sync-glide-media-table', {
+        body: { operation: 'syncBidirectional', tableId: selectedTableId }
       });
 
       if (error) throw error;
 
-      if (!data?.data) {
-        throw new Error('Invalid response from sync function');
-      }
-
-      const { added, updated, deleted, errors } = data.data;
-      
-      // Show success toast with processed items count
+      // Enhanced success toast with detailed stats
       toast({
         title: "Sync Completed",
-        description: `Added: ${added}, Updated: ${updated}, Deleted: ${deleted}`,
+        description: data.summary || `Added: ${data.data.added}, Updated: ${data.data.updated}, Deleted: ${data.data.deleted}`,
       });
 
-      // If there were any errors during sync, show them
-      if (errors?.length > 0) {
-        console.error('Sync errors:', errors);
+      // Show detailed stats in console for debugging
+      console.log('Sync Stats:', {
+        processedItems: data.stats.processedItems,
+        skippedItems: data.stats.skippedItems,
+        errorItems: data.stats.errorItems,
+        totalTime: `${data.stats.totalTime}ms`,
+        details: data.stats.details
+      });
+
+      if (data.data.errors?.length > 0) {
+        console.error('Sync errors:', data.data.errors);
         toast({
-          title: "Sync Completed with Errors",
+          title: `Sync Completed with ${data.stats.errorItems} Errors`,
           description: "Check console for details",
           variant: "destructive",
         });
       }
-
     } catch (error) {
       console.error('Sync error:', error);
       toast({
@@ -80,27 +83,82 @@ export function GlideSyncHeader({ configs, isLoading }: GlideSyncHeaderProps) {
     }
   };
 
+  const handleCheckMissing = async () => {
+    setIsCheckingMissing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-missing-rows-to-glide');
+
+      if (error) throw error;
+
+      toast({
+        title: "Check Completed",
+        description: data.message,
+      });
+    } catch (error) {
+      console.error('Check missing rows error:', error);
+      toast({
+        title: "Check Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsCheckingMissing(false);
+    }
+  };
+
+  const activeConfigs = configs?.filter(config => config.active) || [];
+
   return (
     <div className="flex items-center justify-between">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">Glide Telegram Media Sync</h2>
-        <p className="text-muted-foreground">
-          Sync Telegram media files and metadata between Supabase and Glide
-        </p>
+      <div className="flex items-center gap-4">
+        <h1 className="text-2xl font-semibold">Glide Sync Settings</h1>
+        <Button variant="outline" asChild>
+          <Link to="/glide-connections">Manage Connections</Link>
+        </Button>
       </div>
-      <Button
-        onClick={handleSync}
-        disabled={isSyncing || isLoading || !configs.length}
-      >
-        {isSyncing ? (
-          <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Syncing...
-          </>
-        ) : (
-          'Sync Now'
-        )}
-      </Button>
+      <div className="flex items-center gap-4">
+        <Select value={selectedTableId} onValueChange={setSelectedTableId}>
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="Select a table" />
+          </SelectTrigger>
+          <SelectContent>
+            {activeConfigs.map((config) => (
+              <SelectItem key={config.id} value={config.id}>
+                {config.table_name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button 
+          onClick={handleSync} 
+          className="flex items-center gap-2"
+          disabled={!selectedTableId || isSyncing}
+        >
+          {isSyncing ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Syncing...
+            </>
+          ) : (
+            'Sync with Glide'
+          )}
+        </Button>
+        <Button
+          onClick={handleCheckMissing}
+          className="flex items-center gap-2"
+          disabled={isCheckingMissing}
+          variant="outline"
+        >
+          {isCheckingMissing ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Checking...
+            </>
+          ) : (
+            'Check Missing Records'
+          )}
+        </Button>
+      </div>
     </div>
   );
 }

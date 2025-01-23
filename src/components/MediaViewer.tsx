@@ -7,33 +7,40 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { X, ChevronLeft, ChevronRight } from "lucide-react";
-import { MediaItem } from "@/types/media";
+import { ExternalLink, X, MessageSquare, Users } from "lucide-react";
 
 interface MediaViewerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  media: MediaItem | null;
-  onPrevious?: () => void;
-  onNext?: () => void;
-  hasPrevious?: boolean;
-  hasNext?: boolean;
-  relatedMedia?: MediaItem[];
+  media: {
+    public_url: string;
+    default_public_url: string;
+    file_type: string;
+    caption?: string;
+    product_name?: string;
+    product_code?: string;
+    purchase_order_uid?: string;
+    quantity?: number;
+    vendor_uid?: string;
+    purchase_date?: string;
+    notes?: string;
+    message_url?: string;
+    chat_url?: string;
+    telegram_data?: {
+      chat?: {
+        type?: string;
+        title?: string;
+      };
+    };
+  } | null;
 }
 
-const MediaViewer = ({ 
-  open, 
-  onOpenChange, 
-  media,
-  onPrevious,
-  onNext,
-  hasPrevious = false,
-  hasNext = false,
-  relatedMedia = []
-}: MediaViewerProps) => {
+const MediaViewer = ({ open, onOpenChange, media }: MediaViewerProps) => {
   if (!media) return null;
 
   const mediaUrl = media.public_url || media.default_public_url;
+  const telegramType = media.telegram_data?.chat?.type;
+  const telegramTitle = media.telegram_data?.chat?.title;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -51,7 +58,7 @@ const MediaViewer = ({
         
         <div className="flex flex-col lg:flex-row gap-4">
           {/* Media Column */}
-          <div className="flex-[1.5] min-h-0 relative">
+          <div className="flex-[1.5] min-h-0">
             <div className="relative bg-black/5 rounded-lg overflow-hidden flex items-center justify-center" style={{ 
               height: '50vh',
               maxHeight: 'calc(100vh - 300px)',
@@ -63,52 +70,47 @@ const MediaViewer = ({
                   className="h-full w-full object-contain"
                   controls
                   autoPlay
-                  playsInline
+                  onError={(e) => {
+                    const video = e.target as HTMLVideoElement;
+                    if (video.src !== media.default_public_url) {
+                      video.src = media.default_public_url;
+                    }
+                  }}
                 />
               ) : (
                 <img
                   src={mediaUrl}
                   alt={media.caption || "Media preview"}
                   className="h-full w-full object-contain"
+                  onError={(e) => {
+                    const img = e.target as HTMLImageElement;
+                    if (img.src !== media.default_public_url) {
+                      img.src = media.default_public_url;
+                    }
+                  }}
                 />
-              )}
-            </div>
-            
-            {/* Navigation Buttons */}
-            <div className="absolute inset-y-0 left-0 right-0 flex items-center justify-between pointer-events-none">
-              {hasPrevious && (
-                <Button
-                  onClick={onPrevious}
-                  className="relative ps-12 ml-4 pointer-events-auto"
-                  variant="secondary"
-                >
-                  Previous
-                  <span className="pointer-events-none absolute inset-y-0 start-0 flex w-9 items-center justify-center bg-primary-foreground/15">
-                    <ChevronLeft className="opacity-60" size={16} strokeWidth={2} aria-hidden="true" />
-                  </span>
-                </Button>
-              )}
-              {hasNext && (
-                <Button
-                  onClick={onNext}
-                  className="relative pe-12 mr-4 pointer-events-auto"
-                  variant="secondary"
-                >
-                  Next
-                  <span className="pointer-events-none absolute inset-y-0 end-0 flex w-9 items-center justify-center bg-primary-foreground/15">
-                    <ChevronRight className="opacity-60" size={16} strokeWidth={2} aria-hidden="true" />
-                  </span>
-                </Button>
               )}
             </div>
           </div>
 
           {/* Details Column */}
-          <div className="flex-1 flex flex-col space-y-4">
+          <div className="flex-1 flex flex-col space-y-4 overflow-y-auto">
             {media.caption && (
               <p className="text-muted-foreground text-sm">{media.caption}</p>
             )}
             <div className="grid gap-3 text-sm">
+              {telegramType && (
+                <div>
+                  <span className="font-medium">Type: </span>
+                  {telegramType.charAt(0).toUpperCase() + telegramType.slice(1)}
+                </div>
+              )}
+              {telegramTitle && (
+                <div>
+                  <span className="font-medium">Title: </span>
+                  {telegramTitle}
+                </div>
+              )}
               {media.product_name && (
                 <div>
                   <span className="font-medium">Product: </span>
@@ -119,6 +121,12 @@ const MediaViewer = ({
                 <div>
                   <span className="font-medium">Code: </span>
                   #{media.product_code}
+                </div>
+              )}
+              {media.purchase_order_uid && (
+                <div>
+                  <span className="font-medium">Purchase Order: </span>
+                  {media.purchase_order_uid}
                 </div>
               )}
               {media.quantity && (
@@ -145,6 +153,57 @@ const MediaViewer = ({
                   {media.notes}
                 </div>
               )}
+            </div>
+            <div className="flex flex-col gap-2 pt-4">
+              {media.message_url && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  asChild
+                  className="w-full"
+                >
+                  <a
+                    href={media.message_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-2"
+                  >
+                    View Message <MessageSquare className="h-4 w-4" />
+                  </a>
+                </Button>
+              )}
+              {media.chat_url && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  asChild
+                  className="w-full"
+                >
+                  <a
+                    href={media.chat_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-2"
+                  >
+                    View Channel <Users className="h-4 w-4" />
+                  </a>
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                asChild
+                className="w-full"
+              >
+                <a
+                  href={mediaUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2"
+                >
+                  Open File <ExternalLink className="h-4 w-4" />
+                </a>
+              </Button>
             </div>
           </div>
         </div>

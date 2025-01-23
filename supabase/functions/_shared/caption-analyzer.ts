@@ -1,31 +1,31 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-export async function analyzeCaptionWithAI(
-  caption: string,
-  supabaseClient?: any
-): Promise<any> {
+export async function analyzeCaptionWithAI(caption: string, supabaseUrl: string, supabaseKey: string) {
+  if (!caption?.trim()) {
+    console.log('No caption to analyze');
+    return null;
+  }
+
+  console.log('Analyzing caption:', caption);
   try {
-    // Use provided client or create new one
-    const supabase = supabaseClient || createClient(
-      Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
-    );
-    
-    console.log('Analyzing caption:', caption);
-    
+    const supabase = createClient(supabaseUrl, supabaseKey);
     const { data, error } = await supabase.functions.invoke('analyze-caption', {
-      body: { caption }
+      body: { 
+        caption,
+        // Don't pass IDs when just analyzing
+        isAnalysisOnly: true
+      },
     });
 
     if (error) {
-      console.error('Error in caption analysis:', error);
+      console.error('Error invoking analyze-caption function:', error);
       throw error;
     }
-
+    
     console.log('Caption analysis result:', data);
-    return data;
+    return data || null;
   } catch (error) {
-    console.error('Error in caption analysis:', error);
-    throw error;
+    console.error('Error analyzing caption:', error);
+    return null;
   }
 }
