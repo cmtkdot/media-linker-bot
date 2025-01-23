@@ -19,7 +19,8 @@ export function GlideDataGrid({ configs }: GlideDataGridProps) {
         .order('created_at', { ascending: false });
       
       if (error) throw error;
-      return data as GlideSyncQueueItem[];
+      
+      return (data || []) as GlideSyncQueueItem[];
     }
   });
 
