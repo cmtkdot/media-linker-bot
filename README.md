@@ -36,13 +36,24 @@ A web application that automatically collects, processes, and manages media from
 
 4. **Media Group Handling** (`_shared/media-group-handler.ts`)
    - Manages related media items
-   - Uses: `media-handler.ts`, `database-service.ts`
+   - Uses: `media-handler.ts`, `database-service.ts`, `caption-sync.ts`
    - Flow:
      1. Groups related media items
-     2. Syncs captions across group
-     3. Updates product information
+     2. Creates/updates media_groups record
+     3. Syncs captions and metadata across group
+     4. Updates product information
 
-5. **Glide Synchronization** (`sync-glide-media-table/index.ts`)
+5. **Caption Analysis & Sync** (`analyze-caption/index.ts`, `_shared/caption-analyzer.ts`)
+   - AI-powered caption analysis and group sync
+   - Uses: `OpenAI API`, `database-service.ts`
+   - Flow:
+     1. Analyzes captions using AI
+     2. Extracts product information
+     3. Updates media_groups table
+     4. Propagates updates to related records
+     5. Tracks sync status and errors
+
+6. **Glide Synchronization** (`sync-glide-media-table/index.ts`)
    - Bidirectional sync with Glide
    - Uses: `database-service.ts`, `error-handler.ts`
    - Flow:
@@ -93,15 +104,24 @@ A web application that automatically collects, processes, and manages media from
      - caption: Message text
      - analyzed_content: Extracted product info
 
-2. **telegram_media**
+2. **media_groups**
+   - Group-level metadata storage
+   - Key fields:
+     - media_group_id: Telegram group identifier
+     - caption: Shared caption
+     - analyzed_content: AI analysis results
+     - sync_status: Processing status
+     - product_info: Extracted metadata
+
+3. **telegram_media**
    - Media file records
    - Key fields:
      - file_id: Telegram file identifier
      - public_url: Supabase storage URL
-     - thumbnail_url: Video preview URL from Telegram
+     - thumbnail_url: Video preview URL
      - telegram_media_row_id: Glide reference
 
-3. **glide_sync_queue**
+4. **glide_sync_queue**
    - Sync operation tracking
    - Key fields:
      - record_id: Related media ID
