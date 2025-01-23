@@ -2,46 +2,44 @@
 
 import React, { ReactElement, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { cn } from "@/lib/utils";
 
-export interface AnimatedListProps {
-  className?: string;
-  children: React.ReactNode;
+interface AnimatedListProps extends React.HTMLAttributes<HTMLDivElement> {
   delay?: number;
+  children: React.ReactNode;
 }
 
-export const AnimatedList = React.memo(
-  ({ className, children, delay = 1000 }: AnimatedListProps) => {
-    const [index, setIndex] = useState(0);
-    const childrenArray = React.Children.toArray(children);
+export function AnimatedList({
+  delay = 0,
+  className,
+  children,
+  ...props
+}: AnimatedListProps) {
+  const [isVisible, setIsVisible] = useState(false);
 
-    useEffect(() => {
-      const interval = setInterval(() => {
-        setIndex((prevIndex) => (prevIndex + 1) % childrenArray.length);
-      }, delay);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsVisible(true);
+    }, delay);
 
-      return () => clearInterval(interval);
-    }, [childrenArray.length, delay]);
+    return () => clearTimeout(timer);
+  }, [delay]);
 
-    const itemsToShow = useMemo(
-      () => childrenArray.slice(0, index + 1).reverse(),
-      [index, childrenArray]
-    );
-
-    return (
-      <div className={`flex flex-col items-center gap-4 ${className}`}>
-        <AnimatePresence>
-          {itemsToShow.map((item) => (
-            <AnimatedListItem key={(item as ReactElement).key}>
-              {item}
-            </AnimatedListItem>
-          ))}
-        </AnimatePresence>
-      </div>
-    );
-  }
-);
-
-AnimatedList.displayName = "AnimatedList";
+  return (
+    <div
+      className={cn(
+        "transition-all duration-300 ease-in-out",
+        isVisible
+          ? "opacity-100 translate-y-0"
+          : "opacity-0 translate-y-4",
+        className
+      )}
+      {...props}
+    >
+      {children}
+    </div>
+  );
+}
 
 export function AnimatedListItem({ children }: { children: React.ReactNode }) {
   const animations = {
