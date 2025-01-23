@@ -1,3 +1,4 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getAndDownloadTelegramFile } from './telegram-service.ts';
 import { getMimeType } from './media-validators.ts';
 import { downloadAndStoreThumbnail } from './thumbnail-handler.ts';
@@ -148,11 +149,11 @@ export async function processMediaFiles(
         }
       );
 
-      const { data: { publicUrl: thumbUrl } } = await supabase.storage
+      const { data: { publicUrl } } = await supabase.storage
         .from('thumbnails')
         .getPublicUrl(thumbFileName);
 
-      thumbnailUrl = thumbUrl;
+      thumbnailUrl = publicUrl;
     }
 
     await withDatabaseRetry(
