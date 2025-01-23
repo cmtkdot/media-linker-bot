@@ -114,7 +114,7 @@ export class GlideAPI {
     );
   }
 
-  async addRow(data: GlideMutation['columnValues'], recordId: string) {
+  async addRow(data: GlideMutation['columnValues'], recordId: string): Promise<GlideApiResponse> {
     const response = await this.makeRequest('POST', {
       kind: 'add-row-to-table',
       tableName: this.tableId,
@@ -122,23 +122,7 @@ export class GlideAPI {
     });
 
     const rowId = this.extractRowId(response);
-
-    try {
-      const { error } = await this.supabase
-        .from('telegram_media')
-        .update({ telegram_media_row_id: rowId })
-        .eq('id', recordId);
-
-      if (error) {
-        throw error;
-      }
-    } catch (error) {
-      throw new GlideApiError(
-        `Error updating telegram_media_row_id: ${error.message}`
-      );
-    }
-
-    return response;
+    return { rowID: rowId };
   }
 
   async updateRow(rowId: string, data: GlideMutation['columnValues']) {

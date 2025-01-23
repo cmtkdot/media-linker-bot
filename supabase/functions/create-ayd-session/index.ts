@@ -17,7 +17,7 @@ serve(async (req) => {
     const body = await req.json()
     console.log('Creating AYD session with body:', body)
 
-    // Make request to AYD API
+    // Make request to AYD API with better error handling
     const response = await fetch('https://api.ayd.ai/v1/sessions', {
       method: 'POST',
       headers: {
@@ -25,7 +25,20 @@ serve(async (req) => {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(body)
-    })
+    }).catch(error => {
+      console.error('Network error when calling AYD API:', error);
+      throw new Error(`Failed to connect to AYD API: ${error.message}`);
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('AYD API error response:', {
+        status: response.status,
+        statusText: response.statusText,
+        body: errorText
+      });
+      throw new Error(`AYD API responded with status ${response.status}: ${errorText}`);
+    }
 
     const data = await response.json()
     console.log('AYD API response:', data)
@@ -37,7 +50,11 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Error in create-ayd-session:', error)
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(
+      JSON.stringify({ 
+        error: error.message,
+        details: error.stack
+      }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500
     })

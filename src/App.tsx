@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { SessionContextProvider, useSessionContext } from "@supabase/auth-helpers-react";
+import { StrictMode } from "react";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Products from "./pages/Products";
@@ -30,68 +31,74 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return <DashboardLayout>{children}</DashboardLayout>;
 };
 
+const AppRoutes = () => (
+  <BrowserRouter>
+    <Routes>
+      <Route path="/auth" element={<Auth />} />
+      <Route
+        path="/"
+        element={
+          <ProtectedRoute>
+            <Index />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/products"
+        element={
+          <ProtectedRoute>
+            <Products />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/glide-sync"
+        element={
+          <ProtectedRoute>
+            <GlideSync />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/glide-connections"
+        element={
+          <ProtectedRoute>
+            <GlideConnections />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/database-chat"
+        element={
+          <ProtectedRoute>
+            <DatabaseChat />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/settings"
+        element={
+          <ProtectedRoute>
+            <Settings />
+          </ProtectedRoute>
+        }
+      />
+    </Routes>
+  </BrowserRouter>
+);
+
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <SessionContextProvider supabaseClient={supabase}>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/auth" element={<Auth />} />
-            <Route
-              path="/"
-              element={
-                <ProtectedRoute>
-                  <Index />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/products"
-              element={
-                <ProtectedRoute>
-                  <Products />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/glide-sync"
-              element={
-                <ProtectedRoute>
-                  <GlideSync />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/glide-connections"
-              element={
-                <ProtectedRoute>
-                  <GlideConnections />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/database-chat"
-              element={
-                <ProtectedRoute>
-                  <DatabaseChat />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/settings"
-              element={
-                <ProtectedRoute>
-                  <Settings />
-                </ProtectedRoute>
-              }
-            />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
-    </SessionContextProvider>
-  </QueryClientProvider>
+  <StrictMode>
+    <QueryClientProvider client={queryClient}>
+      <SessionContextProvider supabaseClient={supabase}>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <AppRoutes />
+        </TooltipProvider>
+      </SessionContextProvider>
+    </QueryClientProvider>
+  </StrictMode>
 );
 
 export default App;

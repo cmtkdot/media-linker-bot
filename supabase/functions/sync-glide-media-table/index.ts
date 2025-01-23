@@ -1,241 +1,150 @@
-import { serve } from "https://deno.land/std@0.131.0/http/server.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { GlideAPI } from "./glideApi.ts";
-import { QueueProcessor } from "./queueProcessor.ts";
 import { corsHeaders } from "../_shared/cors.ts";
-import { createSyncLogger, SyncErrorType } from "../_shared/sync-logger.ts";
-import { v4 as uuidv4 } from 'https://esm.sh/uuid@9.0.0';
+import { withDatabaseRetry } from "../_shared/database-retry.ts";
 
-const BATCH_SIZE = 10;
-const MAX_RETRIES = 3;
-
-serve(async (req: Request) => {
-  const correlationId = uuidv4();
-  const logger = createSyncLogger(correlationId);
-
+serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { 
-      headers: {
-        ...corsHeaders,
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Max-Age': '86400',
-      }
-    });
+    return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    logger.log({
-      operation: 'sync_start',
-      status: 'success',
-      details: { method: req.method }
-    });
-
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    // Record health check
-    await supabase
-      .from('sync_health_checks')
-      .insert({
-        check_type: 'sync_start',
-        status: 'running',
-        details: { correlation_id: correlationId }
-      });
-
-    // Get active Glide configurations
-    const { data: configs, error: configError } = await supabase
-      .from('glide_config')
-      .select('*')
-      .eq('active', true);
-
-    if (configError) {
-      logger.log({
-        operation: 'fetch_config',
-        status: 'error',
-        errorType: SyncErrorType.DATABASE,
-        details: { error: configError }
-      });
-      throw configError;
-    }
-
-    if (!configs || configs.length === 0) {
-      logger.log({
-        operation: 'validate_config',
-        status: 'error',
-        errorType: SyncErrorType.VALIDATION,
-        details: { message: 'No active configuration found' }
-      });
-      throw new Error('No active Glide configuration found');
-    }
-
-    const config = configs[0];
-    logger.log({
-      operation: 'config_loaded',
-      status: 'success',
-      details: { config_id: config.id }
-    });
-
-    // Initialize Glide API client
-    const glideApi = new GlideAPI(
-      config.app_id,
-      config.table_id,
-      config.api_token,
-      supabase
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Initialize queue processor
-    const queueProcessor = new QueueProcessor(supabase, config, glideApi, logger);
-
-    // Check for differences between Supabase and Glide
-    const { data: differences, error: diffError } = await supabase
-      .rpc('check_telegram_media_differences');
-
-    if (diffError) {
-      logger.log({
-        operation: 'check_differences',
-        status: 'error',
-        errorType: SyncErrorType.DATABASE,
-        details: { error: diffError }
-      });
-    } else if (differences?.length > 0) {
-      // Queue differences for sync
-      const batchId = uuidv4();
-      await Promise.all(differences.map(async (diff, index) => {
-        await supabase
-          .from('glide_sync_queue')
-          .insert({
-            table_name: 'telegram_media',
-            record_id: diff.record_id,
-            operation: diff.difference_type === 'missing_in_glide' ? 'INSERT' : 'UPDATE',
-            new_data: diff.supabase_data,
-            old_data: diff.glide_data,
-            priority: 2, // Higher priority for differences
-            batch_id: batchId
-          });
-      }));
-    }
-
-    // Get unprocessed items from queue, ordered by priority
-    const { data: queueItems, error: queueError } = await supabase
-      .from('glide_sync_queue')
+    // First, get all messages that need syncing
+    const { data: messages, error: messagesError } = await supabase
+      .from('messages')
       .select('*')
-      .is('processed_at', null)
-      .order('priority', { ascending: false })
-      .order('created_at', { ascending: true })
-      .limit(BATCH_SIZE);
+      .in('message_type', ['photo', 'video', 'document', 'animation'])
+      .is('processed_at', null);
 
-    if (queueError) {
-      logger.log({
-        operation: 'fetch_queue',
-        status: 'error',
-        errorType: SyncErrorType.DATABASE,
-        details: { error: queueError }
-      });
-      throw queueError;
-    }
+    if (messagesError) throw messagesError;
 
-    const result = {
-      added: 0,
-      updated: 0,
-      deleted: 0,
-      errors: [] as string[]
-    };
+    let syncedCount = 0;
+    let errorCount = 0;
+    const errors = [];
 
-    // Process queue items in batches
-    const batches = queueItems?.reduce((acc, item) => {
-      const batchId = item.batch_id || 'default';
-      if (!acc[batchId]) {
-        acc[batchId] = [];
-      }
-      acc[batchId].push(item);
-      return acc;
-    }, {} as Record<string, any[]>) || {};
-
-    // Process each batch
-    for (const [batchId, items] of Object.entries(batches)) {
+    // Process each message
+    for (const message of messages || []) {
       try {
-        await Promise.all(items.map(item => queueProcessor.processQueueItem(item, result)));
+        const fileData = {
+          file_id: message.message_data?.photo?.[0]?.file_id || 
+                   message.message_data?.video?.file_id ||
+                   message.message_data?.document?.file_id ||
+                   message.message_data?.animation?.file_id,
+          file_unique_id: message.message_data?.photo?.[0]?.file_unique_id ||
+                         message.message_data?.video?.file_unique_id ||
+                         message.message_data?.document?.file_unique_id ||
+                         message.message_data?.animation?.file_unique_id,
+          file_type: message.message_type
+        };
+
+        if (!fileData.file_unique_id) {
+          console.error('Missing file_unique_id for message:', message.id);
+          continue;
+        }
+
+        // Check if media already exists
+        const { data: existingMedia } = await supabase
+          .from('telegram_media')
+          .select('id')
+          .eq('file_unique_id', fileData.file_unique_id)
+          .maybeSingle();
+
+        if (existingMedia) {
+          // Update existing record
+          const { error: updateError } = await supabase
+            .from('telegram_media')
+            .update({
+              message_id: message.id,
+              caption: message.caption,
+              product_name: message.product_name,
+              product_code: message.product_code,
+              quantity: message.quantity,
+              vendor_uid: message.vendor_uid,
+              purchase_date: message.purchase_date,
+              notes: message.notes,
+              analyzed_content: message.analyzed_content,
+              telegram_data: {
+                message_data: message.message_data,
+                media_group_id: message.media_group_id
+              },
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', existingMedia.id);
+
+          if (updateError) throw updateError;
+        } else {
+          // Insert new record
+          const { error: insertError } = await supabase
+            .from('telegram_media')
+            .insert({
+              message_id: message.id,
+              file_id: fileData.file_id,
+              file_unique_id: fileData.file_unique_id,
+              file_type: fileData.file_type,
+              caption: message.caption,
+              product_name: message.product_name,
+              product_code: message.product_code,
+              quantity: message.quantity,
+              vendor_uid: message.vendor_uid,
+              purchase_date: message.purchase_date,
+              notes: message.notes,
+              analyzed_content: message.analyzed_content,
+              telegram_data: {
+                message_data: message.message_data,
+                media_group_id: message.media_group_id
+              }
+            });
+
+          if (insertError) throw insertError;
+        }
+
+        // Mark message as processed
+        await supabase
+          .from('messages')
+          .update({ processed_at: new Date().toISOString() })
+          .eq('id', message.id);
+
+        syncedCount++;
       } catch (error) {
-        logger.log({
-          operation: 'process_batch',
-          status: 'error',
-          errorType: SyncErrorType.UNKNOWN,
-          details: { 
-            batch_id: batchId,
-            error: error.message 
-          }
+        console.error('Error processing message:', message.id, error);
+        errorCount++;
+        errors.push({
+          message_id: message.id,
+          error: error.message,
+          file_unique_id: message.message_data?.photo?.[0]?.file_unique_id ||
+                         message.message_data?.video?.file_unique_id ||
+                         message.message_data?.document?.file_unique_id ||
+                         message.message_data?.animation?.file_unique_id
         });
       }
     }
 
-    // Update health check status
-    await supabase
-      .from('sync_health_checks')
-      .insert({
-        check_type: 'sync_complete',
-        status: result.errors.length > 0 ? 'warning' : 'success',
-        details: { 
-          correlation_id: correlationId,
-          result
-        }
-      });
-
-    logger.log({
-      operation: 'sync_complete',
-      status: 'success',
-      details: result
-    });
-
     return new Response(
       JSON.stringify({
         success: true,
-        data: result,
-        correlationId
+        synced_count: syncedCount,
+        error_count: errorCount,
+        errors
       }),
       { 
         headers: { 
           ...corsHeaders,
           'Content-Type': 'application/json'
-        },
-        status: 200 
+        }
       }
     );
 
   } catch (error) {
-    // Record error in health checks
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
-
-    await supabase
-      .from('sync_health_checks')
-      .insert({
-        check_type: 'sync_error',
-        status: 'error',
-        details: { 
-          correlation_id: correlationId,
-          error: error.message,
-          stack: error.stack
-        }
-      });
-
-    logger.log({
-      operation: 'sync_failed',
-      status: 'error',
-      errorType: SyncErrorType.UNKNOWN,
-      details: { 
-        error: error.message,
-        stack: error.stack
-      }
-    });
-    
+    console.error('Error in sync function:', error);
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message,
-        correlationId
+        error: error.message
       }),
       { 
         headers: { 
