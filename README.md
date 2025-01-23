@@ -4,53 +4,28 @@ A web application that automatically collects, processes, and manages media from
 
 ## System Architecture
 
-### Message Processing Flow
+### Core Processing Flow
 
-1. **Webhook Reception**
-   - Edge Function: `telegram-webhook/index.ts`
-   - Shared Functions:
-     - `webhook-handler.ts`: Primary message processor
-     - `database-retry.ts`: Handles database operation retries
+1. **Webhook Reception** (`telegram-webhook/index.ts`)
+   - Validates incoming Telegram updates
+   - Uses: `webhook-handler.ts`, `cors.ts`
    - Flow:
-     1. Validates secret token from request headers
-     2. Extracts message data and generates message URL
-     3. Initial logging via `console.log`
-     4. Uses `withDatabaseRetry` for reliable database operations
+     1. Validates webhook secret
+     2. Extracts message data
+     3. Initiates message processing
 
-2. **Caption Analysis**
-   - Edge Function: `analyze-caption/index.ts`
-   - Shared Functions:
-     - `caption-analyzer.ts`: OpenAI integration
+2. **Message Processing** (`_shared/message-processor.ts`, `_shared/message-manager.ts`)
+   - Handles incoming messages
+   - Uses: `database-service.ts`, `caption-analyzer.ts`
    - Flow:
-     1. Receives caption text from webhook
-     2. Sends to OpenAI for analysis using `gpt-4o-mini` model
-     3. Extracts product information:
-        - Product name (before #)
-        - Product code (between # and x)
-        - Quantity (after x)
-        - Vendor UID (letters before numbers in code)
-        - Purchase date (6 digits from code)
-     4. Returns structured JSON data
+     1. Creates message record
+     2. Analyzes caption for product info
+     3. Triggers media processing if media present
+     4. Updates related records
 
-3. **Message Processing**
-   - Tables: `messages`
-   - Shared Functions:
-     - `message-processor.ts`: Message handling logic
-     - `database-service.ts`: Database operations
-   - Flow:
-     1. Creates/updates message record with:
-        - Basic message data (ID, chat, type)
-        - Sender information
-        - Media group handling
-        - Analyzed content from OpenAI
-     2. Triggers media processing if media present
-
-4. **Media Processing**
-   - Tables: `telegram_media`
-   - Shared Functions:
-     - `media-processor.ts`: Core media handling
-     - `media-validators.ts`: File validation
-     - `media-database.ts`: Media record management
+3. **Media Processing** (`_shared/media-processor.ts`)
+   - Core media file handling
+   - Uses: `media-validators.ts`, `telegram-service.ts`, `storage-manager.ts`
    - Flow:
      1. Downloads files from Telegram
      2. Validates MIME types and file integrity
@@ -59,32 +34,67 @@ A web application that automatically collects, processes, and manages media from
      5. Creates/updates telegram_media records
      6. Handles media group relationships
 
-5. **Glide Synchronization**
-   - Edge Functions:
-     - `sync-glide-media-table/index.ts`
-     - `sync-missing-rows-to-glide/index.ts`
-   - Shared Functions:
-     - `sync-logger.ts`: Sync operation logging
-     - `database-retry.ts`: Retry logic
+4. **Media Group Handling** (`_shared/media-group-handler.ts`)
+   - Manages related media items
+   - Uses: `media-handler.ts`, `database-service.ts`
    - Flow:
-     1. Changes trigger entries in `glide_sync_queue`
-     2. Periodic processing (every 5 minutes)
-     3. Batch processing with retry logic
-     4. Bidirectional updates between systems
+     1. Groups related media items
+     2. Syncs captions across group
+     3. Updates product information
+
+5. **Glide Synchronization** (`sync-glide-media-table/index.ts`)
+   - Bidirectional sync with Glide
+   - Uses: `database-service.ts`, `error-handler.ts`
+   - Flow:
+     1. Processes sync queue
+     2. Maps data between systems
+     3. Handles conflicts
+     4. Records sync status
+
+### Shared Functions Overview
+
+1. **Data Management**
+   - `database-service.ts`: Core database operations
+   - `database-retry.ts`: Retry logic for database operations
+   - `media-database.ts`: Media-specific database operations
+   - `storage-manager.ts`: File storage operations
+
+2. **Message Processing**
+   - `message-processor.ts`: Main message handling
+   - `message-manager.ts`: Message state management
+   - `caption-analyzer.ts`: AI-powered caption analysis
+   - `caption-sync.ts`: Syncs captions across media groups
+
+3. **Media Handling**
+   - `media-processor.ts`: Core media processing
+   - `media-handler.ts`: Media state management
+   - `media-validators.ts`: File validation
+   - `media-group-handler.ts`: Media group operations
+   - `metadata-extractor.ts`: Extracts media metadata
+
+4. **Error Handling & Utilities**
+   - `error-handler.ts`: Centralized error handling
+   - `retry-utils.ts`: Retry mechanism utilities
+   - `cleanup-manager.ts`: Resource cleanup
+   - `sync-logger.ts`: Sync operation logging
+   - `constants.ts`: Shared constants
+
+5. **Integration Services**
+   - `telegram-service.ts`: Telegram API integration
+   - `telegram-types.ts`: Telegram type definitions
 
 ### Database Structure
 
 1. **messages**
-   - Stores raw message data and parsed information
+   - Primary message storage
    - Key fields:
-     - message_id: Telegram message identifier
-     - chat_id: Source chat identifier
-     - media_group_id: Groups related media
-     - analyzed_content: Parsed product data
-     - message_url: Direct Telegram link
+     - message_id: Telegram message ID
+     - chat_id: Telegram chat ID
+     - caption: Message text
+     - analyzed_content: Extracted product info
 
 2. **telegram_media**
-   - Contains media file references and metadata
+   - Media file records
    - Key fields:
      - file_id: Telegram file identifier
      - public_url: Supabase storage URL
@@ -92,49 +102,29 @@ A web application that automatically collects, processes, and manages media from
      - telegram_media_row_id: Glide reference
 
 3. **glide_sync_queue**
-   - Manages pending sync operations
+   - Sync operation tracking
    - Key fields:
-     - operation: Type of sync (INSERT/UPDATE/DELETE)
-     - record_id: Reference to telegram_media
+     - record_id: Related media ID
+     - operation: Sync operation type
      - processed_at: Completion timestamp
 
-4. **failed_webhook_updates**
-   - Tracks failed processing attempts
-   - Key fields:
-     - error_message: Failure details
-     - retry_count: Number of attempts
-     - message_data: Original payload
+### Current Issues & Optimization Points
 
-### Key Components
+1. **Media Processing Flow**
+   - Issue: Media not being added to telegram_media
+   - Potential causes:
+     - Webhook handler not properly utilizing media-processor.ts
+     - Database timeout issues in database-service.ts
+     - Error handling in media-handler.ts not properly managing retries
 
-1. **Webhook Handler** (`telegram-webhook/index.ts`)
-   - Primary entry point for Telegram updates
-   - Coordinates with shared functions
-   - Implements retry logic
+2. **Recommended Fixes**
+   - Implement proper error propagation in webhook-handler.ts
+   - Add additional logging in media-processor.ts
+   - Review database-retry.ts implementation
+   - Ensure proper utilization of cleanup-manager.ts
 
-2. **Media Processor** (`_shared/media-processor.ts`)
-   - Handles file downloads and uploads
-   - Extracts thumbnails from Telegram data
-   - Updates database records
+### Environment Variables Required
 
-3. **Caption Analyzer** (`_shared/caption-analyzer.ts`)
-   - Integrates with OpenAI
-   - Extracts product information
-   - Maintains consistent data format
-
-4. **Error Handler** (`_shared/error-handler.ts`)
-   - Centralizes error logging
-   - Implements retry strategies
-   - Maintains error records
-
-5. **Database Service** (`_shared/database-service.ts`)
-   - Provides database operation helpers
-   - Implements transaction logic
-   - Handles connection management
-
-## Environment Setup
-
-Required environment variables:
 ```
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_WEBHOOK_SECRET=
@@ -144,53 +134,24 @@ OPENAI_API_KEY=
 GLIDE_API_TOKEN=
 ```
 
-## Project Structure
+### Development Guidelines
 
-```
-/src
-  /components        # React components
-    /ui             # shadcn/ui components
-  /hooks            # Custom React hooks
-  /lib             # Utility functions
-  /types           # TypeScript types
+1. **Error Handling**
+   - Use error-handler.ts for consistent error management
+   - Implement retry logic using retry-utils.ts
+   - Log errors using sync-logger.ts
 
-/supabase
-  /functions        # Edge Functions
-    /_shared       # Shared utilities
-    /telegram-webhook
-    /sync-glide-media-table
-```
+2. **Media Processing**
+   - Validate files using media-validators.ts
+   - Process groups using media-group-handler.ts
+   - Extract metadata using metadata-extractor.ts
 
-## Error Handling
+3. **Database Operations**
+   - Use database-service.ts for core operations
+   - Implement retry logic using database-retry.ts
+   - Clean up using cleanup-manager.ts
 
-1. **Retry Mechanism**
-   - Implemented in `database-retry.ts`
-   - Exponential backoff strategy
-   - Maximum retry attempts: 3
-
-2. **Error Logging**
-   - Table: `failed_webhook_updates`
-   - Includes stack traces and context
-   - Tracks retry attempts
-
-3. **Performance Monitoring**
-   - Table: `sync_performance_metrics`
-   - Tracks operation timing
-   - Records success/failure rates
-
-4. **Health Checks**
-   - Table: `sync_health_checks`
-   - Monitors system components
-   - Tracks sync status
-
-## Contributing
-
-1. Fork the repository
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a new Pull Request
-
-## License
-
-This project is private and confidential.
+4. **Monitoring**
+   - Use sync-logger.ts for operation logging
+   - Monitor sync_health_checks table
+   - Review sync_performance_metrics
