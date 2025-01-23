@@ -8,6 +8,13 @@ import { useState } from "react";
 import MediaViewer from "@/components/MediaViewer";
 import MediaEditDialog from "@/components/MediaEditDialog";
 import { useToast } from "@/components/ui/use-toast";
+import { Json } from "@/integrations/supabase/types";
+
+interface AnalyzedContent {
+  text?: string;
+  labels?: string[];
+  objects?: string[];
+}
 
 const Products = () => {
   const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
@@ -15,7 +22,7 @@ const Products = () => {
   const [editItem, setEditItem] = useState<MediaItem | null>(null);
   const { toast } = useToast();
 
-  const { data: products, refetch } = useQuery<MediaItem[]>({
+  const { data: products, refetch } = useQuery({
     queryKey: ['products'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -25,26 +32,27 @@ const Products = () => {
 
       if (error) throw error;
 
-      return data.map((item): MediaItem => ({
-        ...item,
-        file_type: item.file_type as MediaItem['file_type'],
-        telegram_data: item.telegram_data as Record<string, any>,
-        analyzed_content: item.analyzed_content ? {
-          text: typeof item.analyzed_content === 'object' && item.analyzed_content !== null 
-            ? String(item.analyzed_content.text || '') 
-            : '',
-          labels: typeof item.analyzed_content === 'object' && item.analyzed_content !== null && 
-            Array.isArray(item.analyzed_content.labels) 
-            ? item.analyzed_content.labels 
-            : [],
-          objects: typeof item.analyzed_content === 'object' && item.analyzed_content !== null && 
-            Array.isArray(item.analyzed_content.objects) 
-            ? item.analyzed_content.objects 
-            : []
-        } : undefined,
-        glide_data: item.glide_data as Record<string, any>,
-        media_metadata: item.media_metadata as Record<string, any>
-      }));
+      return data.map((item): MediaItem => {
+        // Safely parse analyzed_content
+        let analyzedContent: AnalyzedContent | undefined;
+        if (item.analyzed_content && typeof item.analyzed_content === 'object') {
+          const content = item.analyzed_content as Record<string, unknown>;
+          analyzedContent = {
+            text: typeof content.text === 'string' ? content.text : '',
+            labels: Array.isArray(content.labels) ? content.labels : [],
+            objects: Array.isArray(content.objects) ? content.objects : []
+          };
+        }
+
+        return {
+          ...item,
+          file_type: item.file_type as MediaItem['file_type'],
+          telegram_data: item.telegram_data as Record<string, any>,
+          analyzed_content: analyzedContent,
+          glide_data: item.glide_data as Record<string, any>,
+          media_metadata: item.media_metadata as Record<string, any>
+        };
+      });
     }
   });
 
@@ -82,9 +90,11 @@ const Products = () => {
     }
   };
 
-  const groupMediaByProduct = (media: MediaItem[]) => {
+  const groupMediaByProduct = (media: MediaItem[] | undefined) => {
+    if (!media) return [];
+    
     // First group by media_group_id or individual id
-    const groups = media?.reduce<Record<string, MediaItem[]>>((acc, item) => {
+    const groups = media.reduce<Record<string, MediaItem[]>>((acc, item) => {
       const groupId = item.telegram_data?.media_group_id || item.id;
       if (!acc[groupId]) {
         acc[groupId] = [];
@@ -94,7 +104,7 @@ const Products = () => {
     }, {});
 
     // Sort items within each group (photos first)
-    return Object.values(groups || {}).map(group => {
+    return Object.values(groups).map(group => {
       return group.sort((a, b) => {
         if (a.file_type === 'photo' && b.file_type !== 'photo') return -1;
         if (a.file_type !== 'photo' && b.file_type === 'photo') return 1;
@@ -112,7 +122,7 @@ const Products = () => {
     setEditItem(item);
   };
 
-  const productGroups = products ? groupMediaByProduct(products) : [];
+  const productGroups = groupMediaByProduct(products);
 
   return (
     <div className="container mx-auto py-8 px-4">
