@@ -25,7 +25,7 @@ const DropdownMenu = ({ options, children }: DropdownMenuProps) => {
     <div className="relative">
       <Button
         onClick={toggleDropdown}
-        className="px-4 py-2 bg-[#11111198] hover:bg-[#111111d1] shadow-[0_0_20px_rgba(0,0,0,0.2)] border-none rounded-xl backdrop-blur-sm"
+        className="px-4 py-2 bg-background/80 dark:bg-background/40 hover:bg-background/90 dark:hover:bg-background/60 shadow-lg dark:shadow-[0_0_20px_rgba(0,0,0,0.4)] border border-border/50 dark:border-border/20 rounded-xl backdrop-blur-sm text-foreground dark:text-foreground/90"
       >
         {children ?? "Menu"}
         <>
@@ -46,7 +46,7 @@ const DropdownMenu = ({ options, children }: DropdownMenuProps) => {
             animate={{ y: 0, scale: 1, filter: "blur(0px)" }}
             exit={{ y: -5, scale: 0.95, opacity: 0, filter: "blur(10px)" }}
             transition={{ duration: 0.6, ease: "circInOut", type: "spring" }}
-            className="absolute z-10 w-48 mt-2 p-1 bg-[#11111198] rounded-xl shadow-[0_0_20px_rgba(0,0,0,0.2)] backdrop-blur-sm flex flex-col gap-2"
+            className="absolute z-10 w-48 mt-2 p-1 bg-background/80 dark:bg-background/40 rounded-xl shadow-lg dark:shadow-[0_0_20px_rgba(0,0,0,0.4)] backdrop-blur-sm border border-border/50 dark:border-border/20 flex flex-col gap-2"
           >
             {options && options.length > 0 ? (
               options.map((option, index) => (
@@ -71,7 +71,7 @@ const DropdownMenu = ({ options, children }: DropdownMenuProps) => {
                     type: "spring",
                   }}
                   whileHover={{
-                    backgroundColor: "#11111140",
+                    backgroundColor: "rgba(var(--background), 0.1)",
                     transition: {
                       duration: 0.4,
                       ease: "easeInOut",
@@ -85,18 +85,19 @@ const DropdownMenu = ({ options, children }: DropdownMenuProps) => {
                     },
                   }}
                   key={option.label}
-                  onClick={() => {
-                    option.onClick();
-                    setIsOpen(false);
-                  }}
-                  className="px-2 py-3 cursor-pointer text-white text-sm rounded-lg w-full text-left flex items-center gap-x-2"
+                  onClick={option.onClick}
+                  className="px-2 py-3 cursor-pointer text-foreground dark:text-foreground/90 text-sm rounded-lg w-full text-left flex items-center gap-x-2 hover:bg-accent/10 dark:hover:bg-accent/20"
                 >
-                  {option.Icon}
+                  {option.Icon && (
+                    <span className="text-muted-foreground">{option.Icon}</span>
+                  )}
                   {option.label}
                 </motion.button>
               ))
             ) : (
-              <div className="px-4 py-2 text-white text-xs">No options</div>
+              <div className="px-4 py-2 text-muted-foreground text-xs">
+                No options
+              </div>
             )}
           </motion.div>
         )}
