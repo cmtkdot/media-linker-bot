@@ -168,89 +168,88 @@ export type Database = {
           },
         ]
       }
-
-messages: {
-  Row: {
-    analyzed_content: Json | null
-    caption: string | null
-    chat_id: number
-    created_at: string
-    id: string
-    last_retry_at: string | null
-    media_group_id: string | null
-    message_data: Json
-    message_id: number
-    message_type: string
-    notes: string | null
-    processed_at: string | null
-    processing_error: string | null
-    product_code: string | null
-    product_name: string | null
-    purchase_date: string | null
-    purchase_order_uid: string | null
-    quantity: number | null
-    retry_count: number | null
-    sender_info: Json
-    status: string | null
-    thumbnail_url: string | null
-    updated_at: string
-    vendor_uid: string | null
-    message_url: string | null
-  }
-  Insert: {
-    analyzed_content?: Json | null
-    caption?: string | null
-    chat_id: number
-    created_at?: string
-    id?: string
-    last_retry_at?: string | null
-    media_group_id?: string | null
-    message_data?: Json
-    message_id: number
-    message_type: string
-    notes?: string | null
-    processed_at?: string | null
-    processing_error?: string | null
-    product_code?: string | null
-    product_name?: string | null
-    purchase_date?: string | null
-    purchase_order_uid?: string | null
-    quantity?: number | null
-    retry_count?: number | null
-    sender_info?: Json
-    status?: string | null
-    thumbnail_url?: string | null
-    updated_at?: string
-    vendor_uid?: string | null
-    message_url?: string | null
-  }
-  Update: {
-    analyzed_content?: Json | null
-    caption?: string | null
-    chat_id?: number
-    created_at?: string
-    id?: string
-    last_retry_at?: string | null
-    media_group_id?: string | null
-    message_data?: Json
-    message_id?: number
-    message_type?: string
-    notes?: string | null
-    processed_at?: string | null
-    processing_error?: string | null
-    product_code?: string | null
-    product_name?: string | null
-    purchase_date?: string | null
-    purchase_order_uid?: string | null
-    quantity?: number | null
-    retry_count?: number | null
-    sender_info?: Json
-    status?: string | null
-    thumbnail_url?: string | null
-    updated_at?: string
-    vendor_uid?: string | null
-    message_url?: string | null
-  }
+      messages: {
+        Row: {
+          analyzed_content: Json | null
+          caption: string | null
+          chat_id: number
+          created_at: string
+          id: string
+          last_retry_at: string | null
+          media_group_id: string | null
+          message_data: Json
+          message_id: number
+          message_type: string
+          message_url: string | null
+          notes: string | null
+          processed_at: string | null
+          processing_error: string | null
+          product_code: string | null
+          product_name: string | null
+          purchase_date: string | null
+          purchase_order_uid: string | null
+          quantity: number | null
+          retry_count: number | null
+          sender_info: Json
+          status: string | null
+          thumbnail_url: string | null
+          updated_at: string
+          vendor_uid: string | null
+        }
+        Insert: {
+          analyzed_content?: Json | null
+          caption?: string | null
+          chat_id: number
+          created_at?: string
+          id?: string
+          last_retry_at?: string | null
+          media_group_id?: string | null
+          message_data?: Json
+          message_id: number
+          message_type: string
+          message_url?: string | null
+          notes?: string | null
+          processed_at?: string | null
+          processing_error?: string | null
+          product_code?: string | null
+          product_name?: string | null
+          purchase_date?: string | null
+          purchase_order_uid?: string | null
+          quantity?: number | null
+          retry_count?: number | null
+          sender_info?: Json
+          status?: string | null
+          thumbnail_url?: string | null
+          updated_at?: string
+          vendor_uid?: string | null
+        }
+        Update: {
+          analyzed_content?: Json | null
+          caption?: string | null
+          chat_id?: number
+          created_at?: string
+          id?: string
+          last_retry_at?: string | null
+          media_group_id?: string | null
+          message_data?: Json
+          message_id?: number
+          message_type?: string
+          message_url?: string | null
+          notes?: string | null
+          processed_at?: string | null
+          processing_error?: string | null
+          product_code?: string | null
+          product_name?: string | null
+          purchase_date?: string | null
+          purchase_order_uid?: string | null
+          quantity?: number | null
+          retry_count?: number | null
+          sender_info?: Json
+          status?: string | null
+          thumbnail_url?: string | null
+          updated_at?: string
+          vendor_uid?: string | null
+        }
         Relationships: []
       }
       products: {
@@ -538,6 +537,7 @@ messages: {
           message_data: Json
           message_id: number
           message_type: string
+          message_url: string | null
           notes: string | null
           processed_at: string | null
           processing_error: string | null
@@ -715,4 +715,3 @@ export type CompositeTypes<
   : PublicCompositeTypeNameOrOptions extends keyof PublicSchema["CompositeTypes"]
     ? PublicSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
-

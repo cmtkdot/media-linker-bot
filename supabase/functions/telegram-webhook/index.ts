@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from "../_shared/cors.ts";
 import { handleWebhookUpdate } from "../_shared/webhook-handler.ts";
+import { withDatabaseRetry } from "../_shared/database-retry.ts";
 
 serve(async (req) => {
   console.log('Received webhook request:', req.method);
@@ -51,12 +52,14 @@ serve(async (req) => {
       const chatId = message.chat.id.toString();
       const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
 
-      const { data: messageRecord } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('message_id', message.message_id)
-        .eq('chat_id', message.chat.id)
-        .maybeSingle();
+      const { data: messageRecord } = await withDatabaseRetry(async () => {
+        return await supabase
+          .from('messages')
+          .select('*')
+          .eq('message_id', message.message_id)
+          .eq('chat_id', message.chat.id)
+          .maybeSingle();
+      });
 
       if (messageRecord) {
         let fileId, fileUniqueId, fileType;
@@ -80,20 +83,23 @@ serve(async (req) => {
         }
 
         if (fileId && fileUniqueId) {
-          const { data: existingMedia } = await supabase
-            .from('telegram_media')
-            .select('*')
-            .eq('file_unique_id', fileUniqueId)
-            .maybeSingle();
+          const { data: existingMedia } = await withDatabaseRetry(async () => {
+            return await supabase
+              .from('telegram_media')
+              .select('*')
+              .eq('file_unique_id', fileUniqueId)
+              .maybeSingle();
+          });
 
           const messageCreatedAt = new Date(messageRecord.created_at);
           
-          // Check if file exists in storage
-          const { data: storageData } = await supabase.storage
-            .from('media')
-            .list('', {
-              search: fileUniqueId
-            });
+          const { data: storageData } = await withDatabaseRetry(async () => {
+            return await supabase.storage
+              .from('media')
+              .list('', {
+                search: fileUniqueId
+              });
+          });
 
           let publicUrl;
           if (storageData && storageData.length > 0) {
@@ -113,10 +119,53 @@ serve(async (req) => {
             if (messageCreatedAt > mediaCreatedAt) {
               console.log('Updating existing telegram_media record:', existingMedia.id);
               
-              const { error: updateError } = await supabase
+              await withDatabaseRetry(async () => {
+                const { error: updateError } = await supabase
+                  .from('telegram_media')
+                  .update({
+                    file_id: fileId,
+                    message_id: messageRecord.id,
+                    caption: messageRecord.caption,
+                    product_name: messageRecord.product_name,
+                    product_code: messageRecord.product_code,
+                    quantity: messageRecord.quantity,
+                    vendor_uid: messageRecord.vendor_uid,
+                    purchase_date: messageRecord.purchase_date,
+                    notes: messageRecord.notes,
+                    analyzed_content: messageRecord.analyzed_content,
+                    public_url: publicUrl,
+                    message_url: messageUrl,
+                    telegram_data: {
+                      message_id: message.message_id,
+                      chat_id: message.chat.id,
+                      media_group_id: message.media_group_id,
+                      date: message.date,
+                      caption: message.caption
+                    },
+                    updated_at: new Date().toISOString()
+                  })
+                  .eq('id', existingMedia.id);
+
+                if (updateError) {
+                  console.error('Error updating telegram_media record:', updateError);
+                  throw updateError;
+                }
+              });
+              
+              console.log('Successfully updated telegram_media record:', existingMedia.id);
+            } else {
+              console.log('Skipping update as message is older than existing media record');
+            }
+          } else {
+            console.log('Creating new telegram_media record for message:', messageRecord.id);
+            
+            await withDatabaseRetry(async () => {
+              const { error: insertError } = await supabase
                 .from('telegram_media')
-                .update({
+                .insert({
                   file_id: fileId,
+                  file_unique_id: fileUniqueId,
+                  file_type: fileType,
                   message_id: messageRecord.id,
                   caption: messageRecord.caption,
                   product_name: messageRecord.product_name,
@@ -135,54 +184,17 @@ serve(async (req) => {
                     date: message.date,
                     caption: message.caption
                   },
+                  created_at: new Date().toISOString(),
                   updated_at: new Date().toISOString()
-                })
-                .eq('id', existingMedia.id);
+                });
 
-              if (updateError) {
-                console.error('Error updating telegram_media record:', updateError);
-              } else {
-                console.log('Successfully updated telegram_media record:', existingMedia.id);
+              if (insertError) {
+                console.error('Error creating telegram_media record:', insertError);
+                throw insertError;
               }
-            } else {
-              console.log('Skipping update as message is older than existing media record');
-            }
-          } else {
-            console.log('Creating new telegram_media record for message:', messageRecord.id);
+            });
             
-            const { error: insertError } = await supabase
-              .from('telegram_media')
-              .insert({
-                file_id: fileId,
-                file_unique_id: fileUniqueId,
-                file_type: fileType,
-                message_id: messageRecord.id,
-                caption: messageRecord.caption,
-                product_name: messageRecord.product_name,
-                product_code: messageRecord.product_code,
-                quantity: messageRecord.quantity,
-                vendor_uid: messageRecord.vendor_uid,
-                purchase_date: messageRecord.purchase_date,
-                notes: messageRecord.notes,
-                analyzed_content: messageRecord.analyzed_content,
-                public_url: publicUrl,
-                message_url: messageUrl,
-                telegram_data: {
-                  message_id: message.message_id,
-                  chat_id: message.chat.id,
-                  media_group_id: message.media_group_id,
-                  date: message.date,
-                  caption: message.caption
-                },
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-              });
-
-            if (insertError) {
-              console.error('Error creating telegram_media record:', insertError);
-            } else {
-              console.log('Successfully created telegram_media record for message:', messageRecord.id);
-            }
+            console.log('Successfully created telegram_media record for message:', messageRecord.id);
           }
         }
       }
