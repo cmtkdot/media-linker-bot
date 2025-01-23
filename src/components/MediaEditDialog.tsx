@@ -28,6 +28,33 @@ const MediaEditDialog = ({ editItem, onClose, onSave, onItemChange }: MediaEditD
 
       if (queueError) throw queueError;
 
+      // Queue delete operation for Glide sync if there's a Glide row ID
+      if (editItem.telegram_media_row_id) {
+        const { error: syncError } = await supabase
+          .from('glide_sync_queue')
+          .insert({
+            table_name: 'telegram_media',
+            record_id: editItem.id,
+            operation: 'DELETE',
+            old_data: JSON.parse(JSON.stringify(editItem))
+          });
+
+        if (syncError) throw syncError;
+      }
+
+      // Update Telegram message if needed
+      if (editItem.telegram_data?.message_id && editItem.telegram_data?.chat?.id) {
+        await supabase.functions.invoke('update-telegram-message', {
+          body: {
+            messageId: editItem.telegram_data.message_id,
+            chatId: editItem.telegram_data.chat.id,
+            updates: {
+              caption: ''  // Clear the caption on deletion
+            }
+          }
+        });
+      }
+
       // Then delete the media record
       const { error } = await supabase
         .from('telegram_media')
