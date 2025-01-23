@@ -49,14 +49,14 @@ const DatabaseChat = () => {
           title: "Connection Successful",
           description: "Database chat is ready to use",
         });
-      } catch (err) {
+      } catch (err: any) {
         console.error('Error:', err);
         setConnectionStatus('error');
-        setError("Failed to initialize chat. Please try again later.");
+        setError(err.message || "Failed to initialize chat. Please try again later.");
         toast({
           variant: "destructive",
           title: "Connection Error",
-          description: "Failed to connect to the database chat service",
+          description: err.message || "Failed to connect to the database chat service",
         });
       } finally {
         setIsLoading(false);
