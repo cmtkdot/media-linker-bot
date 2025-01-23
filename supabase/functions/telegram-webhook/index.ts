@@ -5,6 +5,9 @@ import { handleWebhookUpdate } from "../_shared/webhook-handler.ts";
 import { withDatabaseRetry } from "../_shared/database-retry.ts";
 import { analyzeCaptionWithAI } from "../_shared/caption-analyzer.ts";
 import { processMediaFiles } from "../_shared/media-processor.ts";
+import { extractVideoMetadata, buildMediaMetadata } from "../_shared/metadata-extractor.ts";
+import { handleProcessingError } from "../_shared/error-handler.ts";
+import { MAX_RETRY_ATTEMPTS, INITIAL_RETRY_DELAY } from "../_shared/constants.ts";
 
 serve(async (req) => {
   console.log('Received webhook request:', req.method);
@@ -60,35 +63,42 @@ serve(async (req) => {
     if (message.caption) {
       try {
         console.log('Analyzing caption:', message.caption);
-        analyzedContent = await analyzeCaptionWithAI(message.caption, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+        analyzedContent = await analyzeCaptionWithAI(message.caption);
         console.log('Caption analysis result:', analyzedContent);
       } catch (error) {
         console.error('Error analyzing caption:', error);
       }
     }
 
-    // Create or update message record with retry
-    const messageData = {
-      message_id: message.message_id,
-      chat_id: message.chat.id,
-      sender_info: message.from || message.sender_chat || {},
-      message_type: determineMessageType(message),
-      message_data: message,
-      caption: message.caption,
-      media_group_id: message.media_group_id,
-      message_url: messageUrl,
-      analyzed_content: analyzedContent,
-      product_name: analyzedContent?.product_name || null,
-      product_code: analyzedContent?.product_code || null,
-      quantity: analyzedContent?.quantity || null,
-      vendor_uid: analyzedContent?.vendor_uid || null,
-      purchase_date: analyzedContent?.purchase_date || null,
-      notes: analyzedContent?.notes || null,
-      status: 'pending',
-      retry_count: 0
-    };
+    // Extract metadata for videos
+    let mediaMetadata = null;
+    if (message.video) {
+      mediaMetadata = extractVideoMetadata(message);
+      console.log('Extracted video metadata:', mediaMetadata);
+    }
 
-    const { data: messageRecord, error: messageError } = await withDatabaseRetry(async () => {
+    // Create or update message record with retry
+    const messageRecord = await withDatabaseRetry(async () => {
+      const messageData = {
+        message_id: message.message_id,
+        chat_id: message.chat.id,
+        sender_info: message.from || message.sender_chat || {},
+        message_type: determineMessageType(message),
+        message_data: message,
+        caption: message.caption,
+        media_group_id: message.media_group_id,
+        message_url: messageUrl,
+        analyzed_content: analyzedContent,
+        product_name: analyzedContent?.product_name || null,
+        product_code: analyzedContent?.product_code || null,
+        quantity: analyzedContent?.quantity || null,
+        vendor_uid: analyzedContent?.vendor_uid || null,
+        purchase_date: analyzedContent?.purchase_date || null,
+        notes: analyzedContent?.notes || null,
+        status: 'pending',
+        retry_count: 0
+      };
+
       const { data: existingMessage } = await supabase
         .from('messages')
         .select('*')
@@ -97,28 +107,47 @@ serve(async (req) => {
         .maybeSingle();
 
       if (existingMessage) {
-        return await supabase
+        const { data, error } = await supabase
           .from('messages')
           .update(messageData)
           .eq('id', existingMessage.id)
           .select()
           .single();
+
+        if (error) throw error;
+        return data;
       } else {
-        return await supabase
+        const { data, error } = await supabase
           .from('messages')
           .insert([messageData])
           .select()
           .single();
-      }
-    });
 
-    if (messageError) {
-      throw messageError;
-    }
+        if (error) throw error;
+        return data;
+      }
+    }, 0, 'create_message');
 
     // Process media files if present
     if (hasMedia(message) && messageRecord) {
-      await processMediaFiles(message, messageRecord, supabase, TELEGRAM_BOT_TOKEN);
+      try {
+        await processMediaFiles(
+          message,
+          messageRecord,
+          supabase,
+          TELEGRAM_BOT_TOKEN,
+          mediaMetadata
+        );
+        console.log('Successfully processed media files');
+      } catch (error) {
+        await handleProcessingError(
+          supabase,
+          error,
+          messageRecord,
+          0,
+          true
+        );
+      }
     }
 
     console.log('Successfully processed update:', {
