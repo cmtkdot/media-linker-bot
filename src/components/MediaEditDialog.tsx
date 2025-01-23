@@ -119,7 +119,7 @@ const MediaEditDialog = ({ editItem, onClose, onSave, onItemChange }: MediaEditD
           table_name: 'telegram_media',
           record_id: editItem.id,
           operation: 'UPDATE',
-          new_data: editItem
+          new_data: JSON.parse(JSON.stringify(editItem)) // Convert MediaItem to plain object
         });
 
       if (queueError) throw queueError;
