@@ -3,7 +3,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { databaseService } from "@/services/database-service";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, RefreshCw } from "lucide-react";
 
@@ -16,7 +15,13 @@ export const MessageMediaSyncSection = () => {
     setIsSyncing(true);
     try {
       // First, sync messages to telegram_media using the database service
-      const { data: syncResults } = await supabase.rpc('sync_messages_to_telegram_media');
+      const { data: syncResults, error: syncError } = await supabase.rpc('sync_messages_to_telegram_media');
+      
+      if (syncError) {
+        console.error('Error in sync_messages_to_telegram_media:', syncError);
+        throw syncError;
+      }
+
       const syncResult = syncResults?.[0] || { synced_count: 0, error_count: 0 };
 
       // Then call the edge function to process the media files
@@ -35,8 +40,19 @@ export const MessageMediaSyncSection = () => {
     } catch (error: any) {
       console.error('Error in message media sync:', error);
       
+      // Parse the error message from the response body if available
+      let errorMessage = error.message;
+      try {
+        if (error.body) {
+          const bodyError = JSON.parse(error.body);
+          errorMessage = bodyError.message || error.message;
+        }
+      } catch (e) {
+        // If parsing fails, use the original error message
+      }
+      
       // Handle specific database error for duplicate records
-      if (error.message?.includes('ON CONFLICT DO UPDATE command cannot affect row a second time')) {
+      if (errorMessage?.includes('ON CONFLICT DO UPDATE command cannot affect row a second time')) {
         toast({
           title: "Sync Partially Complete",
           description: "Some records were skipped due to duplicate entries. This is expected behavior.",
@@ -47,7 +63,7 @@ export const MessageMediaSyncSection = () => {
 
       toast({
         title: "Sync Failed",
-        description: error.message || "Failed to sync message media",
+        description: errorMessage || "Failed to sync message media",
         variant: "destructive",
       });
     } finally {
