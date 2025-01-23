@@ -12,10 +12,10 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // First, get all media groups that need updating
+    // First, get all unique media groups
     const { data: mediaGroups, error: groupError } = await supabase
       .from('telegram_media')
-      .select('telegram_data->media_group_id, caption')
+      .select('telegram_data->media_group_id')
       .neq('telegram_data->media_group_id', null)
       .limit(1000);
 
@@ -57,7 +57,23 @@ Deno.serve(async (req) => {
         }
 
         if (analyzedContent) {
-          analyzedCaptions++;
+          // Update the media record with analyzed content
+          const { error: updateError } = await supabase
+            .from('telegram_media')
+            .update({
+              analyzed_content: analyzedContent,
+              product_name: analyzedContent?.product_name,
+              product_code: analyzedContent?.product_code,
+              quantity: analyzedContent?.quantity,
+              vendor_uid: analyzedContent?.vendor_uid,
+              purchase_date: analyzedContent?.purchase_date,
+              notes: analyzedContent?.notes
+            })
+            .eq('id', media.id);
+
+          if (!updateError) {
+            analyzedCaptions++;
+          }
         }
       } catch (error) {
         console.error('Error processing media item:', error);
@@ -101,31 +117,8 @@ Deno.serve(async (req) => {
 
         console.log('Analyzed content:', analyzedContent);
 
-        // Update media_groups table
-        const { error: upsertError } = await supabase
-          .from('media_groups')
-          .upsert({
-            media_group_id: mediaGroupId,
-            caption: mediaWithCaption.caption,
-            analyzed_content: analyzedContent,
-            product_name: analyzedContent?.product_name,
-            product_code: analyzedContent?.product_code,
-            quantity: analyzedContent?.quantity,
-            vendor_uid: analyzedContent?.vendor_uid,
-            purchase_date: analyzedContent?.purchase_date,
-            notes: analyzedContent?.notes,
-            sync_status: 'completed'
-          });
-
-        if (upsertError) {
-          console.error('Error updating media group:', upsertError);
-          continue;
-        }
-
-        updatedGroups++;
-
-        // Sync all media in the group
-        const { error: syncError } = await supabase
+        // Update all media in the group with the analyzed content
+        const { error: updateError } = await supabase
           .from('telegram_media')
           .update({
             caption: mediaWithCaption.caption,
@@ -139,7 +132,8 @@ Deno.serve(async (req) => {
           })
           .eq('telegram_data->>media_group_id', mediaGroupId);
 
-        if (!syncError) {
+        if (!updateError) {
+          updatedGroups++;
           syncedMedia += groupMedia.length;
         }
       }
