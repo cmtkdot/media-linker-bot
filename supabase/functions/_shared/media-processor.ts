@@ -5,7 +5,7 @@ import { downloadAndStoreThumbnail } from './thumbnail-handler.ts';
 import { withDatabaseRetry } from './database-retry.ts';
 import { SyncErrorType } from './sync-logger.ts';
 import { handleMediaGroup } from './media-group-handler.ts';
-import { SupabaseClient } from '@supabase/supabase-js';
+import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 interface TelegramMessage {
   photo?: Array<{
