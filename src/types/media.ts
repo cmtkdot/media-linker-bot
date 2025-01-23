@@ -25,6 +25,7 @@ export interface MediaItem {
   };
   message_url?: string;
   glide_app_url?: string;
+  telegram_media_row_id?: string;
   created_at: string;
   updated_at: string;
 }
