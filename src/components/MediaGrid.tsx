@@ -27,6 +27,8 @@ interface QueryResult {
     labels?: string[];
     objects?: string[];
   } | null;
+  created_at: string;
+  updated_at: string;
 }
 
 const MediaGrid = () => {
@@ -97,7 +99,9 @@ const MediaGrid = () => {
           text: item.analyzed_content.text || '',
           labels: item.analyzed_content.labels || [],
           objects: item.analyzed_content.objects || []
-        } : undefined
+        } : undefined,
+        created_at: item.created_at,
+        updated_at: item.updated_at
       }));
     }
   });
