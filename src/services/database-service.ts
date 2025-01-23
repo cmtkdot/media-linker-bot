@@ -43,13 +43,6 @@ class DatabaseService {
     return callback(transactionContext);
   }
 
-  async syncMessageMedia(messageId: string): Promise<void> {
-    return withDatabaseRetry(async () => {
-      const { error } = await supabase.rpc('sync_messages_to_telegram_media');
-      if (error) throw error;
-    });
-  }
-
   async updateMediaItem(id: string, updates: Partial<MediaItem>): Promise<void> {
     return withDatabaseRetry(async () => {
       const { error } = await supabase
@@ -72,18 +65,16 @@ class DatabaseService {
 
   async batchUpdateMedia(updates: Array<{ id: string; data: Partial<MediaItem> }>): Promise<void> {
     return withDatabaseRetry(async () => {
-      await this.runTransaction(async (tx) => {
-        for (const batch of this.chunkArray(updates, 10)) {
-          await Promise.all(
-            batch.map(({ id, data }) =>
-              supabase
-                .from('telegram_media')
-                .update(data)
-                .eq('id', id)
-            )
-          );
-        }
-      });
+      for (const batch of this.chunkArray(updates, 10)) {
+        await Promise.all(
+          batch.map(({ id, data }) =>
+            supabase
+              .from('telegram_media')
+              .update(data)
+              .eq('id', id)
+          )
+        );
+      }
     });
   }
 

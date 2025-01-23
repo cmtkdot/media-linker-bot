@@ -6,27 +6,13 @@ export async function handleMessageProcessing(
   existingMessage: any,
   productInfo: any = null
 ) {
-  console.log('Processing message:', { 
-    message_id: message.message_id, 
-    chat_id: message.chat.id,
-    product_info: productInfo,
-    existing_message: existingMessage?.id
-  });
+  const messageType = determineMessageType(message);
+  if (!messageType) {
+    console.error('Invalid message type:', message);
+    return { success: false, error: 'Invalid message type' };
+  }
 
   try {
-    // Determine message type with proper validation
-    const messageType = determineMessageType(message);
-    if (!messageType) {
-      console.error('Invalid message type:', message);
-      return {
-        success: false,
-        error: 'Invalid message type'
-      };
-    }
-
-    console.log('Determined message type:', messageType);
-
-    // Try to get existing message using maybeSingle
     const { data: existingRecord, error: existingError } = await supabase
       .from('messages')
       .select('*')
@@ -36,13 +22,9 @@ export async function handleMessageProcessing(
 
     if (existingError) {
       console.error('Error checking existing message:', existingError);
-      return {
-        success: false,
-        error: existingError.message
-      };
+      return { success: false, error: existingError.message };
     }
 
-    // Prepare message data
     const messageData = {
       message_id: message.message_id,
       chat_id: message.chat.id,
@@ -64,7 +46,6 @@ export async function handleMessageProcessing(
       })
     };
 
-    // Use upsert to handle both insert and update cases
     const { data: messageRecord, error: upsertError } = await supabase
       .from('messages')
       .upsert(messageData, {
@@ -76,10 +57,7 @@ export async function handleMessageProcessing(
 
     if (upsertError) {
       console.error('Error upserting message:', upsertError);
-      return {
-        success: false,
-        error: upsertError.message
-      };
+      return { success: false, error: upsertError.message };
     }
 
     return { 
@@ -90,17 +68,8 @@ export async function handleMessageProcessing(
     };
 
   } catch (error) {
-    console.error('Error in handleMessageProcessing:', {
-      error: error.message,
-      stack: error.stack,
-      message_id: message?.message_id,
-      chat_id: message?.chat?.id
-    });
-    
-    return {
-      success: false,
-      error: error.message
-    };
+    console.error('Error in handleMessageProcessing:', error);
+    return { success: false, error: error.message };
   }
 }
 

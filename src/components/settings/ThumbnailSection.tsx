@@ -1,75 +1,51 @@
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { useToast } from "@/components/ui/use-toast";
-import { Loader2 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { toast } from "sonner";
 
 export function ThumbnailSection() {
-  const [isProcessing, setIsProcessing] = useState(false);
-  const { toast } = useToast();
+  const { data: thumbnailStats, isLoading } = useQuery({
+    queryKey: ['thumbnailStats'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .rpc('count_missing_thumbnails');
+      if (error) throw error;
+      return data[0];
+    }
+  });
 
-  const handleProcessThumbnails = async () => {
-    setIsProcessing(true);
+  const handleRegenerateThumbnails = async () => {
     try {
-      const { data: stats } = await supabase.rpc('count_missing_thumbnails');
+      const { data, error } = await supabase
+        .rpc('regenerate_video_thumbnails');
+      if (error) throw error;
       
-      if (!stats) {
-        throw new Error('Failed to get thumbnail statistics');
-      }
-
-      toast({
-        title: "Thumbnail Status",
-        description: `Total videos: ${stats.total_videos}, Missing thumbnails: ${stats.missing_thumbnails}`,
-      });
-
-      const { data: updates } = await supabase.rpc('regenerate_video_thumbnails');
-
-      if (updates && updates.length > 0) {
-        toast({
-          title: "Thumbnails Updated",
-          description: `Updated ${updates.length} video thumbnails`,
-        });
-      } else {
-        toast({
-          title: "No Updates Required",
-          description: "All video thumbnails are up to date",
-        });
-      }
-    } catch (error: any) {
-      console.error('Error processing thumbnails:', error);
-      toast({
-        title: "Error Processing Thumbnails",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
-      setIsProcessing(false);
+      toast.success(`Successfully regenerated thumbnails`);
+    } catch (error) {
+      console.error('Error regenerating thumbnails:', error);
+      toast.error('Failed to regenerate thumbnails');
     }
   };
 
   return (
-    <div className="rounded-lg border p-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-medium">Video Thumbnails</h3>
-          <p className="text-sm text-muted-foreground">
-            Generate and update video thumbnails
-          </p>
-        </div>
-        <Button
-          onClick={handleProcessThumbnails}
-          disabled={isProcessing}
-        >
-          {isProcessing ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Processing...
-            </>
-          ) : (
-            'Process Thumbnails'
-          )}
-        </Button>
-      </div>
-    </div>
+    <Card>
+      <CardHeader>
+        <CardTitle>Video Thumbnails</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {!isLoading && thumbnailStats && (
+          <div className="grid gap-4">
+            <div>
+              <p>Total Videos: {thumbnailStats.total_videos}</p>
+              <p>Missing Thumbnails: {thumbnailStats.missing_thumbnails}</p>
+            </div>
+            <Button onClick={handleRegenerateThumbnails}>
+              Regenerate Thumbnails
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
