@@ -26,6 +26,27 @@ const MediaGridContent = ({ items = [], view, isLoading, error, onMediaUpdate }:
     setEditItem(item);
   };
 
+  const handlePrevious = () => {
+    if (!selectedMedia) return;
+    const currentIndex = items.findIndex(item => item.id === selectedMedia.id);
+    if (currentIndex > 0) {
+      setSelectedMedia(items[currentIndex - 1]);
+    }
+  };
+
+  const handleNext = () => {
+    if (!selectedMedia) return;
+    const currentIndex = items.findIndex(item => item.id === selectedMedia.id);
+    if (currentIndex < items.length - 1) {
+      setSelectedMedia(items[currentIndex + 1]);
+    }
+  };
+
+  const getCurrentIndex = () => {
+    if (!selectedMedia) return -1;
+    return items.findIndex(item => item.id === selectedMedia.id);
+  };
+
   if (isLoading) {
     return <div className="text-center py-8">Loading media items...</div>;
   }
@@ -59,6 +80,10 @@ const MediaGridContent = ({ items = [], view, isLoading, error, onMediaUpdate }:
         open={viewerOpen}
         onOpenChange={setViewerOpen}
         media={selectedMedia}
+        onPrevious={handlePrevious}
+        onNext={handleNext}
+        hasPrevious={getCurrentIndex() > 0}
+        hasNext={getCurrentIndex() < items.length - 1}
       />
 
       <MediaEditDialog
