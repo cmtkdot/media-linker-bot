@@ -307,7 +307,22 @@ export type Database = {
           status?: string
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "media_sync_queue_file_unique_id_fkey"
+            columns: ["file_unique_id"]
+            isOneToOne: true
+            referencedRelation: "telegram_media"
+            referencedColumns: ["file_unique_id"]
+          },
+          {
+            foreignKeyName: "media_sync_queue_file_unique_id_fkey"
+            columns: ["file_unique_id"]
+            isOneToOne: true
+            referencedRelation: "video_thumbnail_status"
+            referencedColumns: ["file_unique_id"]
+          },
+        ]
       }
       messages: {
         Row: {
