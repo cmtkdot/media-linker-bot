@@ -12,8 +12,7 @@ export async function processMediaFiles(
   console.log('Processing media files for message:', {
     message_id: message.message_id,
     media_group_id: message.media_group_id,
-    has_caption: !!message.caption,
-    has_analyzed_content: !!messageRecord.analyzed_content
+    has_caption: !!message.caption
   });
 
   try {
@@ -39,17 +38,28 @@ export async function processMediaFiles(
       // Handle video thumbnail
       let thumbnailUrl = null;
       if (type === 'video' && message.video?.thumb) {
-        thumbnailUrl = await downloadAndStoreThumbnail(
-          message.video.thumb,
-          botToken,
-          supabase
-        );
+        try {
+          thumbnailUrl = await downloadAndStoreThumbnail(
+            message.video.thumb,
+            botToken,
+            supabase
+          );
+          console.log('Generated thumbnail URL:', thumbnailUrl);
+        } catch (error) {
+          console.error('Error generating thumbnail:', error);
+        }
       }
 
       // Download and process file
       const { buffer, filePath } = await getAndDownloadTelegramFile(file.file_id, botToken);
       const fileExt = filePath.split('.').pop() || '';
       const fileName = `${file.file_unique_id}.${fileExt}`;
+
+      console.log('Uploading file to storage:', {
+        fileName,
+        fileType: type,
+        mimeType: getMimeType(type, filePath)
+      });
 
       // Check for existing file
       const { data: existingFile } = await supabase.storage
@@ -63,16 +73,24 @@ export async function processMediaFiles(
           .from('media')
           .upload(fileName, buffer, {
             contentType: getMimeType(type, filePath),
-            upsert: false,
+            upsert: true,
             cacheControl: '3600'
           });
 
-        if (uploadError) throw uploadError;
+        if (uploadError) {
+          console.error('Error uploading file:', uploadError);
+          throw uploadError;
+        }
+        console.log('File uploaded successfully:', fileName);
+      } else {
+        console.log('File already exists in storage:', fileName);
       }
 
       const { data: { publicUrl } } = await supabase.storage
         .from('media')
         .getPublicUrl(fileName);
+
+      console.log('Generated public URL:', publicUrl);
 
       // Create or update media record with retry
       await withDatabaseRetry(async () => {
@@ -106,7 +124,10 @@ export async function processMediaFiles(
           .from('telegram_media')
           .insert([mediaRecord]);
 
-        if (error) throw error;
+        if (error) {
+          console.error('Error creating telegram_media record:', error);
+          throw error;
+        }
 
         console.log('Successfully created telegram_media record:', {
           file_id: file.file_id,
