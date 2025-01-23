@@ -23,6 +23,7 @@ serve(async (req: Request) => {
   }
 
   try {
+    console.log('Starting sync process with correlation ID:', correlationId);
     logger.log({
       operation: 'sync_start',
       status: 'success',
@@ -49,12 +50,7 @@ serve(async (req: Request) => {
       .eq('active', true);
 
     if (configError) {
-      logger.log({
-        operation: 'fetch_config',
-        status: 'error',
-        errorType: SyncErrorType.DATABASE,
-        details: { error: configError }
-      });
+      console.error('Error fetching Glide config:', configError);
       throw configError;
     }
 
@@ -67,6 +63,7 @@ serve(async (req: Request) => {
     const queueProcessor = new QueueProcessor(supabase, config, glideApi, logger);
 
     // First, process any pending deletions
+    console.log('Processing pending deletions...');
     const { data: pendingDeletions, error: deletionError } = await supabase
       .from('glide_sync_queue')
       .select('*')
@@ -74,13 +71,26 @@ serve(async (req: Request) => {
       .is('processed_at', null)
       .order('created_at', { ascending: true });
 
-    if (deletionError) throw deletionError;
+    if (deletionError) {
+      console.error('Error fetching pending deletions:', deletionError);
+      throw deletionError;
+    }
 
     // Process deletions first
+    const deletionResults = {
+      processed: 0,
+      errors: [] as string[]
+    };
+
     if (pendingDeletions && pendingDeletions.length > 0) {
+      console.log(`Found ${pendingDeletions.length} pending deletions`);
       for (const deletion of pendingDeletions) {
         try {
-          await glideApi.deleteRow(deletion.record_id);
+          if (deletion.old_data?.telegram_media_row_id) {
+            await glideApi.deleteRow(deletion.old_data.telegram_media_row_id);
+            console.log(`Successfully deleted Glide row: ${deletion.old_data.telegram_media_row_id}`);
+          }
+
           await supabase
             .from('glide_sync_queue')
             .update({ 
@@ -88,7 +98,12 @@ serve(async (req: Request) => {
               error: null 
             })
             .eq('id', deletion.id);
+
+          deletionResults.processed++;
         } catch (error) {
+          console.error(`Error processing deletion ${deletion.id}:`, error);
+          deletionResults.errors.push(`Failed to delete ${deletion.id}: ${error.message}`);
+          
           logger.log({
             operation: 'process_deletion',
             status: 'error',
@@ -100,6 +115,7 @@ serve(async (req: Request) => {
     }
 
     // Then process other sync operations
+    console.log('Processing other sync operations...');
     const { data: queueItems, error: queueError } = await supabase
       .from('glide_sync_queue')
       .select('*')
@@ -109,17 +125,21 @@ serve(async (req: Request) => {
       .order('created_at', { ascending: true })
       .limit(BATCH_SIZE);
 
-    if (queueError) throw queueError;
+    if (queueError) {
+      console.error('Error fetching queue items:', queueError);
+      throw queueError;
+    }
 
     const result = {
       added: 0,
       updated: 0,
-      deleted: pendingDeletions?.length || 0,
-      errors: [] as string[]
+      deleted: deletionResults.processed,
+      errors: [...deletionResults.errors]
     };
 
     // Process remaining queue items
     if (queueItems && queueItems.length > 0) {
+      console.log(`Processing ${queueItems.length} queue items`);
       const batches = queueItems.reduce((acc, item) => {
         const batchId = item.batch_id || 'default';
         if (!acc[batchId]) acc[batchId] = [];
@@ -131,6 +151,7 @@ serve(async (req: Request) => {
         try {
           await Promise.all(items.map(item => queueProcessor.processQueueItem(item, result)));
         } catch (error) {
+          console.error(`Error processing batch ${batchId}:`, error);
           logger.log({
             operation: 'process_batch',
             status: 'error',
@@ -162,6 +183,7 @@ serve(async (req: Request) => {
         }
       });
 
+    console.log('Sync process completed:', result);
     logger.log({
       operation: 'sync_complete',
       status: 'success',
@@ -184,6 +206,8 @@ serve(async (req: Request) => {
     );
 
   } catch (error) {
+    console.error('Sync process failed:', error);
+    
     // Record error in health checks
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
