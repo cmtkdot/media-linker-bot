@@ -1,4 +1,4 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { MediaItem } from "@/types/media";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -7,12 +7,6 @@ import MediaViewer from "@/components/MediaViewer";
 import MediaEditDialog from "@/components/MediaEditDialog";
 import { useToast } from "@/components/ui/use-toast";
 import ProductGroup from "@/components/ProductGroup";
-
-interface AnalyzedContent {
-  text: string;
-  labels: string[];
-  objects: string[];
-}
 
 const Products = () => {
   const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
@@ -31,20 +25,19 @@ const Products = () => {
       if (error) throw error;
 
       return data.map((item): MediaItem => {
-        // Safely parse analyzed_content with required properties and default values
-        let analyzedContent: AnalyzedContent = {
+        // Initialize analyzed_content with default values
+        const analyzedContent = {
           text: '',
           labels: [],
           objects: []
         };
 
+        // Parse analyzed_content if it exists and is an object
         if (item.analyzed_content && typeof item.analyzed_content === 'object') {
           const content = item.analyzed_content as Record<string, unknown>;
-          analyzedContent = {
-            text: typeof content.text === 'string' ? content.text : '',
-            labels: Array.isArray(content.labels) ? content.labels : [],
-            objects: Array.isArray(content.objects) ? content.objects : []
-          };
+          analyzedContent.text = typeof content.text === 'string' ? content.text : '';
+          analyzedContent.labels = Array.isArray(content.labels) ? content.labels : [];
+          analyzedContent.objects = Array.isArray(content.objects) ? content.objects : [];
         }
 
         return {
@@ -96,7 +89,7 @@ const Products = () => {
   const groupMediaByProduct = (media: MediaItem[] | undefined) => {
     if (!media) return [];
     
-    // First group by media_group_id or individual id
+    // Group by media_group_id or individual id
     const groups = media.reduce<Record<string, MediaItem[]>>((acc, item) => {
       const groupId = item.telegram_data?.media_group_id || item.id;
       if (!acc[groupId]) {
@@ -106,12 +99,12 @@ const Products = () => {
       return acc;
     }, {});
 
-    // Sort items within each group (photos first)
+    // Sort items within each group (photos first, then by creation date)
     return Object.values(groups).map(group => {
       return group.sort((a, b) => {
         if (a.file_type === 'photo' && b.file_type !== 'photo') return -1;
         if (a.file_type !== 'photo' && b.file_type === 'photo') return 1;
-        return 0;
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       });
     });
   };
