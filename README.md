@@ -51,12 +51,11 @@ A web application that automatically collects, processes, and manages media from
      - `media-processor.ts`: Core media handling
      - `media-validators.ts`: File validation
      - `media-database.ts`: Media record management
-     - `thumbnail-handler.ts`: Video thumbnail generation
    - Flow:
      1. Downloads files from Telegram
      2. Validates MIME types and file integrity
      3. Uploads to Supabase storage
-     4. Generates thumbnails for videos
+     4. Extracts video thumbnails from Telegram message data
      5. Creates/updates telegram_media records
      6. Handles media group relationships
 
@@ -89,7 +88,7 @@ A web application that automatically collects, processes, and manages media from
    - Key fields:
      - file_id: Telegram file identifier
      - public_url: Supabase storage URL
-     - thumbnail_url: Video preview URL
+     - thumbnail_url: Video preview URL from Telegram
      - telegram_media_row_id: Glide reference
 
 3. **glide_sync_queue**
@@ -115,7 +114,7 @@ A web application that automatically collects, processes, and manages media from
 
 2. **Media Processor** (`_shared/media-processor.ts`)
    - Handles file downloads and uploads
-   - Generates thumbnails
+   - Extracts thumbnails from Telegram data
    - Updates database records
 
 3. **Caption Analyzer** (`_shared/caption-analyzer.ts`)
