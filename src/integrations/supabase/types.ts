@@ -147,9 +147,11 @@ export type Database = {
       glide_sync_queue: {
         Row: {
           batch_id: string | null
+          correlation_id: string | null
           created_at: string | null
           error: string | null
           id: string
+          max_retries: number | null
           new_data: Json | null
           old_data: Json | null
           operation: string
@@ -157,13 +159,16 @@ export type Database = {
           processed_at: string | null
           record_id: string
           retry_count: number | null
+          sync_type: string | null
           table_name: string
         }
         Insert: {
           batch_id?: string | null
+          correlation_id?: string | null
           created_at?: string | null
           error?: string | null
           id?: string
+          max_retries?: number | null
           new_data?: Json | null
           old_data?: Json | null
           operation: string
@@ -171,13 +176,16 @@ export type Database = {
           processed_at?: string | null
           record_id: string
           retry_count?: number | null
+          sync_type?: string | null
           table_name: string
         }
         Update: {
           batch_id?: string | null
+          correlation_id?: string | null
           created_at?: string | null
           error?: string | null
           id?: string
+          max_retries?: number | null
           new_data?: Json | null
           old_data?: Json | null
           operation?: string
@@ -185,6 +193,7 @@ export type Database = {
           processed_at?: string | null
           record_id?: string
           retry_count?: number | null
+          sync_type?: string | null
           table_name?: string
         }
         Relationships: [
@@ -258,11 +267,71 @@ export type Database = {
         }
         Relationships: []
       }
+      media_processing_queue: {
+        Row: {
+          batch_id: string | null
+          correlation_id: string | null
+          created_at: string | null
+          error_message: string | null
+          file_unique_id: string | null
+          id: string
+          last_retry_at: string | null
+          max_retries: number | null
+          media_data: Json
+          message_id: string | null
+          priority: number | null
+          processed_at: string | null
+          retry_count: number | null
+          status: string
+        }
+        Insert: {
+          batch_id?: string | null
+          correlation_id?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          file_unique_id?: string | null
+          id?: string
+          last_retry_at?: string | null
+          max_retries?: number | null
+          media_data: Json
+          message_id?: string | null
+          priority?: number | null
+          processed_at?: string | null
+          retry_count?: number | null
+          status?: string
+        }
+        Update: {
+          batch_id?: string | null
+          correlation_id?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          file_unique_id?: string | null
+          id?: string
+          last_retry_at?: string | null
+          max_retries?: number | null
+          media_data?: Json
+          message_id?: string | null
+          priority?: number | null
+          processed_at?: string | null
+          retry_count?: number | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_processing_queue_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           analyzed_content: Json | null
           caption: string | null
           chat_id: number
+          correlation_id: string | null
           created_at: string
           id: string
           last_retry_at: string | null
@@ -290,6 +359,7 @@ export type Database = {
           analyzed_content?: Json | null
           caption?: string | null
           chat_id: number
+          correlation_id?: string | null
           created_at?: string
           id?: string
           last_retry_at?: string | null
@@ -317,6 +387,7 @@ export type Database = {
           analyzed_content?: Json | null
           caption?: string | null
           chat_id?: number
+          correlation_id?: string | null
           created_at?: string
           id?: string
           last_retry_at?: string | null
@@ -518,6 +589,57 @@ export type Database = {
           },
         ]
       }
+      webhook_processing_queue: {
+        Row: {
+          batch_id: string | null
+          chat_id: number | null
+          correlation_id: string | null
+          created_at: string | null
+          error_message: string | null
+          id: string
+          last_retry_at: string | null
+          max_retries: number | null
+          message_data: Json
+          message_id: number | null
+          priority: number | null
+          processed_at: string | null
+          retry_count: number | null
+          status: string
+        }
+        Insert: {
+          batch_id?: string | null
+          chat_id?: number | null
+          correlation_id?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          last_retry_at?: string | null
+          max_retries?: number | null
+          message_data: Json
+          message_id?: number | null
+          priority?: number | null
+          processed_at?: string | null
+          retry_count?: number | null
+          status?: string
+        }
+        Update: {
+          batch_id?: string | null
+          chat_id?: number | null
+          correlation_id?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          last_retry_at?: string | null
+          max_retries?: number | null
+          message_data?: Json
+          message_id?: number | null
+          priority?: number | null
+          processed_at?: string | null
+          retry_count?: number | null
+          status?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       video_thumbnail_status: {
@@ -546,6 +668,16 @@ export type Database = {
       }
     }
     Functions: {
+      check_queue_health: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          queue_name: string
+          pending_count: number
+          error_count: number
+          avg_processing_time: unknown
+          oldest_pending_item: string
+        }[]
+      }
       check_telegram_media_differences: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -554,6 +686,10 @@ export type Database = {
           supabase_data: Json
           glide_data: Json
         }[]
+      }
+      cleanup_processed_queues: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
       count_missing_thumbnails: {
         Args: Record<PropertyKey, never>
@@ -596,6 +732,7 @@ export type Database = {
           analyzed_content: Json | null
           caption: string | null
           chat_id: number
+          correlation_id: string | null
           created_at: string
           id: string
           last_retry_at: string | null
@@ -664,10 +801,6 @@ export type Database = {
           synced_count: number
           error_count: number
         }[]
-      }
-      sync_missing_media_records: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
       }
       sync_missing_video_metadata: {
         Args: Record<PropertyKey, never>
