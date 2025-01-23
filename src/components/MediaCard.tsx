@@ -1,9 +1,9 @@
 import React from "react";
 import { Card } from "@/components/ui/card";
-import { Play } from "lucide-react";
+import { Play, Edit } from "lucide-react";
 import { MediaItem } from "@/types/media";
 import { Dispatch, SetStateAction } from "react";
-import MediaActions from "./MediaActions";
+import { Button } from "@/components/ui/button";
 
 interface MediaCardProps {
   item: MediaItem;
@@ -15,19 +15,15 @@ const MediaCard = ({ item, onPreview, onEdit }: MediaCardProps) => {
   const [isPlaying, setIsPlaying] = React.useState(false);
   const videoRef = React.useRef<HTMLVideoElement>(null);
 
+  // Get the display URL for the media item
   const getDisplayUrl = () => {
     if (item.file_type === 'video') {
-      // Try to get thumbnail from various sources
-      const thumbFromMetadata = item.telegram_data?.message_data?.video?.thumb?.file_id;
-      if (thumbFromMetadata) {
-        return `https://kzfamethztziwqiocbwz.supabase.co/storage/v1/object/public/media/${item.telegram_data.message_data.video.thumb.file_unique_id}.jpg`;
-      }
-      // Fallback to other URLs
-      return item.thumbnail_url || item.public_url || item.default_public_url;
+      return item.thumbnail_url || item.default_public_url;
     }
     return item.public_url || item.default_public_url;
   };
 
+  // Get the video URL (actual video file, not thumbnail)
   const getVideoUrl = () => {
     return item.public_url || item.default_public_url;
   };
@@ -55,14 +51,19 @@ const MediaCard = ({ item, onPreview, onEdit }: MediaCardProps) => {
     }
   };
 
-  const handleEditClick = () => {
+  const handleEditClick = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent card click
     onEdit(item);
+  };
+
+  const handleCardClick = () => {
+    onPreview();
   };
 
   return (
     <Card 
       className="group relative overflow-hidden bg-card hover:shadow-lg transition-all duration-300 rounded-xl border-0 cursor-pointer" 
-      onClick={onPreview}
+      onClick={handleCardClick}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
@@ -97,24 +98,28 @@ const MediaCard = ({ item, onPreview, onEdit }: MediaCardProps) => {
             className="absolute inset-0 w-full h-full object-cover"
           />
         )}
+
+        {/* Edit Button Overlay */}
+        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          <Button
+            variant="secondary"
+            size="icon"
+            className="h-8 w-8 bg-white/90 hover:bg-white"
+            onClick={handleEditClick}
+          >
+            <Edit className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       {/* Info Section */}
-      <div className="p-3 space-y-3">
-        <div>
-          <p className="font-medium text-foreground truncate">
-            {item.product_name || 'Untitled Product'}
-          </p>
-          <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
-            {item.caption || 'No caption'}
-          </p>
-        </div>
-        
-        <MediaActions 
-          item={item}
-          onEdit={handleEditClick}
-          onView={onPreview}
-        />
+      <div className="p-3 bg-card">
+        <p className="font-medium text-foreground truncate">
+          {item.product_name || 'Untitled Product'}
+        </p>
+        <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
+          {item.caption || 'No caption'}
+        </p>
       </div>
     </Card>
   );

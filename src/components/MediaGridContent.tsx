@@ -1,102 +1,74 @@
-import { useState, useMemo } from "react";
 import { MediaItem } from "@/types/media";
-import MediaCard from "./MediaCard";
 import MediaViewer from "./MediaViewer";
-import MediaEditDialog from "./MediaEditDialog";
+import MediaCard from "./MediaCard";
+import { Alert, AlertDescription } from "./ui/alert";
+import { Loader2 } from "lucide-react";
+import { Dispatch, SetStateAction } from "react";
 
 interface MediaGridContentProps {
-  items: MediaItem[];
   view: 'grid' | 'table';
-  isLoading?: boolean;
-  error?: Error | null;
-  onMediaUpdate: () => Promise<any>;
+  isLoading: boolean;
+  error: Error | null;
+  mediaItems: MediaItem[] | undefined;
+  previewItem: MediaItem | null;
+  onPreviewChange: (open: boolean) => void;
+  onEdit: Dispatch<SetStateAction<MediaItem | null>>;
+  onPreview: (item: MediaItem) => void;
 }
 
-const MediaGridContent = ({ items = [], view, isLoading, error, onMediaUpdate }: MediaGridContentProps) => {
-  const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
-  const [editItem, setEditItem] = useState<MediaItem | null>(null);
-  const [viewerOpen, setViewerOpen] = useState(false);
-
-  // Group media items by product name and caption
-  const groupedMedia = useMemo(() => {
-    const groups = new Map<string, MediaItem[]>();
-    
-    items.forEach(item => {
-      const key = `${item.product_name}-${item.caption}`;
-      if (!groups.has(key)) {
-        groups.set(key, []);
-      }
-      groups.get(key)?.push(item);
-    });
-
-    return groups;
-  }, [items]);
-
-  // Convert grouped media to array format
-  const groupedItems = useMemo(() => {
-    return Array.from(groupedMedia.values()).map(group => group[0]);
-  }, [groupedMedia]);
-
-  const handleView = (item: MediaItem) => {
-    const key = `${item.product_name}-${item.caption}`;
-    const relatedItems = groupedMedia.get(key) || [];
-    setSelectedMedia({ ...item, relatedMedia: relatedItems });
-    setViewerOpen(true);
-  };
-
-  const handleEdit = (item: MediaItem) => {
-    setEditItem(item);
-  };
-
+const MediaGridContent = ({
+  view,
+  isLoading,
+  error,
+  mediaItems,
+  previewItem,
+  onPreviewChange,
+  onEdit,
+  onPreview,
+}: MediaGridContentProps) => {
   if (isLoading) {
-    return <div className="text-center py-8">Loading media items...</div>;
+    return (
+      <div className="flex items-center justify-center h-[50vh]">
+        <div className="flex items-center gap-2">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span>Loading media...</span>
+        </div>
+      </div>
+    );
   }
 
   if (error) {
-    return <div className="text-center py-8 text-red-500">Error loading media: {error.message}</div>;
+    return (
+      <Alert variant="destructive" className="m-4">
+        <AlertDescription>{error.message}</AlertDescription>
+      </Alert>
+    );
   }
 
-  if (items.length === 0) {
-    return <div className="text-center py-8">No media items found</div>;
+  if (!mediaItems?.length) {
+    return (
+      <Alert variant="default" className="m-4">
+        <AlertDescription>No media items found</AlertDescription>
+      </Alert>
+    );
   }
 
   return (
     <>
-      <div className={
-        view === 'grid' 
-          ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" 
-          : "space-y-4"
-      }>
-        {groupedItems.map((item) => (
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        {mediaItems.map((item) => (
           <MediaCard
             key={item.id}
             item={item}
-            onPreview={() => handleView(item)}
-            onEdit={handleEdit}
+            onPreview={() => onPreview(item)}
+            onEdit={onEdit}
           />
         ))}
       </div>
-
       <MediaViewer
-        open={viewerOpen}
-        onOpenChange={setViewerOpen}
-        media={selectedMedia}
-        relatedMedia={selectedMedia?.relatedMedia || []}
-      />
-
-      <MediaEditDialog
-        editItem={editItem}
-        onClose={() => setEditItem(null)}
-        onSave={onMediaUpdate}
-        onItemChange={(field, value) => {
-          if (editItem) {
-            setEditItem({ ...editItem, [field]: value });
-          }
-        }}
-        formatDate={(date) => {
-          if (!date) return null;
-          return new Date(date).toISOString().split('T')[0];
-        }}
+        open={!!previewItem}
+        onOpenChange={onPreviewChange}
+        media={previewItem}
       />
     </>
   );

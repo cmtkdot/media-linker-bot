@@ -24,33 +24,33 @@ const Settings = () => {
   const handleGenerateThumbnails = async () => {
     setIsGenerating(true);
     try {
-      console.log('Starting thumbnail generation...');
-      
-      // Call the Supabase function to generate thumbnails
+      // First, generate thumbnails
       const { error: genError } = await supabase.rpc('generate_missing_thumbnails');
-      if (genError) {
-        console.error('Error generating thumbnails:', genError);
-        throw genError;
-      }
+      if (genError) throw genError;
 
-      // Wait a moment for the changes to propagate
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Then update all videos that still don't have thumbnails to use their default_public_url
+      const { error: updateError } = await supabase
+        .from('telegram_media')
+        .update({ thumbnail_url: null })
+        .eq('file_type', 'video')
+        .is('thumbnail_url', null)
+        .select();
+
+      if (updateError) throw updateError;
       
       // Refetch the stats and invalidate any queries that might show media
       await refetch();
-      await queryClient.invalidateQueries({ queryKey: ['telegram-media'] });
-      
-      console.log('Thumbnail generation completed');
+      await queryClient.invalidateQueries({ queryKey: ['products'] });
       
       toast({
         title: "Success",
         description: "Thumbnails have been generated successfully",
       });
     } catch (error) {
-      console.error('Error in handleGenerateThumbnails:', error);
+      console.error('Error generating thumbnails:', error);
       toast({
         title: "Error",
-        description: "Failed to generate thumbnails. Please try again.",
+        description: "Failed to generate thumbnails",
         variant: "destructive",
       });
     } finally {
