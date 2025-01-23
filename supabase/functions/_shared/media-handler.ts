@@ -15,7 +15,8 @@ export async function processMedia(
     message_id: message?.message_id,
     chat_id: message?.chat?.id,
     retry_count: retryCount,
-    has_existing_media: !!existingMedia
+    has_existing_media: !!existingMedia,
+    has_message_record: !!messageRecord
   });
 
   while (retryCount < MAX_RETRY_ATTEMPTS) {
@@ -45,13 +46,41 @@ export async function processMedia(
         message_id: messageRecord?.id
       });
 
-      // Process the media file
+      // Check for existing media first
+      const { data: existingMediaRecord } = await supabase
+        .from('telegram_media')
+        .select('*')
+        .eq('file_unique_id', mediaFile.file_unique_id)
+        .maybeSingle();
+
+      if (existingMediaRecord) {
+        console.log('Found existing media record:', {
+          id: existingMediaRecord.id,
+          file_unique_id: existingMediaRecord.file_unique_id
+        });
+
+        // Update existing record with new message_id if available
+        if (messageRecord?.id && !existingMediaRecord.message_id) {
+          const { error: updateError } = await supabase
+            .from('telegram_media')
+            .update({ message_id: messageRecord.id })
+            .eq('id', existingMediaRecord.id);
+
+          if (updateError) {
+            console.error('Error updating message_id:', updateError);
+          }
+        }
+
+        return existingMediaRecord;
+      }
+
+      // Process the media file even without message_id
       const result = await processMediaFile(
         supabase,
         mediaFile,
         mediaType,
         message,
-        messageRecord,
+        messageRecord || null, // Allow null messageRecord
         botToken,
         productInfo
       );
@@ -59,7 +88,8 @@ export async function processMedia(
       console.log('Media processing completed successfully:', {
         file_id: mediaFile.file_id,
         media_type: mediaType,
-        result_id: result?.id
+        result_id: result?.id,
+        has_message_id: !!messageRecord
       });
 
       return result;

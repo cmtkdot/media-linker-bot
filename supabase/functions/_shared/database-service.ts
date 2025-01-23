@@ -14,7 +14,8 @@ export async function processMediaFile(
 ) {
   console.log(`Processing ${mediaType} file:`, {
     file_id: mediaFile.file_id,
-    message_id: messageRecord?.id
+    message_id: messageRecord?.id,
+    has_message_record: !!messageRecord
   });
 
   // Check for existing media first
@@ -67,33 +68,35 @@ export async function processMediaFile(
     .from('media')
     .getPublicUrl(uniqueFileName);
 
-  // Create media record with retry
+  // Create media record with retry, allowing null message_id
   const { data: mediaRecord, error: insertError } = await withDatabaseRetry(
     async () => {
+      const insertData = {
+        file_id: mediaFile.file_id,
+        file_unique_id: mediaFile.file_unique_id,
+        file_type: mediaType,
+        message_id: messageRecord?.id || null,
+        public_url: publicUrl,
+        caption: message.caption,
+        product_name: productInfo?.product_name,
+        product_code: productInfo?.product_code,
+        quantity: productInfo?.quantity,
+        vendor_uid: productInfo?.vendor_uid,
+        purchase_date: productInfo?.purchase_date,
+        notes: productInfo?.notes,
+        analyzed_content: productInfo?.analyzed_content,
+        telegram_data: {
+          message_id: message.message_id,
+          chat_id: message.chat.id,
+          media_group_id: message.media_group_id,
+          date: message.date,
+          storage_path: uniqueFileName
+        }
+      };
+
       return await supabase
         .from('telegram_media')
-        .insert([{
-          file_id: mediaFile.file_id,
-          file_unique_id: mediaFile.file_unique_id,
-          file_type: mediaType,
-          message_id: messageRecord?.id,
-          public_url: publicUrl,
-          caption: message.caption,
-          product_name: productInfo?.product_name,
-          product_code: productInfo?.product_code,
-          quantity: productInfo?.quantity,
-          vendor_uid: productInfo?.vendor_uid,
-          purchase_date: productInfo?.purchase_date,
-          notes: productInfo?.notes,
-          analyzed_content: productInfo?.analyzed_content,
-          telegram_data: {
-            message_id: message.message_id,
-            chat_id: message.chat.id,
-            media_group_id: message.media_group_id,
-            date: message.date,
-            storage_path: uniqueFileName
-          }
-        }])
+        .insert([insertData])
         .select()
         .single();
     },
@@ -107,7 +110,8 @@ export async function processMediaFile(
     file_id: mediaFile.file_id,
     type: mediaType,
     public_url: publicUrl,
-    record_id: mediaRecord?.id
+    record_id: mediaRecord?.id,
+    has_message_id: !!messageRecord
   });
 
   return mediaRecord;
