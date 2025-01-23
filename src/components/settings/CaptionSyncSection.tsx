@@ -10,6 +10,12 @@ interface MediaGroup {
   media_group_id: string | null;
 }
 
+interface TelegramMediaRow {
+  telegram_data: {
+    media_group_id: string | null;
+  };
+}
+
 export const CaptionSyncSection = () => {
   const [isSyncingCaptions, setIsSyncingCaptions] = useState(false);
   const { toast } = useToast();
@@ -20,14 +26,15 @@ export const CaptionSyncSection = () => {
     try {
       const { data: mediaGroups, error: fetchError } = await supabase
         .from('telegram_media')
-        .select('telegram_data->media_group_id')
+        .select<'telegram_data->media_group_id', TelegramMediaRow>('telegram_data->media_group_id')
         .not('telegram_data->media_group_id', 'is', null);
 
       if (fetchError) throw fetchError;
 
-      const uniqueGroups = (mediaGroups || []).reduce<MediaGroup[]>((acc, group) => {
-        if (group.media_group_id && !acc.some(g => g.media_group_id === group.media_group_id)) {
-          acc.push(group);
+      const uniqueGroups = (mediaGroups || []).reduce<MediaGroup[]>((acc, current) => {
+        const mediaGroupId = current.telegram_data?.media_group_id;
+        if (mediaGroupId && !acc.some(g => g.media_group_id === mediaGroupId)) {
+          acc.push({ media_group_id: mediaGroupId });
         }
         return acc;
       }, []);
