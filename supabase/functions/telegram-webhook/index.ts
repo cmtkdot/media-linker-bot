@@ -8,6 +8,7 @@ import { processMediaFiles } from "../_shared/media-processor.ts";
 import { extractVideoMetadata, buildMediaMetadata } from "../_shared/metadata-extractor.ts";
 import { handleProcessingError } from "../_shared/error-handler.ts";
 import { MAX_RETRY_ATTEMPTS, INITIAL_RETRY_DELAY } from "../_shared/constants.ts";
+import { downloadAndStoreThumbnail } from "../_shared/thumbnail-handler.ts";
 
 serve(async (req) => {
   console.log('Received webhook request:', req.method);
@@ -54,27 +55,42 @@ serve(async (req) => {
       media_group_id: message.media_group_id
     });
 
-    // Generate message URL
+    // Generate message URL early
     const chatId = message.chat.id.toString();
     const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
 
-    // Analyze caption if present
+    // Analyze caption if present - moved earlier in the flow
     let analyzedContent = null;
     if (message.caption) {
       try {
         console.log('Analyzing caption:', message.caption);
-        analyzedContent = await analyzeCaptionWithAI(message.caption);
+        analyzedContent = await analyzeCaptionWithAI(message.caption, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
         console.log('Caption analysis result:', analyzedContent);
       } catch (error) {
         console.error('Error analyzing caption:', error);
       }
     }
 
-    // Extract metadata for videos
+    // Extract metadata and handle thumbnails early
     let mediaMetadata = null;
+    let thumbnailUrl = null;
     if (message.video) {
       mediaMetadata = extractVideoMetadata(message);
       console.log('Extracted video metadata:', mediaMetadata);
+      
+      // Handle video thumbnail early
+      if (message.video.thumb) {
+        try {
+          thumbnailUrl = await downloadAndStoreThumbnail(
+            message.video.thumb,
+            TELEGRAM_BOT_TOKEN,
+            supabase
+          );
+          console.log('Generated thumbnail URL:', thumbnailUrl);
+        } catch (error) {
+          console.error('Error processing thumbnail:', error);
+        }
+      }
     }
 
     // Create or update message record with retry
@@ -95,6 +111,7 @@ serve(async (req) => {
         vendor_uid: analyzedContent?.vendor_uid || null,
         purchase_date: analyzedContent?.purchase_date || null,
         notes: analyzedContent?.notes || null,
+        thumbnail_url: thumbnailUrl,
         status: 'pending',
         retry_count: 0
       };
@@ -136,7 +153,11 @@ serve(async (req) => {
           messageRecord,
           supabase,
           TELEGRAM_BOT_TOKEN,
-          mediaMetadata
+          {
+            ...mediaMetadata,
+            thumbnail_url: thumbnailUrl,
+            message_url: messageUrl
+          }
         );
         console.log('Successfully processed media files');
       } catch (error) {
