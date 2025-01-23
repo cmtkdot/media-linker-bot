@@ -5,9 +5,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
-import { GlideSyncQueueItem } from "@/types/glide";
+import { FailedWebhookUpdate } from "@/types/glide";
 
-export const columns: ColumnDef<GlideSyncQueueItem>[] = [
+export const columns: ColumnDef<FailedWebhookUpdate>[] = [
   {
     id: "select",
     header: ({ table }) => (
@@ -28,12 +28,17 @@ export const columns: ColumnDef<GlideSyncQueueItem>[] = [
     enableHiding: false,
   },
   {
-    accessorKey: "table_name",
-    header: "Table",
+    accessorKey: "message_id",
+    header: "Message ID",
   },
   {
-    accessorKey: "operation",
-    header: "Operation",
+    accessorKey: "status",
+    header: "Status",
+  },
+  {
+    accessorKey: "error_message",
+    header: "Error",
+    cell: ({ row }) => row.getValue("error_message") || "None",
   },
   {
     accessorKey: "created_at",
@@ -42,11 +47,6 @@ export const columns: ColumnDef<GlideSyncQueueItem>[] = [
       const date = row.getValue("created_at") as string;
       return date ? format(new Date(date), "PPpp") : "N/A";
     },
-  },
-  {
-    accessorKey: "error",
-    header: "Error",
-    cell: ({ row }) => row.getValue("error") || "None",
   },
   {
     id: "actions",
