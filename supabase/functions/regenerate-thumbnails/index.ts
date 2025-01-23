@@ -7,35 +7,6 @@ const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN')!;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-// List of specific file_unique_ids that need regeneration
-const FILE_UNIQUE_IDS = [
-  'AgADcgQAAmnV6Uc', 'AgADDQUAAhnIkUQ', 'AgADDAUAAhnIkUQ', 'AgADQgUAAg0I-Uc',
-  'AgADDgUAAhnIkUQ', 'AgADCwUAAhnIkUQ', 'AgADgAQAApzXyEY', 'AgADzQQAAmQJmUc',
-  'AgADAgUAAtzSKUY', 'AgADsQUAAlLlSEc', 'AgADggQAApzXyEY', 'AgADRQQAAlWLOEQ',
-  'AgADRwQAApmZoUY', 'AgADkgYAAppYwUQ', 'AgADIwQAAsQwOEQ', 'AgADpwQAAtwOQUQ',
-  'AgADpgQAAtwOQUQ', 'AgADyAQAAri4-UU', 'AgADlBEAAuK1GUU', 'AgADxgQAAri4-UU',
-  'AgADcwQAAoWsEUY', 'AgADtwUAArgJoUY', 'AgADqAQAAtwOQUQ', 'AgADLAQAApmZoUY',
-  'AgADlgUAAuAgAUY', 'AgADdAQAAoWsEUY', 'AgAD9QQAAlgvQEc', 'AgADigUAAsGzUUQ',
-  'AgADvQQAAhBtyEY', 'AgADQwUAAg0I-Uc', 'AgADzAQAAri4-UU', 'AgADHwQAAhzOyUY',
-  'AgADzQQAAri4-UU', 'AgAD7QMAAmFtyEc', 'AgADjQUAAuAgAUY', 'AgADLgQAApmZoUY',
-  'AgADlQUAAuAgAUY', 'AgADLwQAApmZoUY', 'AgAD7AMAAmFtyEc', 'AgADWQQAAuaogEY',
-  'AgAD6wMAAmFtyEc', 'AgADSQQAAuAg-UU', 'AgADVgQAApzX0EY', 'AgADQwYAAtfsgEQ',
-  'AgAD6AQAAr9eoEQ', 'AgADywQAAmQJmUc', 'AgADAwUAAtzSKUY', 'AgAD6QQAAr9eoEQ',
-  'AgADngQAAmQJoUc', 'AgADmAYAAppYwUQ', 'AgADXQYAAr9emEQ', 'AgADwwUAAquaaUU',
-  'AgADwgUAAquaaUU', 'AgADmQYAAppYwUQ', 'AgADmgYAAppYwUQ', 'AgADJgUAAsshqEU',
-  'AgADIAQAAsQwOEQ', 'AgADRgQAApmZoUY', 'AgADBAUAAtzSKUY', 'AgADmwYAAppYwUQ',
-  'AgADnAYAAppYwUQ', 'AgADHwQAAsQwOEQ', 'AgADqQQAAtwOQUQ', 'AgADgQQAApzXyEY',
-  'AgADJQUAAsshqEU', 'AgAD-QQAAuaoiEY', 'AgADWQQAApzX0EY', 'AgADiQUAAsGzUUQ',
-  'AgADiwUAAsGzUUQ', 'AgADzwQAAp96wUc', 'AgADJwUAAsshqEU', 'AgADuAUAArgJoUY',
-  'AgAD9gQAAtzSKUY', 'AgADxQQAAri4-UU', 'AgADjAUAAsGzUUQ', 'AgADSAQAApmZoUY',
-  'AgADRAUAAg0I-Uc', 'AgADZQUAApLVAAFE', 'AgADwQUAAquaaUU', 'AgADzwQAAri4-UU',
-  'AgADLQQAApmZoUY', 'AgADxwQAAri4-UU', 'AgADzwQAAroZcUY', 'AgAD0AQAAroZcUY',
-  'AgADsgUAAlLlSEc', 'AgADlAYAAppYwUQ', 'AgADlAUAAuAgAUY', 'AgADnwQAApb_6EQ',
-  'AgADUAUAAwgRRw', 'AgADKAUAAsshqEU', 'AgADwQUAAkbw2UY', 'AgADvgQAAhBtyEY',
-  'AgADrgQAAroZcUY', 'AgADSgQAAuAg-UU', 'AgADcgQAAoWsEUY', 'AgAD9wQAAtzSKUY',
-  'AgAD9AQAAlgvQEc', 'AgADwAQAAhBtyEY', 'AgADhwQAApzXyEY'
-];
-
 async function getFileFromTelegram(fileId: string) {
   console.log('Getting file from Telegram:', fileId);
   const response = await fetch(
@@ -60,31 +31,16 @@ Deno.serve(async (req) => {
   try {
     console.log('Starting thumbnail regeneration process...');
     
-    let fileIds = FILE_UNIQUE_IDS;
-    const body = await req.json().catch(() => ({}));
-    
-    // If not specifically requesting the identified videos, use normal process
-    if (body.mode !== 'specific') {
-      const { data: videos, error: queryError } = await supabase
-        .from('telegram_media')
-        .select('*')
-        .eq('file_type', 'video')
-        .is('thumbnail_url', null);
-
-      if (queryError) throw queryError;
-      fileIds = videos?.map(v => v.file_unique_id) || [];
-    }
-
-    // Get videos that need thumbnail regeneration
+    // Get all videos with Telegram thumbnail data
     const { data: videos, error: queryError } = await supabase
       .from('telegram_media')
       .select('*')
       .eq('file_type', 'video')
-      .in('file_unique_id', fileIds);
+      .not('telegram_data->>message_data', 'null');
 
     if (queryError) throw queryError;
 
-    console.log(`Found ${videos?.length || 0} videos needing thumbnails`);
+    console.log(`Found ${videos?.length || 0} videos to process`);
 
     const results = [];
     for (const video of videos || []) {
@@ -124,6 +80,17 @@ Deno.serve(async (req) => {
           .from('telegram_media')
           .update({ 
             thumbnail_url: publicUrl,
+            media_metadata: {
+              ...video.media_metadata,
+              thumbnail: {
+                file_id: thumbData.file_id,
+                file_unique_id: thumbData.file_unique_id,
+                width: thumbData.width,
+                height: thumbData.height,
+                storage_path: filename,
+                public_url: publicUrl
+              }
+            },
             updated_at: new Date().toISOString()
           })
           .eq('id', video.id);
@@ -137,7 +104,8 @@ Deno.serve(async (req) => {
           id: video.id,
           file_unique_id: video.file_unique_id,
           status: 'success',
-          thumbnail_url: publicUrl
+          old_thumbnail: video.thumbnail_url,
+          new_thumbnail: publicUrl
         });
 
         console.log(`Successfully processed video ${video.id}`);
