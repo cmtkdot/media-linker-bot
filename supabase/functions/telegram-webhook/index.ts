@@ -55,6 +55,14 @@ serve(async (req) => {
       media_group_id: message.media_group_id
     });
 
+    // Check for existing message
+    const { data: existingMessage } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('message_id', message.message_id)
+      .eq('chat_id', message.chat_id)
+      .maybeSingle();
+
     // Generate message URL early
     const chatId = message.chat.id.toString();
     const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
@@ -67,7 +75,7 @@ serve(async (req) => {
     // Handle caption analysis
     if (message.caption) {
       try {
-        analyzedContent = await analyzeCaptionWithAI(message.caption, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+        analyzedContent = await analyzeCaptionWithAI(message.caption);
       } catch (error) {
         console.error('Error analyzing caption:', error);
       }
@@ -89,7 +97,59 @@ serve(async (req) => {
       }
     }
 
-    // Process message using shared handler
+    // If message exists, check for missing telegram_media records
+    if (existingMessage) {
+      console.log('Found existing message, checking for missing media records');
+      
+      const hasMedia = message.photo || message.video || message.document || message.animation;
+      if (hasMedia) {
+        // Check for existing media records
+        const { data: existingMedia } = await supabase
+          .from('telegram_media')
+          .select('*')
+          .eq('message_id', existingMessage.id);
+
+        if (!existingMedia || existingMedia.length === 0) {
+          console.log('No telegram_media records found for existing message, processing media');
+          try {
+            await processMediaFiles(
+              message,
+              existingMessage,
+              supabase,
+              TELEGRAM_BOT_TOKEN,
+              {
+                ...mediaMetadata,
+                thumbnail_url: thumbnailUrl,
+                message_url: messageUrl,
+                analyzed_content: analyzedContent
+              }
+            );
+          } catch (error) {
+            console.error('Error processing missing media:', error);
+            await handleProcessingError(
+              supabase,
+              error,
+              existingMessage,
+              0,
+              true
+            );
+          }
+        } else {
+          console.log('Existing media records found:', existingMedia.length);
+        }
+      }
+
+      return new Response(
+        JSON.stringify({ 
+          ok: true, 
+          message: 'Existing message checked for missing media',
+          messageId: existingMessage.id 
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Process new message using shared handler
     const { messageRecord, success, error } = await handleMessageProcessing(
       supabase,
       message,
@@ -116,7 +176,8 @@ serve(async (req) => {
           {
             ...mediaMetadata,
             thumbnail_url: thumbnailUrl,
-            message_url: messageUrl
+            message_url: messageUrl,
+            analyzed_content: analyzedContent
           }
         );
       } catch (error) {
