@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getAndDownloadTelegramFile } from './telegram-service.ts';
 import { getMimeType } from './media-validators.ts';
 import { downloadAndStoreThumbnail } from './thumbnail-handler.ts';
@@ -72,12 +72,6 @@ export async function processMediaFiles(
   botToken: string,
   correlationId = crypto.randomUUID()
 ) {
-  // First handle media group if present
-  if (message.media_group_id) {
-    const mediaGroup = await handleMediaGroup(supabase, message, messageRecord);
-    console.log('Processed media group:', mediaGroup?.media_group_id);
-  }
-
   const mediaFiles: MediaFile[] = [];
   if (message.photo) {
     mediaFiles.push({
@@ -102,27 +96,6 @@ export async function processMediaFiles(
       }
     );
 
-    // If media exists and is part of a group, update group info
-    if (existingMedia && message.media_group_id) {
-      await withDatabaseRetry(
-        async () => {
-          const { error: updateError } = await supabase
-            .from('telegram_media')
-            .update({
-              telegram_data: {
-                ...existingMedia.telegram_data,
-                media_group_id: message.media_group_id
-              },
-              message_url: messageUrl
-            })
-            .eq('id', existingMedia.id);
-
-          if (updateError) throw updateError;
-        }
-      );
-      continue;
-    }
-
     if (existingMedia) continue;
 
     const { buffer, filePath } = await getAndDownloadTelegramFile(file.file_id, botToken);
@@ -132,28 +105,19 @@ export async function processMediaFiles(
     // Handle video thumbnail if available
     let thumbnailUrl: string | null = null;
     if (type === 'video' && file.thumb) {
-      const thumbData = await getAndDownloadTelegramFile(file.thumb.file_id, botToken);
-      const thumbFileName = `thumb_${file.file_unique_id}.jpg`;
-      
-      await withDatabaseRetry(
-        async () => {
-          const { error: thumbError } = await supabase.storage
-            .from('thumbnails')
-            .upload(thumbFileName, thumbData.buffer, {
-              contentType: 'image/jpeg',
-              upsert: true,
-              cacheControl: '3600'
-            });
-
-          if (thumbError) throw thumbError;
-        }
+      const thumbData = await downloadAndStoreThumbnail(
+        {
+          file_id: file.thumb.file_id,
+          file_unique_id: file.thumb.file_unique_id
+        },
+        botToken,
+        supabase
       );
-
-      const { data: { publicUrl } } = await supabase.storage
-        .from('thumbnails')
-        .getPublicUrl(thumbFileName);
-
-      thumbnailUrl = publicUrl;
+      
+      if (thumbData?.publicUrl) {
+        thumbnailUrl = thumbData.publicUrl;
+        console.log('Successfully processed video thumbnail:', thumbnailUrl);
+      }
     }
 
     await withDatabaseRetry(
@@ -194,7 +158,6 @@ export async function processMediaFiles(
                 username: message.chat.username,
                 type: message.chat.type
               },
-              media_group_id: message.media_group_id,
               date: message.date,
               storage_path: fileName
             }
