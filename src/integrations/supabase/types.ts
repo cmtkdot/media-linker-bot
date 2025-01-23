@@ -515,6 +515,15 @@ export type Database = {
           vendor_uid: string | null
         }
       }
+      regenerate_all_video_thumbnails: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          video_id: string
+          old_thumbnail: string
+          new_thumbnail: string
+          source: string
+        }[]
+      }
       sync_media_group_captions: {
         Args: {
           media_group_id: string
