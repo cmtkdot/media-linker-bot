@@ -3,16 +3,14 @@ import { MediaItem } from "@/types/media";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useState } from "react";
-import MediaViewer from "@/components/MediaViewer";
+import ProductMediaViewer from "@/components/ProductMediaViewer";
 import MediaEditDialog from "@/components/MediaEditDialog";
-import { useToast } from "@/components/ui/use-toast";
 import ProductGroup from "@/components/ProductGroup";
 
 const Products = () => {
   const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [editItem, setEditItem] = useState<MediaItem | null>(null);
-  const { toast } = useToast();
 
   const { data: products, refetch } = useQuery({
     queryKey: ['products'],
@@ -72,17 +70,8 @@ const Products = () => {
       if (error) throw error;
 
       await refetch();
-      toast({
-        title: "Changes saved",
-        description: "The media item has been updated successfully.",
-      });
     } catch (error) {
       console.error('Error saving changes:', error);
-      toast({
-        title: "Error",
-        description: "Failed to save changes.",
-        variant: "destructive",
-      });
     }
   };
 
@@ -134,7 +123,7 @@ const Products = () => {
         ))}
       </div>
 
-      <MediaViewer
+      <ProductMediaViewer
         open={viewerOpen}
         onOpenChange={setViewerOpen}
         media={selectedMedia}
