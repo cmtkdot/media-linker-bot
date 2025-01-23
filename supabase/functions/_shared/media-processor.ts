@@ -1,5 +1,5 @@
 import { getAndDownloadTelegramFile } from './telegram-service.ts';
-import { getMimeType } from './media-validators.ts';
+import { getMimeTypeFromFileName, sanitizeFileName, validateMimeType } from './mime-utils.ts';
 import { downloadAndStoreThumbnail } from './thumbnail-handler.ts';
 import { withDatabaseRetry } from './database-retry.ts';
 
@@ -52,27 +52,33 @@ export async function processMediaFiles(
 
       // Download and process file
       const { buffer, filePath } = await getAndDownloadTelegramFile(file.file_id, botToken);
-      const fileExt = filePath.split('.').pop() || '';
-      const fileName = `${file.file_unique_id}.${fileExt}`;
+      
+      // Generate safe filename and determine MIME type
+      const sanitizedFileName = sanitizeFileName(filePath);
+      const mimeType = getMimeTypeFromFileName(sanitizedFileName);
+      
+      if (!validateMimeType(mimeType)) {
+        throw new Error(`Unsupported MIME type: ${mimeType}`);
+      }
 
       console.log('Uploading file to storage:', {
-        fileName,
+        fileName: sanitizedFileName,
         fileType: type,
-        mimeType: getMimeType(type, filePath)
+        mimeType: mimeType
       });
 
       // Check for existing file
       const { data: existingFile } = await supabase.storage
         .from('media')
         .list('', {
-          search: fileName
+          search: sanitizedFileName
         });
 
       if (!existingFile || existingFile.length === 0) {
         const { error: uploadError } = await supabase.storage
           .from('media')
-          .upload(fileName, buffer, {
-            contentType: getMimeType(type, filePath),
+          .upload(sanitizedFileName, buffer, {
+            contentType: mimeType,
             upsert: true,
             cacheControl: '3600'
           });
@@ -81,14 +87,14 @@ export async function processMediaFiles(
           console.error('Error uploading file:', uploadError);
           throw uploadError;
         }
-        console.log('File uploaded successfully:', fileName);
+        console.log('File uploaded successfully:', sanitizedFileName);
       } else {
-        console.log('File already exists in storage:', fileName);
+        console.log('File already exists in storage:', sanitizedFileName);
       }
 
       const { data: { publicUrl } } = await supabase.storage
         .from('media')
-        .getPublicUrl(fileName);
+        .getPublicUrl(sanitizedFileName);
 
       console.log('Generated public URL:', publicUrl);
 
@@ -116,7 +122,7 @@ export async function processMediaFiles(
             media_group_id: message.media_group_id,
             date: message.date,
             caption: message.caption,
-            storage_path: fileName
+            storage_path: sanitizedFileName
           }
         };
 
