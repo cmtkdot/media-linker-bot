@@ -6,7 +6,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { createSyncLogger, SyncErrorType } from "../_shared/sync-logger.ts";
 import { v4 as uuidv4 } from 'https://esm.sh/uuid@9.0.0';
 
-const BATCH_SIZE = 10;
+const BATCH_SIZE = 500; // Updated to Glide's max batch size
 
 serve(async (req: Request) => {
   const correlationId = uuidv4();
@@ -86,50 +86,16 @@ serve(async (req: Request) => {
       console.log(`Found ${pendingDeletions.length} pending deletions`);
       for (const deletion of pendingDeletions) {
         try {
-          if (deletion.old_data?.telegram_media_row_id) {
-            await glideApi.deleteRow(deletion.old_data.telegram_media_row_id);
-            console.log(`Successfully deleted Glide row: ${deletion.old_data.telegram_media_row_id}`);
-          }
-
-          await supabase
-            .from('glide_sync_queue')
-            .update({ 
-              processed_at: new Date().toISOString(),
-              error: null 
-            })
-            .eq('id', deletion.id);
-
-          deletionResults.processed++;
+          await queueProcessor.processQueueItem(deletion, deletionResults);
         } catch (error) {
           console.error(`Error processing deletion ${deletion.id}:`, error);
           deletionResults.errors.push(`Failed to delete ${deletion.id}: ${error.message}`);
-          
-          logger.log({
-            operation: 'process_deletion',
-            status: 'error',
-            errorType: SyncErrorType.API,
-            details: { error: error.message, record_id: deletion.record_id }
-          });
         }
       }
     }
 
-    // Then process other sync operations
+    // Then process other sync operations in batches
     console.log('Processing other sync operations...');
-    const { data: queueItems, error: queueError } = await supabase
-      .from('glide_sync_queue')
-      .select('*')
-      .neq('operation', 'DELETE')
-      .is('processed_at', null)
-      .order('priority', { ascending: false })
-      .order('created_at', { ascending: true })
-      .limit(BATCH_SIZE);
-
-    if (queueError) {
-      console.error('Error fetching queue items:', queueError);
-      throw queueError;
-    }
-
     const result = {
       added: 0,
       updated: 0,
@@ -137,29 +103,39 @@ serve(async (req: Request) => {
       errors: [...deletionResults.errors]
     };
 
-    // Process remaining queue items
-    if (queueItems && queueItems.length > 0) {
-      console.log(`Processing ${queueItems.length} queue items`);
-      const batches = queueItems.reduce((acc, item) => {
-        const batchId = item.batch_id || 'default';
-        if (!acc[batchId]) acc[batchId] = [];
-        acc[batchId].push(item);
-        return acc;
-      }, {} as Record<string, any[]>);
+    let hasMoreItems = true;
+    let processedCount = 0;
 
-      for (const [batchId, items] of Object.entries(batches)) {
-        try {
-          await Promise.all(items.map(item => queueProcessor.processQueueItem(item, result)));
-        } catch (error) {
-          console.error(`Error processing batch ${batchId}:`, error);
-          logger.log({
-            operation: 'process_batch',
-            status: 'error',
-            errorType: SyncErrorType.UNKNOWN,
-            details: { batch_id: batchId, error: error.message }
-          });
-        }
+    while (hasMoreItems) {
+      const { data: queueItems, error: queueError } = await supabase
+        .from('glide_sync_queue')
+        .select('*')
+        .neq('operation', 'DELETE')
+        .is('processed_at', null)
+        .order('priority', { ascending: false })
+        .order('created_at', { ascending: true })
+        .limit(BATCH_SIZE);
+
+      if (queueError) {
+        console.error('Error fetching queue items:', queueError);
+        throw queueError;
       }
+
+      if (!queueItems || queueItems.length === 0) {
+        hasMoreItems = false;
+        continue;
+      }
+
+      console.log(`Processing batch of ${queueItems.length} items`);
+      
+      // Process items in parallel within the batch
+      await Promise.all(queueItems.map(item => queueProcessor.processQueueItem(item, result)));
+      
+      processedCount += queueItems.length;
+      console.log(`Processed ${processedCount} items so far`);
+      
+      // Check if we need to continue processing more batches
+      hasMoreItems = queueItems.length === BATCH_SIZE;
     }
 
     // Clean up processed queue items older than 24 hours
@@ -179,7 +155,8 @@ serve(async (req: Request) => {
         status: result.errors.length > 0 ? 'warning' : 'success',
         details: { 
           correlation_id: correlationId,
-          result
+          result,
+          total_processed: processedCount
         }
       });
 
@@ -208,7 +185,6 @@ serve(async (req: Request) => {
   } catch (error) {
     console.error('Sync process failed:', error);
     
-    // Record error in health checks
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
