@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { processMediaFiles } from './media-processor.ts';
 import { withDatabaseRetry } from './database-retry.ts';
 import { analyzeCaptionWithAI } from './caption-analyzer.ts';
@@ -35,7 +35,7 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
       }
     }
 
-    // Create message record with retry
+    // Create or update message record with retry
     const messageRecord = await withDatabaseRetry(async () => {
       const messageData = {
         message_id: message.message_id,
@@ -57,24 +57,38 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
         retry_count: 0
       };
 
-      const { data, error: insertError } = await supabase
+      const { data: existingMessage } = await supabase
         .from('messages')
-        .insert([messageData])
-        .select()
-        .single();
+        .select('*')
+        .eq('message_id', message.message_id)
+        .eq('chat_id', message.chat.id)
+        .maybeSingle();
 
-      if (insertError) {
-        console.error('Error inserting message:', insertError);
-        throw insertError;
+      if (existingMessage) {
+        const { data, error: updateError } = await supabase
+          .from('messages')
+          .update(messageData)
+          .eq('id', existingMessage.id)
+          .select()
+          .single();
+
+        if (updateError) throw updateError;
+        return data;
+      } else {
+        const { data, error: insertError } = await supabase
+          .from('messages')
+          .insert([messageData])
+          .select()
+          .single();
+
+        if (insertError) throw insertError;
+        return data;
       }
-
-      return data;
     }, 0, `create_message_${message.message_id}`);
 
     // Process media files if present
     const hasMedia = message.photo || message.video || message.document || message.animation;
     if (hasMedia && messageRecord) {
-      console.log('Processing media for message:', messageRecord.id);
       await processMediaFiles(message, messageRecord, supabase, botToken);
     }
 
@@ -99,7 +113,6 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
       message_id: message?.message_id,
       chat_id: message?.chat?.id
     });
-
     throw error;
   }
 }
