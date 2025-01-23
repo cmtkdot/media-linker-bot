@@ -393,30 +393,6 @@ export type Database = {
         }
         Relationships: []
       }
-      products: {
-        Row: {
-          caption: string | null
-          id: string
-          media_group_id: string
-          name: string
-          purchase_date: string
-        }
-        Insert: {
-          caption?: string | null
-          id?: string
-          media_group_id: string
-          name: string
-          purchase_date: string
-        }
-        Update: {
-          caption?: string | null
-          id?: string
-          media_group_id?: string
-          name?: string
-          purchase_date?: string
-        }
-        Relationships: []
-      }
       sync_health_checks: {
         Row: {
           check_type: string
@@ -490,6 +466,7 @@ export type Database = {
           chat_url: string | null
           created_at: string
           default_public_url: string | null
+          extracted_media_group_id: string | null
           file_id: string
           file_type: string
           file_unique_id: string
@@ -522,6 +499,7 @@ export type Database = {
           chat_url?: string | null
           created_at?: string
           default_public_url?: string | null
+          extracted_media_group_id?: string | null
           file_id: string
           file_type: string
           file_unique_id: string
@@ -554,6 +532,7 @@ export type Database = {
           chat_url?: string | null
           created_at?: string
           default_public_url?: string | null
+          extracted_media_group_id?: string | null
           file_id?: string
           file_type?: string
           file_unique_id?: string
@@ -592,14 +571,6 @@ export type Database = {
       }
     }
     Views: {
-      duplicate_messages: {
-        Row: {
-          created_dates: string[] | null
-          file_id: string | null
-          message_ids: string[] | null
-        }
-        Relationships: []
-      }
       video_thumbnail_status: {
         Row: {
           file_unique_id: string | null
@@ -626,21 +597,6 @@ export type Database = {
       }
     }
     Functions: {
-      check_telegram_media_differences: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          record_id: string
-          difference_type: string
-          supabase_data: Json
-          glide_data: Json
-        }[]
-      }
-      cleanup_media_sync_queue: {
-        Args: {
-          max_age_hours?: number
-        }
-        Returns: number
-      }
       count_missing_thumbnails: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -666,18 +622,6 @@ export type Database = {
           new_thumbnail: string
           source: string
         }[]
-      }
-      get_all_tables: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          table_name: string
-        }[]
-      }
-      get_message_file_id: {
-        Args: {
-          message_data: Json
-        }
-        Returns: string
       }
       get_synced_message_data: {
         Args: {

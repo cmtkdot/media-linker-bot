@@ -15,7 +15,8 @@ export async function processMediaFile(
   console.log(`Processing ${mediaType} file:`, {
     file_id: mediaFile.file_id,
     message_id: messageRecord?.id,
-    has_message_record: !!messageRecord
+    has_message_record: !!messageRecord,
+    custom_file_name: mediaFile.customFileName
   });
 
   // Check for existing media first
@@ -39,7 +40,7 @@ export async function processMediaFile(
   // Download and process the file
   const { buffer, filePath } = await getAndDownloadTelegramFile(mediaFile.file_id, botToken);
   const fileExt = filePath.split('.').pop() || '';
-  const uniqueFileName = `${mediaFile.file_unique_id}.${fileExt}`;
+  const uniqueFileName = `${mediaFile.customFileName}.${fileExt}`;
 
   console.log('Uploading file to storage:', {
     fileName: uniqueFileName,
