@@ -12,10 +12,30 @@ interface TelegramData {
   message_data?: {
     video?: {
       thumb?: {
-        file_unique_id?: string;
+        file_id: string;
+        file_unique_id: string;
+        width: number;
+        height: number;
       };
     };
   };
+}
+
+interface GlideData {
+  row_id?: string;
+  sync_status?: string;
+  last_sync?: string;
+  [key: string]: unknown;
+}
+
+interface MediaMetadata {
+  width?: number;
+  height?: number;
+  duration?: number;
+  thumbnail_path?: string;
+  dimensions?: Record<string, unknown>;
+  thumbnail?: Record<string, unknown>;
+  [key: string]: unknown;
 }
 
 interface QueryResult {
@@ -33,8 +53,8 @@ interface QueryResult {
   purchase_date: string | null;
   notes: string | null;
   telegram_data: TelegramData;
-  glide_data: Record<string, any>;
-  media_metadata: Record<string, any>;
+  glide_data: GlideData;
+  media_metadata: MediaMetadata;
   analyzed_content: {
     text?: string;
     labels?: string[];
