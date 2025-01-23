@@ -23,6 +23,15 @@ const MediaEditDialog = ({ editItem, onClose, onSave, onItemChange, formatDate }
     if (!editItem) return;
 
     try {
+      // First delete any related records in glide_sync_queue
+      const { error: queueError } = await supabase
+        .from('glide_sync_queue')
+        .delete()
+        .eq('record_id', editItem.id);
+
+      if (queueError) throw queueError;
+
+      // Then delete the media record
       const { error } = await supabase
         .from('telegram_media')
         .delete()
