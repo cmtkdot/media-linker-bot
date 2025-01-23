@@ -16,7 +16,8 @@ export const MessageMediaSyncSection = () => {
     setIsSyncing(true);
     try {
       // First, sync messages to telegram_media using the database service
-      const { data: syncResult } = await supabase.rpc('sync_messages_to_telegram_media');
+      const { data: syncResults } = await supabase.rpc('sync_messages_to_telegram_media');
+      const syncResult = syncResults?.[0] || { synced_count: 0, error_count: 0 };
 
       // Then call the edge function to process the media files
       const { data, error } = await supabase.functions.invoke('sync-message-media', {
@@ -29,7 +30,7 @@ export const MessageMediaSyncSection = () => {
 
       toast({
         title: "Message Media Sync Complete",
-        description: `Processed ${data?.processed_count || 0} messages and synced ${data?.synced_media || 0} media items. ${syncResult?.synced_count || 0} records synced from messages.`,
+        description: `Processed ${data?.processed_count || 0} messages and synced ${data?.synced_media || 0} media items. ${syncResult.synced_count || 0} records synced from messages.`,
       });
     } catch (error: any) {
       console.error('Error in message media sync:', error);
