@@ -43,41 +43,17 @@ export async function getAndDownloadTelegramFile(fileId: string, botToken: strin
 }
 
 export function generateSafeFileName(
-  productName: string = 'untitled',
-  productCode: string = 'no_code',
-  mediaType: string,
+  fileUniqueId: string,
   extension: string
 ): string {
-  console.log('Generating safe filename with:', { 
-    productName, 
-    productCode, 
-    mediaType, 
-    extension 
-  });
-  
-  const safeName = (productName || 'untitled')
-    .toLowerCase()
-    .replace(/[^\x00-\x7F]/g, '')
-    .replace(/\s+/g, '_')
-    .replace(/[^a-z0-9_]/g, '');
-
-  const safeCode = (productCode || 'no_code')
-    .toLowerCase()
-    .replace(/[^\x00-\x7F]/g, '')
-    .replace(/\s+/g, '_')
-    .replace(/[^a-z0-9_]/g, '');
-
-  const safeMediaType = (mediaType || 'unknown')
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '');
-
+  // Clean the extension, removing any invalid characters
   const safeExtension = (extension || 'bin')
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '');
 
-  const timestamp = Date.now();
-  const fileName = `${safeName}_${safeCode}_${safeMediaType}_${timestamp}`;
+  // Simply combine the unique ID with the extension
+  const fileName = `${fileUniqueId}.${safeExtension}`;
 
-  console.log('Generated filename:', `${fileName}.${safeExtension}`);
-  return `${fileName}.${safeExtension}`;
+  console.log('Generated filename:', fileName);
+  return fileName;
 }
