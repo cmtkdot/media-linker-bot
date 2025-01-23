@@ -82,9 +82,13 @@ export class QueueProcessor {
           const glideData = mapSupabaseToGlide(item.new_data);
           
           // Add row to Glide with retry logic
-          await this.withRetry(async () => {
-            await this.glideApi.addRow(glideData, item.record_id);
-          });
+          await this.withRetry(
+            async () => {
+              await this.glideApi.addRow(glideData, item.record_id);
+            },
+            0,
+            { operation: 'insert', itemId: item.id }
+          );
           result.added++;
           break;
         }
@@ -98,9 +102,13 @@ export class QueueProcessor {
           const glideData = mapSupabaseToGlide(item.new_data);
           
           // Update existing row in Glide with retry logic
-          await this.withRetry(async () => {
-            await this.glideApi.updateRow(item.old_data!.telegram_media_row_id!, glideData);
-          });
+          await this.withRetry(
+            async () => {
+              await this.glideApi.updateRow(item.old_data!.telegram_media_row_id!, glideData);
+            },
+            0,
+            { operation: 'update', itemId: item.id }
+          );
           result.updated++;
           break;
         }
@@ -111,9 +119,13 @@ export class QueueProcessor {
           }
 
           // Delete row from Glide with retry logic
-          await this.withRetry(async () => {
-            await this.glideApi.deleteRow(item.old_data!.telegram_media_row_id!);
-          });
+          await this.withRetry(
+            async () => {
+              await this.glideApi.deleteRow(item.old_data!.telegram_media_row_id!);
+            },
+            0,
+            { operation: 'delete', itemId: item.id }
+          );
           result.deleted++;
           break;
         }
@@ -128,6 +140,24 @@ export class QueueProcessor {
         error: null
       });
 
+      // Record performance metrics
+      await this.supabase
+        .from('sync_performance_metrics')
+        .insert({
+          operation_type: item.operation,
+          start_time: item.created_at!,
+          end_time: new Date().toISOString(),
+          records_processed: 1,
+          success_count: 1,
+          error_count: 0,
+          correlation_id: item.id,
+          metadata: {
+            table_name: item.table_name,
+            record_id: item.record_id,
+            batch_id: item.batch_id
+          }
+        });
+
     } catch (error) {
       console.error('Error processing queue item:', error);
       result.errors.push(`Error processing item ${item.id}: ${error.message}`);
@@ -137,6 +167,25 @@ export class QueueProcessor {
         error: error.message,
         retry_count: (item.retry_count || 0) + 1
       });
+
+      // Record performance metrics for failed operation
+      await this.supabase
+        .from('sync_performance_metrics')
+        .insert({
+          operation_type: item.operation,
+          start_time: item.created_at!,
+          end_time: new Date().toISOString(),
+          records_processed: 1,
+          success_count: 0,
+          error_count: 1,
+          correlation_id: item.id,
+          metadata: {
+            table_name: item.table_name,
+            record_id: item.record_id,
+            batch_id: item.batch_id,
+            error: error.message
+          }
+        });
 
       // If max retries reached, mark as processed to prevent further attempts
       if ((item.retry_count || 0) >= MAX_RETRIES) {

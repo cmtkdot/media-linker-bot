@@ -34,6 +34,15 @@ serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Record health check
+    await supabase
+      .from('sync_health_checks')
+      .insert({
+        check_type: 'sync_start',
+        status: 'running',
+        details: { correlation_id: correlationId }
+      });
+
     // Get active Glide configurations
     const { data: configs, error: configError } = await supabase
       .from('glide_config')
@@ -67,10 +76,6 @@ serve(async (req: Request) => {
       details: { config_id: config.id }
     });
 
-    if (!config.supabase_table_name) {
-      throw new Error('No table name specified in Glide configuration');
-    }
-
     // Initialize Glide API client
     const glideApi = new GlideAPI(
       config.app_id,
@@ -82,11 +87,41 @@ serve(async (req: Request) => {
     // Initialize queue processor
     const queueProcessor = new QueueProcessor(supabase, config, glideApi, logger);
 
-    // Get unprocessed items from queue
+    // Check for differences between Supabase and Glide
+    const { data: differences, error: diffError } = await supabase
+      .rpc('check_telegram_media_differences');
+
+    if (diffError) {
+      logger.log({
+        operation: 'check_differences',
+        status: 'error',
+        errorType: SyncErrorType.DATABASE,
+        details: { error: diffError }
+      });
+    } else if (differences?.length > 0) {
+      // Queue differences for sync
+      const batchId = uuidv4();
+      await Promise.all(differences.map(async (diff, index) => {
+        await supabase
+          .from('glide_sync_queue')
+          .insert({
+            table_name: 'telegram_media',
+            record_id: diff.record_id,
+            operation: diff.difference_type === 'missing_in_glide' ? 'INSERT' : 'UPDATE',
+            new_data: diff.supabase_data,
+            old_data: diff.glide_data,
+            priority: 2, // Higher priority for differences
+            batch_id: batchId
+          });
+      }));
+    }
+
+    // Get unprocessed items from queue, ordered by priority
     const { data: queueItems, error: queueError } = await supabase
       .from('glide_sync_queue')
       .select('*')
       .is('processed_at', null)
+      .order('priority', { ascending: false })
       .order('created_at', { ascending: true })
       .limit(BATCH_SIZE);
 
@@ -100,12 +135,6 @@ serve(async (req: Request) => {
       throw queueError;
     }
 
-    logger.log({
-      operation: 'queue_fetched',
-      status: 'success',
-      details: { items_count: queueItems?.length || 0 }
-    });
-
     const result = {
       added: 0,
       updated: 0,
@@ -113,38 +142,44 @@ serve(async (req: Request) => {
       errors: [] as string[]
     };
 
-    // Process each queue item
-    for (const item of queueItems || []) {
+    // Process queue items in batches
+    const batches = queueItems?.reduce((acc, item) => {
+      const batchId = item.batch_id || 'default';
+      if (!acc[batchId]) {
+        acc[batchId] = [];
+      }
+      acc[batchId].push(item);
+      return acc;
+    }, {} as Record<string, any[]>) || {};
+
+    // Process each batch
+    for (const [batchId, items] of Object.entries(batches)) {
       try {
-        await queueProcessor.processQueueItem(item, result);
+        await Promise.all(items.map(item => queueProcessor.processQueueItem(item, result)));
       } catch (error) {
         logger.log({
-          operation: 'process_item',
+          operation: 'process_batch',
           status: 'error',
           errorType: SyncErrorType.UNKNOWN,
           details: { 
-            item_id: item.id,
+            batch_id: batchId,
             error: error.message 
           }
         });
-        result.errors.push(`Error processing item ${item.id}: ${error.message}`);
       }
     }
 
-    // Clean up processed items older than 24 hours
-    const { error: cleanupError } = await supabase
-      .from('glide_sync_queue')
-      .delete()
-      .lt('processed_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
-
-    if (cleanupError) {
-      logger.log({
-        operation: 'cleanup',
-        status: 'error',
-        errorType: SyncErrorType.DATABASE,
-        details: { error: cleanupError }
+    // Update health check status
+    await supabase
+      .from('sync_health_checks')
+      .insert({
+        check_type: 'sync_complete',
+        status: result.errors.length > 0 ? 'warning' : 'success',
+        details: { 
+          correlation_id: correlationId,
+          result
+        }
       });
-    }
 
     logger.log({
       operation: 'sync_complete',
@@ -168,6 +203,24 @@ serve(async (req: Request) => {
     );
 
   } catch (error) {
+    // Record error in health checks
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    );
+
+    await supabase
+      .from('sync_health_checks')
+      .insert({
+        check_type: 'sync_error',
+        status: 'error',
+        details: { 
+          correlation_id: correlationId,
+          error: error.message,
+          stack: error.stack
+        }
+      });
+
     logger.log({
       operation: 'sync_failed',
       status: 'error',

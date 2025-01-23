@@ -110,36 +110,42 @@ export type Database = {
       }
       glide_sync_queue: {
         Row: {
+          batch_id: string | null
           created_at: string | null
           error: string | null
           id: string
           new_data: Json | null
           old_data: Json | null
           operation: string
+          priority: number | null
           processed_at: string | null
           record_id: string
           retry_count: number | null
           table_name: string
         }
         Insert: {
+          batch_id?: string | null
           created_at?: string | null
           error?: string | null
           id?: string
           new_data?: Json | null
           old_data?: Json | null
           operation: string
+          priority?: number | null
           processed_at?: string | null
           record_id: string
           retry_count?: number | null
           table_name: string
         }
         Update: {
+          batch_id?: string | null
           created_at?: string | null
           error?: string | null
           id?: string
           new_data?: Json | null
           old_data?: Json | null
           operation?: string
+          priority?: number | null
           processed_at?: string | null
           record_id?: string
           retry_count?: number | null
@@ -257,6 +263,72 @@ export type Database = {
         }
         Relationships: []
       }
+      sync_health_checks: {
+        Row: {
+          check_type: string
+          created_at: string | null
+          details: Json | null
+          id: string
+          last_check_time: string | null
+          status: string
+        }
+        Insert: {
+          check_type: string
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          last_check_time?: string | null
+          status: string
+        }
+        Update: {
+          check_type?: string
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          last_check_time?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
+      sync_performance_metrics: {
+        Row: {
+          correlation_id: string | null
+          created_at: string | null
+          end_time: string | null
+          error_count: number | null
+          id: string
+          metadata: Json | null
+          operation_type: string
+          records_processed: number | null
+          start_time: string
+          success_count: number | null
+        }
+        Insert: {
+          correlation_id?: string | null
+          created_at?: string | null
+          end_time?: string | null
+          error_count?: number | null
+          id?: string
+          metadata?: Json | null
+          operation_type: string
+          records_processed?: number | null
+          start_time: string
+          success_count?: number | null
+        }
+        Update: {
+          correlation_id?: string | null
+          created_at?: string | null
+          end_time?: string | null
+          error_count?: number | null
+          id?: string
+          metadata?: Json | null
+          operation_type?: string
+          records_processed?: number | null
+          start_time?: string
+          success_count?: number | null
+        }
+        Relationships: []
+      }
       telegram_media: {
         Row: {
           analyzed_content: Json | null
@@ -365,6 +437,15 @@ export type Database = {
       }
     }
     Functions: {
+      check_telegram_media_differences: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          record_id: string
+          difference_type: string
+          supabase_data: Json
+          glide_data: Json
+        }[]
+      }
       count_missing_thumbnails: {
         Args: Record<PropertyKey, never>
         Returns: {
