@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, Play, RefreshCw, Queue, CheckCircle } from "lucide-react";
+import { Loader2, Play, RefreshCw, ListChecks } from "lucide-react";
 
 export const ProcessFlowSection = () => {
   const [isProcessingMessages, setIsProcessingMessages] = useState(false);
@@ -172,7 +172,7 @@ export const ProcessFlowSection = () => {
                 </>
               ) : (
                 <>
-                  <Queue className="w-4 h-4 mr-2" />
+                  <ListChecks className="w-4 h-4 mr-2" />
                   Process Queue Items
                 </>
               )}
