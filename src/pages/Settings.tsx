@@ -6,6 +6,10 @@ import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, RefreshCw } from "lucide-react";
 
+interface MediaGroup {
+  media_group_id: string | null;
+}
+
 const Settings = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -94,12 +98,19 @@ const Settings = () => {
         .from('telegram_media')
         .select('telegram_data->media_group_id')
         .not('telegram_data->media_group_id', 'is', null)
-        .distinct();
+        .select('telegram_data->media_group_id');
 
       if (fetchError) throw fetchError;
 
+      const uniqueGroups = (mediaGroups || []).reduce<MediaGroup[]>((acc, group) => {
+        if (group.media_group_id && !acc.some(g => g.media_group_id === group.media_group_id)) {
+          acc.push(group);
+        }
+        return acc;
+      }, []);
+
       let syncedGroups = 0;
-      for (const group of mediaGroups || []) {
+      for (const group of uniqueGroups) {
         const mediaGroupId = group.media_group_id;
         if (!mediaGroupId) continue;
 
