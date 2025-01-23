@@ -50,6 +50,23 @@ const MediaCard = ({ item, onPreview, onEdit }: MediaCardProps) => {
             </div>
           </div>
         </div>
+
+        {/* Product Information */}
+        <div className="p-4">
+          <h3 className="font-medium text-sm mb-1">
+            {item.product_name || 'Untitled Product'}
+          </h3>
+          {item.caption && (
+            <p className="text-sm text-muted-foreground line-clamp-2">
+              {item.caption}
+            </p>
+          )}
+          {item.product_code && (
+            <p className="text-sm text-muted-foreground mt-1">
+              Code: {item.product_code}
+            </p>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
