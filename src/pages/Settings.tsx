@@ -3,6 +3,7 @@ import { CaptionSyncSection } from "@/components/settings/CaptionSyncSection";
 import { GlideSyncSection } from "@/components/settings/GlideSyncSection";
 import { ProcessFlowSection } from "@/components/settings/ProcessFlowSection";
 import { CaptionAnalysisSection } from "@/components/settings/CaptionAnalysisSection";
+import { MediaGroupSyncSection } from "@/components/settings/MediaGroupSyncSection";
 
 const Settings = () => {
   return (
@@ -12,6 +13,7 @@ const Settings = () => {
       <div className="grid gap-6">
         <ProcessFlowSection />
         <CaptionAnalysisSection />
+        <MediaGroupSyncSection />
         <ThumbnailSection />
         <CaptionSyncSection />
         <GlideSyncSection />
