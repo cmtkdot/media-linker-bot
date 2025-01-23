@@ -3,6 +3,7 @@ import { processMediaFiles } from './media-processor.ts';
 import { delay } from './retry-utils.ts';
 import { analyzeCaptionWithAI } from './caption-analyzer.ts';
 import { syncMediaGroupCaptions } from './caption-sync.ts';
+import { downloadAndStoreThumbnail } from './thumbnail-handler.ts';
 
 export async function handleWebhookUpdate(update: any, supabase: any, botToken: string) {
   const message = update.message || update.channel_post;
@@ -18,8 +19,19 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
       chat_id: message.chat.id,
       media_group_id: message.media_group_id,
       has_caption: !!message.caption,
-      caption: message.caption // Log the actual caption for debugging
+      caption: message.caption
     });
+
+    // Handle video thumbnail if present
+    let thumbnailUrl = null;
+    if (message.video?.thumb) {
+      console.log('Video thumbnail found:', message.video.thumb);
+      thumbnailUrl = await downloadAndStoreThumbnail(
+        message.video.thumb,
+        botToken,
+        supabase
+      );
+    }
 
     // Step 1: If this is part of a media group, check for existing data
     let existingGroupData = null;
@@ -50,7 +62,6 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
         console.log('Caption analysis result:', analyzedContent);
       } catch (error) {
         console.error('Error analyzing caption:', error);
-        // Don't throw here, continue with null analyzedContent
       }
     } else if (existingGroupData?.analyzed_content) {
       analyzedContent = existingGroupData.analyzed_content;
@@ -70,14 +81,16 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
       quantity: analyzedContent?.quantity || existingGroupData?.quantity || null,
       vendor_uid: analyzedContent?.vendor_uid || existingGroupData?.vendor_uid || null,
       purchase_date: analyzedContent?.purchase_date || existingGroupData?.purchase_date || null,
-      notes: analyzedContent?.notes || existingGroupData?.notes || null
+      notes: analyzedContent?.notes || existingGroupData?.notes || null,
+      thumbnail_url: thumbnailUrl
     };
 
     console.log('Prepared message data:', {
       message_id: messageData.message_id,
       product_name: messageData.product_name,
       caption: messageData.caption,
-      analyzed_content: messageData.analyzed_content
+      analyzed_content: messageData.analyzed_content,
+      thumbnail_url: messageData.thumbnail_url
     });
 
     try {
@@ -162,7 +175,8 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
         vendor_uid: messageData.vendor_uid,
         purchase_date: messageData.purchase_date,
         notes: messageData.notes,
-        caption: message.caption // Ensure caption is saved
+        caption: message.caption,
+        thumbnail_url: thumbnailUrl
       })
       .eq('id', messageRecord.id);
 
