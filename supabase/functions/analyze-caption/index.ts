@@ -18,7 +18,6 @@ serve(async (req) => {
       throw new Error('OpenAI API key is not configured');
     }
 
-    // Initialize Supabase client with environment variables
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
@@ -52,13 +51,20 @@ serve(async (req) => {
         messages: [
           {
             role: 'system',
-            content: `You are a JSON extraction assistant. Extract product information from captions following these rules and return ONLY a JSON object with these fields (no markdown, no explanations):
-            - product_name: Everything before the # symbol, trimmed
+            content: `You are a JSON extraction assistant. Extract product information from captions. The MOST IMPORTANT field is product_name which should be everything before the # symbol if present, or the first line of text. Other fields are optional but try to extract them if present:
+
+            Required field:
+            - product_name: Everything before the # symbol, trimmed. If no # symbol, use the first line or full text.
+
+            Optional fields (only include if confident):
             - product_code: Text between # and x, excluding parentheses
             - quantity: Number after "x" and before parentheses
             - vendor_uid: Letters before numbers in product code
-            - purchase_date: Convert 6 digits from code (mmDDyy) to YYYY-MM-DD
+            - purchase_date: Convert 6 digits from code (mmDDyy) to YYYY-MM-DD if present
             - notes: Text in parentheses () combined with spaces
+
+            Return ONLY a JSON object with these fields (no markdown).
+            If you can only extract product_name, that's fine - return just that field.
 
             Example input: "Cherry Runtz #FISH011625 x 3 (20 behind) (fresh batch)"
             Example output: {"product_name":"Cherry Runtz","product_code":"FISH011625","quantity":3,"vendor_uid":"FISH","purchase_date":"2025-01-16","notes":"20 behind fresh batch"}`
@@ -86,9 +92,18 @@ serve(async (req) => {
     }
 
     try {
-      // Remove any markdown formatting if present
-      const cleanContent = data.choices[0].message.content.replace(/```json\n|\n```/g, '');
-      const result = JSON.parse(cleanContent);
+      // Remove any markdown formatting if present and parse JSON
+      const cleanContent = data.choices[0].message.content.replace(/```json\n|\n```|```/g, '');
+      let result = JSON.parse(cleanContent);
+
+      // Ensure we at least have a product name
+      if (!result.product_name && caption) {
+        console.log('Fallback: Extracting product name from caption');
+        // Fallback: Use text before # or first line as product name
+        const productName = caption.split('#')[0].trim() || caption.split('\n')[0].trim() || caption.trim();
+        result = { product_name: productName, ...result };
+      }
+
       console.log('Parsed result:', result);
 
       // Update the telegram_media table with the analyzed content
@@ -140,10 +155,33 @@ serve(async (req) => {
     } catch (parseError) {
       console.error('Error parsing OpenAI response:', parseError);
       console.error('Raw response content:', data.choices[0].message.content);
-      throw new Error(`Failed to parse OpenAI response: ${parseError.message}`);
+      
+      // Fallback: Extract at least the product name
+      const productName = caption.split('#')[0].trim() || caption.split('\n')[0].trim() || caption.trim();
+      const fallbackResult = { product_name: productName };
+      
+      console.log('Using fallback result:', fallbackResult);
+      return new Response(
+        JSON.stringify(fallbackResult),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
   } catch (error) {
     console.error('Error in analyze-caption function:', error);
+    // Even in case of error, try to extract at least the product name
+    try {
+      const { caption } = await req.json();
+      if (caption) {
+        const productName = caption.split('#')[0].trim() || caption.split('\n')[0].trim() || caption.trim();
+        return new Response(
+          JSON.stringify({ product_name: productName }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    } catch (fallbackError) {
+      console.error('Error in fallback product name extraction:', fallbackError);
+    }
+    
     return new Response(
       JSON.stringify({ 
         error: error.message,
