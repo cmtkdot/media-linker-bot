@@ -14,22 +14,20 @@ interface MediaCardProps {
 
 const MediaCard = ({ item, onPreview, onEdit }: MediaCardProps) => {
   const [isPlaying, setIsPlaying] = React.useState(false);
-  const [thumbnailError, setThumbnailError] = React.useState(false);
-  const [isGeneratingThumbnail, setIsGeneratingThumbnail] = React.useState(false);
+  const [isVideoLoaded, setIsVideoLoaded] = React.useState(false);
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const supabase = useSupabaseClient();
 
   // Reset states when item changes
   React.useEffect(() => {
     setIsPlaying(false);
-    setThumbnailError(false);
-    setIsGeneratingThumbnail(false);
+    setIsVideoLoaded(false);
   }, [item.id]);
 
   const getDisplayUrl = () => {
     if (item.file_type === 'video') {
-      // If we have a valid thumbnail URL and no error, use it
-      if (item.thumbnail_url && !thumbnailError) {
+      // Try thumbnail URL first
+      if (item.thumbnail_url) {
         return item.thumbnail_url;
       }
 
@@ -66,116 +64,28 @@ const MediaCard = ({ item, onPreview, onEdit }: MediaCardProps) => {
     return item.public_url || item.default_public_url;
   };
 
-  const handleThumbnailError = () => {
-    setThumbnailError(true);
-    // If thumbnail fails, try to generate one from the video
-    if (videoRef.current && !isGeneratingThumbnail) {
-      generateThumbnail();
-    }
-  };
-
-  const generateThumbnail = async () => {
-    if (!videoRef.current || !item.id || isGeneratingThumbnail) return;
-
-    try {
-      setIsGeneratingThumbnail(true);
-
-      // Load the video
-      videoRef.current.src = item.public_url || item.default_public_url;
-      videoRef.current.currentTime = 1; // Skip to 1 second
-      
-      // Wait for video to load
-      await new Promise((resolve, reject) => {
-        const video = videoRef.current;
-        if (!video) return reject('No video element');
-        
-        const handleLoad = () => {
-          video.removeEventListener('loadeddata', handleLoad);
-          video.removeEventListener('error', handleError);
-          resolve(null);
-        };
-        
-        const handleError = (e: Event) => {
-          video.removeEventListener('loadeddata', handleLoad);
-          video.removeEventListener('error', handleError);
-          reject(e);
-        };
-
-        video.addEventListener('loadeddata', handleLoad);
-        video.addEventListener('error', handleError);
-      });
-
-      // Create canvas and capture frame
-      const canvas = document.createElement('canvas');
-      canvas.width = videoRef.current.videoWidth;
-      canvas.height = videoRef.current.videoHeight;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) throw new Error('Could not get canvas context');
-      
-      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-      
-      // Convert to blob
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob(
-          (blob) => blob ? resolve(blob) : reject('Failed to create blob'),
-          'image/jpeg',
-          0.95
-        );
-      });
-
-      // Upload to Supabase
-      const fileName = `thumb_${item.id}.jpg`;
-      const { error: uploadError } = await supabase
-        .storage
-        .from('media')
-        .upload(fileName, blob, {
-          upsert: true,
-          contentType: 'image/jpeg'
-        });
-
-      if (uploadError) throw uploadError;
-
-      // Get public URL
-      const { data } = supabase
-        .storage
-        .from('media')
-        .getPublicUrl(fileName);
-
-      if (!data?.publicUrl) throw new Error('Failed to get public URL');
-
-      // Update media record
-      const { error: updateError } = await supabase
-        .from('telegram_media')
-        .update({ 
-          thumbnail_url: data.publicUrl,
-          media_metadata: {
-            ...item.media_metadata,
-            thumbnail_path: fileName
-          }
-        })
-        .eq('id', item.id);
-
-      if (updateError) throw updateError;
-
-      // Reset error state since we have a new thumbnail
-      setThumbnailError(false);
-
-    } catch (error) {
-      console.error('Error generating thumbnail:', error);
-    } finally {
-      setIsGeneratingThumbnail(false);
-      if (videoRef.current) {
-        videoRef.current.src = '';
-      }
-    }
-  };
-
   const handleVideoClick = () => {
-    if (videoRef.current) {
-      if (!isPlaying) {
-        videoRef.current.play();
-      } else {
+    if (!videoRef.current) return;
+
+    if (!isVideoLoaded) {
+      // First load the video
+      videoRef.current.src = item.public_url || item.default_public_url;
+      videoRef.current.load();
+      setIsVideoLoaded(true);
+      
+      // Add event listener for when video is ready
+      const handleCanPlay = () => {
+        videoRef.current?.play();
+        setIsPlaying(true);
+        videoRef.current?.removeEventListener('canplay', handleCanPlay);
+      };
+      videoRef.current.addEventListener('canplay', handleCanPlay);
+    } else {
+      // Video is already loaded, just toggle play/pause
+      if (isPlaying) {
         videoRef.current.pause();
+      } else {
+        videoRef.current.play();
       }
       setIsPlaying(!isPlaying);
     }
@@ -184,13 +94,15 @@ const MediaCard = ({ item, onPreview, onEdit }: MediaCardProps) => {
   return (
     <Card className="group relative overflow-hidden">
       <div className="relative aspect-square bg-muted">
-        {/* Video Thumbnail */}
-        {item.file_type === 'video' && !isPlaying && (
+        {/* Thumbnail Image */}
+        {item.file_type === 'video' && (
           <img
             src={getDisplayUrl()}
             alt={item.caption || 'Video thumbnail'}
-            className="absolute inset-0 w-full h-full object-cover"
-            onError={handleThumbnailError}
+            className={cn(
+              "absolute inset-0 w-full h-full object-cover",
+              isPlaying ? "opacity-0" : "opacity-100"
+            )}
           />
         )}
         
@@ -202,11 +114,11 @@ const MediaCard = ({ item, onPreview, onEdit }: MediaCardProps) => {
               "absolute inset-0 w-full h-full object-cover",
               isPlaying ? "opacity-100" : "opacity-0"
             )}
-            src={item.public_url}
             muted
             playsInline
             preload="none"
             onClick={handleVideoClick}
+            onEnded={() => setIsPlaying(false)}
           />
         )}
 
@@ -221,18 +133,12 @@ const MediaCard = ({ item, onPreview, onEdit }: MediaCardProps) => {
 
         {/* Play Button Overlay */}
         {item.file_type === 'video' && !isPlaying && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors">
+          <div 
+            className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors cursor-pointer"
+            onClick={handleVideoClick}
+          >
             <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center group-hover:scale-110 transition-transform">
               <Play className="h-6 w-6 text-black" />
-            </div>
-          </div>
-        )}
-
-        {/* Loading Overlay */}
-        {isGeneratingThumbnail && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-            <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center animate-spin">
-              <div className="w-6 h-6 border-2 border-black border-t-transparent rounded-full" />
             </div>
           </div>
         )}
