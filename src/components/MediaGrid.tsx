@@ -5,6 +5,12 @@ import { MediaItem } from "@/types/media";
 import MediaGridFilters from "./MediaGridFilters";
 import MediaGridContent from "./MediaGridContent";
 
+interface TelegramData {
+  chat?: {
+    title?: string;
+  };
+}
+
 interface QueryResult {
   id: string;
   file_id: string;
@@ -19,7 +25,7 @@ interface QueryResult {
   vendor_uid: string | null;
   purchase_date: string | null;
   notes: string | null;
-  telegram_data: Record<string, any>;
+  telegram_data: TelegramData;
   glide_data: Record<string, any>;
   media_metadata: Record<string, any>;
   analyzed_content: {
@@ -55,7 +61,7 @@ const MediaGrid = () => {
 
       // Extract unique channel titles from telegram_data
       const channels = [...new Set(channelsResult.data?.map(item => {
-        const data = item.telegram_data;
+        const data = item.telegram_data as TelegramData;
         return data?.chat?.title;
       }).filter(Boolean) || [])];
       
