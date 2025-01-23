@@ -34,7 +34,7 @@ export const CaptionAnalysisSection = () => {
       // First analyze messages with captions but no analysis
       const { data: messages, error: fetchError } = await supabase
         .from('messages')
-        .select('id, caption, media_group_id')
+        .select('id, caption, media_group_id, chat_id, message_id')
         .is('analyzed_content', null)
         .not('caption', 'is', null);
 
@@ -80,7 +80,9 @@ export const CaptionAnalysisSection = () => {
                 quantity: analysis?.quantity,
                 vendor_uid: analysis?.vendor_uid,
                 purchase_date: analysis?.purchase_date,
-                notes: analysis?.notes
+                notes: analysis?.notes,
+                chat_id: message.chat_id,
+                message_id: message.message_id
               })
               .eq('id', message.id);
 
