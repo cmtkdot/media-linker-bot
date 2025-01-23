@@ -61,6 +61,13 @@ const MediaEditDialog = ({ editItem, onClose, onSave, onItemChange, formatDate }
       return;
     }
 
+    // Only update Telegram if this media provided the original caption
+    const isOriginalCaptionSource = editItem.analyzed_content?.text === editItem.caption;
+    if (!isOriginalCaptionSource) {
+      console.log('Skipping Telegram update - not the original caption source');
+      return;
+    }
+
     try {
       const { data, error } = await supabase.functions.invoke('update-telegram-message', {
         body: {
@@ -86,14 +93,29 @@ const MediaEditDialog = ({ editItem, onClose, onSave, onItemChange, formatDate }
     }
   };
 
+  const generateCaption = (item: MediaItem): string => {
+    const parts = [];
+    if (item.product_name) parts.push(item.product_name);
+    if (item.product_code) parts.push(`#${item.product_code}`);
+    if (item.quantity) parts.push(`x ${item.quantity}`);
+    if (item.vendor_uid) parts.push(`(Vendor: ${item.vendor_uid})`);
+    return parts.join(' ');
+  };
+
   const handleSave = async () => {
     if (!editItem) return;
 
     try {
+      // Update caption if this is the original caption source
+      if (editItem.analyzed_content?.text === editItem.caption) {
+        const newCaption = generateCaption(editItem);
+        onItemChange('caption', newCaption);
+      }
+
       // First save to Supabase
       await onSave();
 
-      // Then update Telegram message if we have the required data
+      // Then update Telegram message if needed
       if (editItem.telegram_data?.message_id && editItem.telegram_data?.chat?.id) {
         await updateTelegramMessage({
           caption: editItem.caption,
@@ -144,7 +166,13 @@ const MediaEditDialog = ({ editItem, onClose, onSave, onItemChange, formatDate }
               id="product_name"
               value={editItem.product_name || ''}
               className="col-span-3"
-              onChange={(e) => onItemChange('product_name', e.target.value)}
+              onChange={(e) => {
+                onItemChange('product_name', e.target.value);
+                if (editItem.analyzed_content?.text === editItem.caption) {
+                  const updatedItem = { ...editItem, product_name: e.target.value };
+                  onItemChange('caption', generateCaption(updatedItem));
+                }
+              }}
             />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
@@ -155,7 +183,13 @@ const MediaEditDialog = ({ editItem, onClose, onSave, onItemChange, formatDate }
               id="product_code"
               value={editItem.product_code || ''}
               className="col-span-3"
-              onChange={(e) => onItemChange('product_code', e.target.value)}
+              onChange={(e) => {
+                onItemChange('product_code', e.target.value);
+                if (editItem.analyzed_content?.text === editItem.caption) {
+                  const updatedItem = { ...editItem, product_code: e.target.value };
+                  onItemChange('caption', generateCaption(updatedItem));
+                }
+              }}
             />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
@@ -167,7 +201,13 @@ const MediaEditDialog = ({ editItem, onClose, onSave, onItemChange, formatDate }
               type="number"
               value={editItem.quantity || ''}
               className="col-span-3"
-              onChange={(e) => onItemChange('quantity', parseInt(e.target.value) || null)}
+              onChange={(e) => {
+                onItemChange('quantity', parseInt(e.target.value) || null);
+                if (editItem.analyzed_content?.text === editItem.caption) {
+                  const updatedItem = { ...editItem, quantity: parseInt(e.target.value) || null };
+                  onItemChange('caption', generateCaption(updatedItem));
+                }
+              }}
             />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
@@ -178,7 +218,13 @@ const MediaEditDialog = ({ editItem, onClose, onSave, onItemChange, formatDate }
               id="vendor_uid"
               value={editItem.vendor_uid || ''}
               className="col-span-3"
-              onChange={(e) => onItemChange('vendor_uid', e.target.value)}
+              onChange={(e) => {
+                onItemChange('vendor_uid', e.target.value);
+                if (editItem.analyzed_content?.text === editItem.caption) {
+                  const updatedItem = { ...editItem, vendor_uid: e.target.value };
+                  onItemChange('caption', generateCaption(updatedItem));
+                }
+              }}
             />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
