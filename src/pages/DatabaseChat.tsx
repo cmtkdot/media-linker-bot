@@ -97,20 +97,18 @@ const DatabaseChat = () => {
     ) : null;
   };
 
-  if (isLoading) {
-    return (
-      <AuroraBackground>
-        <div className="flex items-center justify-center min-h-[600px]">
+  const renderContent = () => {
+    if (isLoading) {
+      return (
+        <div className="flex items-center justify-center min-h-screen">
           <Loader2 className="w-8 h-8 animate-spin" />
         </div>
-      </AuroraBackground>
-    );
-  }
+      );
+    }
 
-  if (error) {
-    return (
-      <AuroraBackground>
-        <div className="flex items-center justify-center min-h-[600px]">
+    if (error) {
+      return (
+        <div className="flex items-center justify-center min-h-screen">
           <AnimatedList>
             <Alert variant="destructive" className="backdrop-blur-lg bg-destructive/10 border-destructive/50">
               <XCircle className="h-4 w-4" />
@@ -118,28 +116,34 @@ const DatabaseChat = () => {
             </Alert>
           </AnimatedList>
         </div>
-      </AuroraBackground>
+      );
+    }
+
+    return (
+      <div className="min-h-screen py-8">
+        <div className="container mx-auto px-4">
+          <Card className="p-6 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+            <h1 className="text-2xl font-bold mb-4">Database Chat</h1>
+            {renderConnectionStatus()}
+            <div className="relative rounded-lg overflow-hidden bg-muted">
+              {connectionStatus === 'success' && iframeUrl && (
+                <iframe
+                  className="w-full border-0"
+                  style={{ height: "calc(100vh - 300px)", minHeight: "600px" }}
+                  src={iframeUrl}
+                  allow="clipboard-write"
+                />
+              )}
+            </div>
+          </Card>
+        </div>
+      </div>
     );
-  }
+  };
 
   return (
-    <AuroraBackground>
-      <div className="container mx-auto p-4">
-        <Card className="p-6 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <h1 className="text-2xl font-bold mb-4">Database Chat</h1>
-          {renderConnectionStatus()}
-          <div className="relative rounded-lg overflow-hidden bg-muted">
-            {connectionStatus === 'success' && iframeUrl && (
-              <iframe
-                className="w-full border-0"
-                style={{ height: "600px" }}
-                src={iframeUrl}
-                allow="clipboard-write"
-              />
-            )}
-          </div>
-        </Card>
-      </div>
+    <AuroraBackground showRadialGradient={false}>
+      {renderContent()}
     </AuroraBackground>
   );
 };
