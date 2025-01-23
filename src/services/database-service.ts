@@ -5,7 +5,6 @@ import type { MediaItem } from "@/types/media";
 interface TransactionContext {
   insertMessage: (messageData: any) => Promise<any>;
   insertMedia: (messageId: string, mediaData: any) => Promise<any>;
-  updateMediaGroup: (groupId: string, data: any) => Promise<any>;
 }
 
 class DatabaseService {
@@ -30,13 +29,6 @@ class DatabaseService {
           .single();
         if (error) throw error;
         return data;
-      },
-      updateMediaGroup: async (groupId, data) => {
-        const { error } = await supabase
-          .from('media_groups')
-          .update(data)
-          .eq('media_group_id', groupId);
-        if (error) throw error;
       }
     };
 

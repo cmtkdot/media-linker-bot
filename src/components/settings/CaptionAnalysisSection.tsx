@@ -33,8 +33,8 @@ export const CaptionAnalysisSection = () => {
       
       // First analyze messages with captions but no analysis
       const { data: messages, error: fetchError } = await supabase
-        .from('messages')
-        .select('id, caption, media_group_id, chat_id, message_id')
+        .from('telegram_media')
+        .select('id, caption, telegram_data')
         .is('analyzed_content', null)
         .not('caption', 'is', null);
 
@@ -46,48 +46,15 @@ export const CaptionAnalysisSection = () => {
         try {
           // Call the analyze-caption function
           const { data: analysis, error: analysisError } = await supabase.functions.invoke('analyze-caption', {
-            body: { caption: message.caption }
+            body: { 
+              caption: message.caption,
+              messageId: message.id,
+              mediaGroupId: message.telegram_data?.media_group_id
+            }
           });
 
           if (analysisError) throw analysisError;
 
-          if (message.media_group_id) {
-            // Update media group
-            const { error: updateError } = await supabase
-              .from('media_groups')
-              .upsert({
-                media_group_id: message.media_group_id,
-                caption: message.caption,
-                analyzed_content: analysis,
-                product_name: analysis?.product_name,
-                product_code: analysis?.product_code,
-                quantity: analysis?.quantity,
-                vendor_uid: analysis?.vendor_uid,
-                purchase_date: analysis?.purchase_date,
-                notes: analysis?.notes,
-                sync_status: 'completed'
-              });
-
-            if (updateError) throw updateError;
-          } else {
-            // Update individual message and media
-            const { error: updateError } = await supabase
-              .from('messages')
-              .update({
-                analyzed_content: analysis,
-                product_name: analysis?.product_name,
-                product_code: analysis?.product_code,
-                quantity: analysis?.quantity,
-                vendor_uid: analysis?.vendor_uid,
-                purchase_date: analysis?.purchase_date,
-                notes: analysis?.notes,
-                chat_id: message.chat_id,
-                message_id: message.message_id
-              })
-              .eq('id', message.id);
-
-            if (updateError) throw updateError;
-          }
         } catch (error) {
           console.error('Error analyzing caption:', error);
           // Continue with next message even if one fails
