@@ -25,7 +25,7 @@ const DropdownMenu = ({ options, children }: DropdownMenuProps) => {
     <div className="relative">
       <Button
         onClick={toggleDropdown}
-        className="px-4 py-2 bg-background/80 dark:bg-[rgba(9,48,92,0.75)] hover:bg-background/90 dark:hover:bg-[rgba(9,48,92,0.85)] shadow-lg dark:shadow-[0_0_20px_rgba(0,0,0,0.4)] border border-border/50 dark:border-white/10 rounded-xl backdrop-blur-[16px] text-foreground dark:text-white/90"
+        className="px-4 py-2 bg-[#11111198] hover:bg-[#111111d1] shadow-[0_0_20px_rgba(0,0,0,0.2)] border-none rounded-xl backdrop-blur-sm"
       >
         {children ?? "Menu"}
         <>
@@ -46,7 +46,7 @@ const DropdownMenu = ({ options, children }: DropdownMenuProps) => {
             animate={{ y: 0, scale: 1, filter: "blur(0px)" }}
             exit={{ y: -5, scale: 0.95, opacity: 0, filter: "blur(10px)" }}
             transition={{ duration: 0.6, ease: "circInOut", type: "spring" }}
-            className="absolute z-10 w-48 mt-2 p-1 bg-background/80 dark:bg-[rgba(9,48,92,0.75)] rounded-xl shadow-lg dark:shadow-[0_0_20px_rgba(0,0,0,0.4)] backdrop-blur-[16px] border border-border/50 dark:border-white/10 flex flex-col gap-2"
+            className="absolute z-10 w-48 mt-2 p-1 bg-[#11111198] rounded-xl shadow-[0_0_20px_rgba(0,0,0,0.2)] backdrop-blur-sm flex flex-col gap-2"
           >
             {options && options.length > 0 ? (
               options.map((option, index) => (
@@ -71,7 +71,7 @@ const DropdownMenu = ({ options, children }: DropdownMenuProps) => {
                     type: "spring",
                   }}
                   whileHover={{
-                    backgroundColor: "rgba(255, 255, 255, 0.1)",
+                    backgroundColor: "#11111140",
                     transition: {
                       duration: 0.4,
                       ease: "easeInOut",
@@ -89,18 +89,14 @@ const DropdownMenu = ({ options, children }: DropdownMenuProps) => {
                     option.onClick();
                     setIsOpen(false);
                   }}
-                  className="px-2 py-3 cursor-pointer text-foreground dark:text-white/90 text-sm rounded-lg w-full text-left flex items-center gap-x-2 hover:bg-accent/10 dark:hover:bg-white/10"
+                  className="px-2 py-3 cursor-pointer text-white text-sm rounded-lg w-full text-left flex items-center gap-x-2"
                 >
-                  {option.Icon && (
-                    <span className="text-muted-foreground dark:text-white/70">{option.Icon}</span>
-                  )}
+                  {option.Icon}
                   {option.label}
                 </motion.button>
               ))
             ) : (
-              <div className="px-4 py-2 text-muted-foreground dark:text-white/50 text-xs">
-                No options
-              </div>
+              <div className="px-4 py-2 text-white text-xs">No options</div>
             )}
           </motion.div>
         )}
