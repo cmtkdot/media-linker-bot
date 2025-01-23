@@ -283,12 +283,12 @@ export type Database = {
           last_retry_at?: string | null
           max_retries?: number | null
           next_retry_at?: string | null
-          operation_data: Json
+          operation_data?: Json
           operation_type: string
           priority?: number | null
           processed_at?: string | null
           retry_count?: number | null
-          status: string
+          status?: string
           updated_at?: string | null
         }
         Update: {
@@ -367,7 +367,7 @@ export type Database = {
         Update: {
           analyzed_content?: Json | null
           caption?: string | null
-          chat_id: number
+          chat_id?: number
           created_at?: string
           id?: string
           last_retry_at?: string | null
@@ -438,7 +438,7 @@ export type Database = {
           created_at?: string | null
           end_time?: string | null
           error_count?: number | null
-          id: string
+          id?: string
           metadata?: Json | null
           operation_type: string
           records_processed?: number | null
@@ -610,19 +610,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      get_all_tables: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          table_name: string
-        }[]
-      }
-      sync_messages_to_telegram_media: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          synced_count: number
-          error_count: number
-        }[]
-      }
       generate_missing_thumbnails: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -634,6 +621,12 @@ export type Database = {
           old_thumbnail: string
           new_thumbnail: string
           source: string
+        }[]
+      }
+      get_all_tables: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          table_name: string
         }[]
       }
       get_synced_message_data: {
@@ -717,6 +710,13 @@ export type Database = {
         }
         Returns: undefined
       }
+      sync_messages_to_telegram_media: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          synced_count: number
+          error_count: number
+        }[]
+      }
       sync_missing_media_records: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -767,7 +767,7 @@ export type Tables<
   TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
     ? keyof (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
         Database[PublicTableNameOrOptions["schema"]]["Views"])
-    : never,
+    : never = never,
 > = PublicTableNameOrOptions extends { schema: keyof Database }
   ? (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
       Database[PublicTableNameOrOptions["schema"]]["Views"])[TableName] extends {
