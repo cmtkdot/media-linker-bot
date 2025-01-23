@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { databaseService } from "@/services/database-service";
 import { Loader2, RefreshCw } from "lucide-react";
 
 export const MessageMediaSyncSection = () => {
@@ -14,11 +14,8 @@ export const MessageMediaSyncSection = () => {
   const handleSync = async () => {
     setIsSyncing(true);
     try {
-      // First, sync messages to telegram_media using the database function
-      const { data: syncResults, error: syncError } = await supabase
-        .rpc('sync_messages_to_telegram_media');
-
-      if (syncError) throw syncError;
+      // First, sync messages to telegram_media using the database service
+      await databaseService.syncMessageMedia('all');
 
       // Then call the edge function to process the media files
       const { data, error } = await supabase.functions.invoke('sync-message-media', {
