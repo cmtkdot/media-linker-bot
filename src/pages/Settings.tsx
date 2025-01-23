@@ -4,12 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 const Settings = () => {
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isRegeneratingSpecific, setIsRegeneratingSpecific] = useState(false);
-  const [isRegeneratingFromTelegram, setIsRegeneratingFromTelegram] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -28,82 +26,36 @@ const Settings = () => {
   const handleGenerateThumbnails = async () => {
     setIsGenerating(true);
     try {
-      const { data, error } = await supabase.functions.invoke('regenerate-thumbnails');
+      console.log('Starting thumbnail generation...');
       
-      if (error) throw error;
+      const { error: genError } = await supabase.rpc('generate_missing_thumbnails');
+      if (genError) {
+        console.error('Error generating thumbnails:', genError);
+        throw genError;
+      }
+
+      // Wait a moment for the operation to complete
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
+      // Refresh the stats
       await refetchThumbnails();
       await queryClient.invalidateQueries({ queryKey: ['telegram-media'] });
       
+      console.log('Thumbnail generation completed');
+      
       toast({
         title: "Success",
-        description: `Processed ${data.processed} videos. Please refresh the page to see the updates.`,
+        description: "Thumbnails have been generated successfully. Please refresh the page to see the updates.",
       });
     } catch (error: any) {
       console.error('Error in handleGenerateThumbnails:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to regenerate thumbnails. Please try again.",
+        description: error.message || "Failed to generate thumbnails. Please try again.",
         variant: "destructive",
       });
     } finally {
       setIsGenerating(false);
-    }
-  };
-
-  const handleRegenerateSpecificThumbnails = async () => {
-    setIsRegeneratingSpecific(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('regenerate-thumbnails', {
-        body: { mode: 'specific' }
-      });
-      
-      if (error) throw error;
-
-      await refetchThumbnails();
-      await queryClient.invalidateQueries({ queryKey: ['telegram-media'] });
-      
-      toast({
-        title: "Success",
-        description: `Processed ${data.processed} specific videos. Please refresh to see updates.`,
-      });
-    } catch (error: any) {
-      console.error('Error regenerating specific thumbnails:', error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to regenerate specific thumbnails.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsRegeneratingSpecific(false);
-    }
-  };
-
-  const handleRegenerateFromTelegram = async () => {
-    setIsRegeneratingFromTelegram(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('regenerate-thumbnails', {
-        body: { mode: 'telegram' }
-      });
-      
-      if (error) throw error;
-
-      await refetchThumbnails();
-      await queryClient.invalidateQueries({ queryKey: ['telegram-media'] });
-      
-      toast({
-        title: "Success",
-        description: `Processed ${data.processed} videos from Telegram. Please refresh to see updates.`,
-      });
-    } catch (error: any) {
-      console.error('Error regenerating thumbnails from Telegram:', error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to regenerate thumbnails from Telegram.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsRegeneratingFromTelegram(false);
     }
   };
 
@@ -170,48 +122,7 @@ const Settings = () => {
                       Generating Thumbnails...
                     </>
                   ) : (
-                    <>
-                      <RefreshCw className="w-4 h-4 mr-2" />
-                      Generate Missing Thumbnails
-                    </>
-                  )}
-                </Button>
-                <Button 
-                  onClick={handleRegenerateSpecificThumbnails}
-                  disabled={isRegeneratingSpecific}
-                  className="w-full"
-                  size="lg"
-                  variant="secondary"
-                >
-                  {isRegeneratingSpecific ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Regenerating Specific Thumbnails...
-                    </>
-                  ) : (
-                    <>
-                      <RefreshCw className="w-4 h-4 mr-2" />
-                      Regenerate Identified Thumbnails
-                    </>
-                  )}
-                </Button>
-                <Button 
-                  onClick={handleRegenerateFromTelegram}
-                  disabled={isRegeneratingFromTelegram}
-                  className="w-full"
-                  size="lg"
-                  variant="outline"
-                >
-                  {isRegeneratingFromTelegram ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Regenerating From Telegram...
-                    </>
-                  ) : (
-                    <>
-                      <RefreshCw className="w-4 h-4 mr-2" />
-                      Regenerate From Telegram Data
-                    </>
+                    'Generate Missing Thumbnails'
                   )}
                 </Button>
               </div>

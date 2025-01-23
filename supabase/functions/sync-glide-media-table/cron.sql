@@ -12,7 +12,7 @@ select
       net.http_post(
         url:='https://kzfamethztziwqiocbwz.supabase.co/functions/v1/sync-glide-media-table',
         headers:='{"Content-Type": "application/json", "Authorization": "Bearer YOUR_ANON_KEY"}'::jsonb,
-        body:='{"operation": "processSyncQueue", "batchSize": 50}'::jsonb
+        body:='{"operation": "processSyncQueue"}'::jsonb
       ) as request_id;
     $$
   );
