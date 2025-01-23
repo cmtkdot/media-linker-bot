@@ -9,6 +9,7 @@ import { Loader2, RefreshCw } from "lucide-react";
 const Settings = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRegeneratingSpecific, setIsRegeneratingSpecific] = useState(false);
+  const [isRegeneratingFromTelegram, setIsRegeneratingFromTelegram] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -75,6 +76,34 @@ const Settings = () => {
       });
     } finally {
       setIsRegeneratingSpecific(false);
+    }
+  };
+
+  const handleRegenerateFromTelegram = async () => {
+    setIsRegeneratingFromTelegram(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('regenerate-thumbnails', {
+        body: { mode: 'telegram' }
+      });
+      
+      if (error) throw error;
+
+      await refetchThumbnails();
+      await queryClient.invalidateQueries({ queryKey: ['telegram-media'] });
+      
+      toast({
+        title: "Success",
+        description: `Processed ${data.processed} videos from Telegram. Please refresh to see updates.`,
+      });
+    } catch (error: any) {
+      console.error('Error regenerating thumbnails from Telegram:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to regenerate thumbnails from Telegram.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRegeneratingFromTelegram(false);
     }
   };
 
@@ -163,6 +192,25 @@ const Settings = () => {
                     <>
                       <RefreshCw className="w-4 h-4 mr-2" />
                       Regenerate Identified Thumbnails
+                    </>
+                  )}
+                </Button>
+                <Button 
+                  onClick={handleRegenerateFromTelegram}
+                  disabled={isRegeneratingFromTelegram}
+                  className="w-full"
+                  size="lg"
+                  variant="outline"
+                >
+                  {isRegeneratingFromTelegram ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Regenerating From Telegram...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      Regenerate From Telegram Data
                     </>
                   )}
                 </Button>
