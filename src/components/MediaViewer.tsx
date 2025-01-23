@@ -18,6 +18,7 @@ interface MediaViewerProps {
   onNext?: () => void;
   hasPrevious?: boolean;
   hasNext?: boolean;
+  relatedMedia?: MediaItem[];
 }
 
 const MediaViewer = ({ 
@@ -27,7 +28,8 @@ const MediaViewer = ({
   onPrevious,
   onNext,
   hasPrevious = false,
-  hasNext = false 
+  hasNext = false,
+  relatedMedia = []
 }: MediaViewerProps) => {
   if (!media) return null;
 
