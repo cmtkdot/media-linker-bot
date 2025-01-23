@@ -7,6 +7,7 @@ export enum ErrorType {
   VALIDATION = 'VALIDATION',
   MEDIA_PROCESSING = 'MEDIA_PROCESSING',
   STORAGE = 'STORAGE',
+  DUPLICATE_MESSAGE = 'DUPLICATE_MESSAGE',
   UNKNOWN = 'UNKNOWN'
 }
 
@@ -18,6 +19,9 @@ export interface ProcessingError extends Error {
 }
 
 function classifyError(error: any): ErrorType {
+  if (error.code === '23505' && error.message?.includes('messages_message_id_chat_id_key')) {
+    return ErrorType.DUPLICATE_MESSAGE;
+  }
   if (error.code === '57014' || error.message?.includes('timeout')) {
     return ErrorType.DATABASE_TIMEOUT;
   }
@@ -52,6 +56,37 @@ export async function handleProcessingError(
   });
 
   try {
+    // For duplicate message errors, check if we have telegram media records
+    if (errorType === ErrorType.DUPLICATE_MESSAGE && messageRecord) {
+      console.log('Handling duplicate message case, checking for telegram media records...');
+      
+      const { data: existingMessage } = await supabase
+        .from('messages')
+        .select('id')
+        .eq('message_id', messageRecord.message_id)
+        .eq('chat_id', messageRecord.chat_id)
+        .maybeSingle();
+
+      if (existingMessage) {
+        const { data: telegramMedia } = await supabase
+          .from('telegram_media')
+          .select('id')
+          .eq('message_id', existingMessage.id)
+          .limit(1);
+
+        // If no telegram media exists, we should continue processing
+        if (!telegramMedia || telegramMedia.length === 0) {
+          console.log('No telegram media found for duplicate message, continuing processing...');
+          return {
+            success: true,
+            error: '',
+            retryCount,
+            shouldContinue: true
+          };
+        }
+      }
+    }
+
     // Update error tracking
     const { error: updateError } = await supabase
       .from('failed_webhook_updates')
