@@ -546,6 +546,15 @@ export type Database = {
       }
     }
     Functions: {
+      check_telegram_media_differences: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          record_id: string
+          difference_type: string
+          supabase_data: Json
+          glide_data: Json
+        }[]
+      }
       count_missing_thumbnails: {
         Args: Record<PropertyKey, never>
         Returns: {
