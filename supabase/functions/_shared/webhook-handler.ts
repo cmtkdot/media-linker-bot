@@ -1,9 +1,7 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders } from "./cors.ts";
-import { processMediaFiles } from "./media-processor.ts";
-import { delay } from "./retry-utils.ts";
-import { analyzeCaptionWithAI } from "./caption-analyzer.ts";
+import { processMediaFiles } from './media-processor.ts';
+import { withDatabaseRetry } from './database-retry.ts';
+import { analyzeCaptionWithAI } from './caption-analyzer.ts';
 
 export async function handleWebhookUpdate(update: any, supabase: any, botToken: string) {
   const message = update.message || update.channel_post;
@@ -30,73 +28,68 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
     if (message.caption) {
       try {
         console.log('Analyzing caption:', message.caption);
-        analyzedContent = await analyzeCaptionWithAI(
-          message.caption,
-          Deno.env.get('SUPABASE_URL') || '',
-          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
-        );
+        analyzedContent = await analyzeCaptionWithAI(message.caption);
         console.log('Caption analysis result:', analyzedContent);
       } catch (error) {
         console.error('Error analyzing caption:', error);
       }
     }
 
-    // Prepare message data
-    const messageData = {
-      message_id: message.message_id,
-      chat_id: message.chat.id,
-      sender_info: message.from || message.sender_chat || {},
-      message_type: determineMessageType(message),
-      message_data: message,
-      caption: message.caption,
-      media_group_id: message.media_group_id,
-      analyzed_content: analyzedContent,
-      product_name: analyzedContent?.product_name || null,
-      product_code: analyzedContent?.product_code || null,
-      quantity: analyzedContent?.quantity || null,
-      vendor_uid: analyzedContent?.vendor_uid || null,
-      purchase_date: analyzedContent?.purchase_date || null,
-      notes: analyzedContent?.notes || null,
-      thumbnail_url: null,
-      message_url: messageUrl,
-      status: 'pending',
-      retry_count: 0
-    };
+    // Create or update message record with retry
+    const messageRecord = await withDatabaseRetry(async () => {
+      const messageData = {
+        message_id: message.message_id,
+        chat_id: message.chat.id,
+        sender_info: message.from || message.sender_chat || {},
+        message_type: determineMessageType(message),
+        message_data: message,
+        caption: message.caption,
+        media_group_id: message.media_group_id,
+        message_url: messageUrl,
+        analyzed_content: analyzedContent,
+        product_name: analyzedContent?.product_name || null,
+        product_code: analyzedContent?.product_code || null,
+        quantity: analyzedContent?.quantity || null,
+        vendor_uid: analyzedContent?.vendor_uid || null,
+        purchase_date: analyzedContent?.purchase_date || null,
+        notes: analyzedContent?.notes || null,
+        status: 'pending',
+        retry_count: 0
+      };
 
-    // Insert or update message record
-    const { data: existingMessage } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('message_id', message.message_id)
-      .eq('chat_id', message.chat.id)
-      .maybeSingle();
-
-    let messageRecord;
-    if (existingMessage) {
-      const { data, error: updateError } = await supabase
+      const { data: existingMessage } = await supabase
         .from('messages')
-        .update(messageData)
-        .eq('id', existingMessage.id)
-        .select()
-        .single();
+        .select('*')
+        .eq('message_id', message.message_id)
+        .eq('chat_id', message.chat.id)
+        .maybeSingle();
 
-      if (updateError) throw updateError;
-      messageRecord = data;
-    } else {
-      const { data, error: insertError } = await supabase
-        .from('messages')
-        .insert([messageData])
-        .select()
-        .single();
+      if (existingMessage) {
+        const { data, error: updateError } = await supabase
+          .from('messages')
+          .update(messageData)
+          .eq('id', existingMessage.id)
+          .select()
+          .single();
 
-      if (insertError) throw insertError;
-      messageRecord = data;
-    }
+        if (updateError) throw updateError;
+        return data;
+      } else {
+        const { data, error: insertError } = await supabase
+          .from('messages')
+          .insert([messageData])
+          .select()
+          .single();
 
-    // Process media files
+        if (insertError) throw insertError;
+        return data;
+      }
+    }, 0, `create_message_${message.message_id}`);
+
+    // Process media files if present
     const hasMedia = message.photo || message.video || message.document || message.animation;
     if (hasMedia && messageRecord) {
-      await processMediaFiles(messageData, messageRecord, supabase, botToken);
+      await processMediaFiles(message, messageRecord, supabase, botToken);
     }
 
     console.log('Successfully processed update:', {
