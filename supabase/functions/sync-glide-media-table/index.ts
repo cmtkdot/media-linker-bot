@@ -1,141 +1,156 @@
-import { serve } from "https://deno.land/std@0.131.0/http/server.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { createSyncLogger, SyncErrorType } from "../_shared/sync-logger.ts";
+import { withDatabaseRetry } from "../_shared/database-retry.ts";
 
-serve(async (req: Request) => {
-  const logger = createSyncLogger(crypto.randomUUID());
-  
-  // Handle CORS
+serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
 
-    const { operation, tableId, recordIds } = await req.json();
-
-    logger.log({
-      operation: 'sync_to_glide',
-      status: 'started',
-      details: { operation, tableId, recordCount: recordIds?.length }
-    });
-
-    // Get the Glide configuration
-    const { data: config, error: configError } = await supabase
-      .from('glide_config')
+    // First, get all messages that need syncing
+    const { data: messages, error: messagesError } = await supabase
+      .from('messages')
       .select('*')
-      .eq('id', tableId)
-      .single();
+      .in('message_type', ['photo', 'video', 'document', 'animation'])
+      .is('processed_at', null);
 
-    if (configError) {
-      logger.log({
-        operation: 'get_glide_config',
-        status: 'error',
-        errorType: SyncErrorType.DATABASE,
-        details: { error: configError.message }
-      });
-      throw configError;
-    }
+    if (messagesError) throw messagesError;
 
-    // Check for updates in telegram_media
-    const { data: updates, error: updateCheckError } = await supabase
-      .from('telegram_media')
-      .select('*')
-      .in('id', recordIds || []);
+    let syncedCount = 0;
+    let errorCount = 0;
+    const errors = [];
 
-    if (updateCheckError) {
-      logger.log({
-        operation: 'check_updates',
-        status: 'error',
-        errorType: SyncErrorType.DATABASE,
-        details: { error: updateCheckError.message }
-      });
-      throw updateCheckError;
-    }
-
-    if (!updates || updates.length === 0) {
-      logger.log({
-        operation: 'check_updates',
-        status: 'complete',
-        details: { message: 'No updates found' }
-      });
-      
-      return new Response(
-        JSON.stringify({ message: 'No updates found' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    logger.log({
-      operation: 'process_updates',
-      status: 'processing',
-      details: { updateCount: updates.length }
-    });
-
-    // Process updates to Glide
-    const results = {
-      processed: 0,
-      errors: [] as string[]
-    };
-
-    for (const update of updates) {
+    // Process each message
+    for (const message of messages || []) {
       try {
-        // Call Glide API to sync record
-        // Implementation depends on your Glide API structure
-        results.processed++;
-        
-        logger.log({
-          operation: 'sync_record',
-          status: 'success',
-          details: { record_id: update.id }
-        });
+        const fileData = {
+          file_id: message.message_data?.photo?.[0]?.file_id || 
+                   message.message_data?.video?.file_id ||
+                   message.message_data?.document?.file_id ||
+                   message.message_data?.animation?.file_id,
+          file_unique_id: message.message_data?.photo?.[0]?.file_unique_id ||
+                         message.message_data?.video?.file_unique_id ||
+                         message.message_data?.document?.file_unique_id ||
+                         message.message_data?.animation?.file_unique_id,
+          file_type: message.message_type
+        };
+
+        if (!fileData.file_unique_id) {
+          console.error('Missing file_unique_id for message:', message.id);
+          continue;
+        }
+
+        // Check if media already exists
+        const { data: existingMedia } = await supabase
+          .from('telegram_media')
+          .select('id')
+          .eq('file_unique_id', fileData.file_unique_id)
+          .maybeSingle();
+
+        if (existingMedia) {
+          // Update existing record
+          const { error: updateError } = await supabase
+            .from('telegram_media')
+            .update({
+              message_id: message.id,
+              caption: message.caption,
+              product_name: message.product_name,
+              product_code: message.product_code,
+              quantity: message.quantity,
+              vendor_uid: message.vendor_uid,
+              purchase_date: message.purchase_date,
+              notes: message.notes,
+              analyzed_content: message.analyzed_content,
+              telegram_data: {
+                message_data: message.message_data,
+                media_group_id: message.media_group_id
+              },
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', existingMedia.id);
+
+          if (updateError) throw updateError;
+        } else {
+          // Insert new record
+          const { error: insertError } = await supabase
+            .from('telegram_media')
+            .insert({
+              message_id: message.id,
+              file_id: fileData.file_id,
+              file_unique_id: fileData.file_unique_id,
+              file_type: fileData.file_type,
+              caption: message.caption,
+              product_name: message.product_name,
+              product_code: message.product_code,
+              quantity: message.quantity,
+              vendor_uid: message.vendor_uid,
+              purchase_date: message.purchase_date,
+              notes: message.notes,
+              analyzed_content: message.analyzed_content,
+              telegram_data: {
+                message_data: message.message_data,
+                media_group_id: message.media_group_id
+              }
+            });
+
+          if (insertError) throw insertError;
+        }
+
+        // Mark message as processed
+        await supabase
+          .from('messages')
+          .update({ processed_at: new Date().toISOString() })
+          .eq('id', message.id);
+
+        syncedCount++;
       } catch (error) {
-        logger.log({
-          operation: 'sync_record',
-          status: 'error',
-          errorType: SyncErrorType.API,
-          details: {
-            error: error.message,
-            record_id: update.id
-          }
+        console.error('Error processing message:', message.id, error);
+        errorCount++;
+        errors.push({
+          message_id: message.id,
+          error: error.message,
+          file_unique_id: message.message_data?.photo?.[0]?.file_unique_id ||
+                         message.message_data?.video?.file_unique_id ||
+                         message.message_data?.document?.file_unique_id ||
+                         message.message_data?.animation?.file_unique_id
         });
-        
-        results.errors.push(`Error syncing record ${update.id}: ${error.message}`);
       }
     }
-
-    logger.log({
-      operation: 'sync_to_glide',
-      status: 'complete',
-      details: {
-        processed: results.processed,
-        errors: results.errors.length
-      }
-    });
 
     return new Response(
-      JSON.stringify(results),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({
+        success: true,
+        synced_count: syncedCount,
+        error_count: errorCount,
+        errors
+      }),
+      { 
+        headers: { 
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        }
+      }
     );
+
   } catch (error) {
-    logger.log({
-      operation: 'sync_to_glide',
-      status: 'error',
-      errorType: SyncErrorType.UNKNOWN,
-      details: { error: error.message }
-    });
-    
+    console.error('Error in sync function:', error);
     return new Response(
       JSON.stringify({
         success: false,
         error: error.message
       }),
       { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { 
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        },
         status: 400
       }
     );
