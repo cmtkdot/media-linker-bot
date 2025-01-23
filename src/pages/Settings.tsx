@@ -1,4 +1,3 @@
-import { MediaGroupSyncSection } from "@/components/settings/MediaGroupSyncSection";
 import { ProcessFlowSection } from "@/components/settings/ProcessFlowSection";
 import { MessageMediaSyncSection } from "@/components/settings/MessageMediaSyncSection";
 
@@ -9,7 +8,6 @@ export default function Settings() {
       
       <div className="grid gap-8 md:grid-cols-2">
         <ProcessFlowSection />
-        <MediaGroupSyncSection />
         <MessageMediaSyncSection />
       </div>
     </div>
