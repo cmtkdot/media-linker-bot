@@ -6,16 +6,18 @@ interface MediaViewerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   media: MediaItem | null;
+  relatedMedia?: MediaItem[];
 }
 
 const MediaViewer = ({ 
   open, 
   onOpenChange, 
-  media
+  media,
+  relatedMedia = []
 }: MediaViewerProps) => {
   if (!media) return null;
   
-  const mediaItems = [media];
+  const mediaItems = relatedMedia.length > 0 ? relatedMedia : [media];
 
   return (
     <GalleryModal
