@@ -58,7 +58,7 @@ serve(async (req) => {
     let analyzedContent = null;
     if (message.caption) {
       try {
-        analyzedContent = await analyzeCaptionWithAI(message.caption, supabase);
+        analyzedContent = await analyzeCaptionWithAI(message.caption);
       } catch (error) {
         console.error('Error analyzing caption:', error);
       }
@@ -68,46 +68,86 @@ serve(async (req) => {
     const chatId = message.chat.id.toString();
     const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
 
-    // Create message record with retry
-    const messageRecord = await withDatabaseRetry(async () => {
-      const messageData = {
-        message_id: message.message_id,
-        chat_id: message.chat.id,
-        sender_info: message.from || message.sender_chat || {},
-        message_type: determineMessageType(message),
-        message_data: message,
-        caption: message.caption,
-        media_group_id: message.media_group_id,
-        message_url: messageUrl,
-        analyzed_content: analyzedContent,
-        product_name: analyzedContent?.product_name,
-        product_code: analyzedContent?.product_code,
-        quantity: analyzedContent?.quantity,
-        vendor_uid: analyzedContent?.vendor_uid,
-        purchase_date: analyzedContent?.purchase_date,
-        notes: analyzedContent?.notes,
-        status: 'pending'
-      };
+    // Check for existing message
+    const { data: existingMessage } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('message_id', message.message_id)
+      .eq('chat_id', message.chat.id)
+      .maybeSingle();
 
-      const { data, error } = await supabase
-        .from('messages')
-        .upsert(messageData)
-        .select()
-        .single();
+    let messageRecord = existingMessage;
 
-      if (error) throw error;
-      return data;
-    }, 0, `create_message_${message.message_id}`);
+    // If message doesn't exist, create it
+    if (!existingMessage) {
+      try {
+        const messageData = {
+          message_id: message.message_id,
+          chat_id: message.chat.id,
+          sender_info: message.from || message.sender_chat || {},
+          message_type: determineMessageType(message),
+          message_data: message,
+          caption: message.caption,
+          media_group_id: message.media_group_id,
+          message_url: messageUrl,
+          analyzed_content: analyzedContent,
+          product_name: analyzedContent?.product_name,
+          product_code: analyzedContent?.product_code,
+          quantity: analyzedContent?.quantity,
+          vendor_uid: analyzedContent?.vendor_uid,
+          purchase_date: analyzedContent?.purchase_date,
+          notes: analyzedContent?.notes,
+          status: 'pending'
+        };
 
-    // Handle media group if present
-    if (message.media_group_id) {
-      await handleMediaGroup(supabase, message, messageRecord);
+        const { data: newMessage, error } = await supabase
+          .from('messages')
+          .insert([messageData])
+          .select()
+          .single();
+
+        if (error) throw error;
+        messageRecord = newMessage;
+      } catch (error) {
+        console.error('Error creating message record:', error);
+        // Continue processing even if message creation fails
+      }
     }
 
-    // Process media files if present
+    // Check for existing media records
     const hasMedia = message.photo || message.video || message.document || message.animation;
-    if (hasMedia && messageRecord) {
-      await processMediaFiles(message, messageRecord, supabase, TELEGRAM_BOT_TOKEN);
+    if (hasMedia) {
+      const { data: existingMedia } = await supabase
+        .from('telegram_media')
+        .select('*')
+        .eq('message_id', messageRecord?.id);
+
+      // Process media if no existing media records found
+      if (!existingMedia || existingMedia.length === 0) {
+        console.log('No existing media found, processing media files');
+        try {
+          await processMediaFiles(message, messageRecord, supabase, TELEGRAM_BOT_TOKEN);
+        } catch (error) {
+          console.error('Error processing media:', error);
+          await handleProcessingError(
+            supabase,
+            error,
+            messageRecord,
+            0,
+            false
+          );
+        }
+      } else {
+        console.log('Media already exists for this message:', {
+          message_id: messageRecord?.id,
+          media_count: existingMedia.length
+        });
+      }
+    }
+
+    // Handle media group if present
+    if (message.media_group_id && messageRecord) {
+      await handleMediaGroup(supabase, message, messageRecord);
     }
 
     return new Response(
