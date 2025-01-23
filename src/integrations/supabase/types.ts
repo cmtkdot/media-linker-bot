@@ -108,66 +108,6 @@ export type Database = {
         }
         Relationships: []
       }
-      glide_sync_queue: {
-        Row: {
-          batch_id: string | null
-          created_at: string | null
-          error: string | null
-          id: string
-          new_data: Json | null
-          old_data: Json | null
-          operation: string
-          priority: number | null
-          processed_at: string | null
-          record_id: string
-          retry_count: number | null
-          table_name: string
-        }
-        Insert: {
-          batch_id?: string | null
-          created_at?: string | null
-          error?: string | null
-          id?: string
-          new_data?: Json | null
-          old_data?: Json | null
-          operation: string
-          priority?: number | null
-          processed_at?: string | null
-          record_id: string
-          retry_count?: number | null
-          table_name: string
-        }
-        Update: {
-          batch_id?: string | null
-          created_at?: string | null
-          error?: string | null
-          id?: string
-          new_data?: Json | null
-          old_data?: Json | null
-          operation?: string
-          priority?: number | null
-          processed_at?: string | null
-          record_id?: string
-          retry_count?: number | null
-          table_name?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "glide_sync_queue_record_id_fkey"
-            columns: ["record_id"]
-            isOneToOne: false
-            referencedRelation: "telegram_media"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "glide_sync_queue_record_id_fkey"
-            columns: ["record_id"]
-            isOneToOne: false
-            referencedRelation: "video_thumbnail_status"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       media_groups: {
         Row: {
           analyzed_content: Json | null
