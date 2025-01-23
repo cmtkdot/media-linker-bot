@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { processMediaFiles } from './media-processor.ts';
 import { withDatabaseRetry } from './database-retry.ts';
 import { analyzeCaptionWithAI } from './caption-analyzer.ts';
@@ -18,26 +18,6 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
       media_group_id: message.media_group_id,
       has_caption: !!message.caption
     });
-
-    // First check if message already exists
-    const { data: existingMessage } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('message_id', message.message_id)
-      .eq('chat_id', message.chat.id)
-      .maybeSingle();
-
-    if (existingMessage) {
-      console.log('Message already exists:', {
-        message_id: message.message_id,
-        chat_id: message.chat.id
-      });
-      return {
-        success: true,
-        message: 'Message already processed',
-        messageId: existingMessage.id
-      };
-    }
 
     // Generate message URL
     const chatId = message.chat.id.toString();
@@ -119,22 +99,6 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
       message_id: message?.message_id,
       chat_id: message?.chat?.id
     });
-
-    // Store failed webhook update for retry
-    try {
-      await supabase
-        .from('failed_webhook_updates')
-        .insert({
-          message_id: message?.message_id,
-          chat_id: message?.chat?.id,
-          error_message: error.message,
-          error_stack: error.stack,
-          message_data: update,
-          status: 'failed'
-        });
-    } catch (dbError) {
-      console.error('Failed to store failed webhook update:', dbError);
-    }
 
     throw error;
   }

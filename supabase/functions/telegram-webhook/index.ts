@@ -27,6 +27,36 @@ serve(async (req) => {
       has_channel_post: !!update.channel_post
     });
 
+    // Check for existing message to prevent duplicates
+    const message = update.message || update.channel_post;
+    if (message) {
+      const { data: existingMessage } = await supabaseClient
+        .from('messages')
+        .select('id')
+        .eq('message_id', message.message_id)
+        .eq('chat_id', message.chat.id)
+        .maybeSingle();
+
+      if (existingMessage) {
+        console.log('Duplicate message detected:', {
+          message_id: message.message_id,
+          chat_id: message.chat.id,
+          record_id: existingMessage.id
+        });
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: 'Message already processed',
+            messageId: existingMessage.id
+          }),
+          { 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 200 
+          }
+        );
+      }
+    }
+
     try {
       const result = await handleWebhookUpdate(update, supabaseClient, TELEGRAM_BOT_TOKEN);
       console.log('Successfully processed webhook:', result);
@@ -50,11 +80,12 @@ serve(async (req) => {
         await supabaseClient
           .from('failed_webhook_updates')
           .insert({
-            message_id: update.message?.message_id || update.channel_post?.message_id,
-            chat_id: update.message?.chat?.id || update.channel_post?.chat?.id,
+            message_id: message?.message_id,
+            chat_id: message?.chat?.id,
             error_message: error.message,
             error_stack: error.stack,
-            message_data: update
+            message_data: update,
+            status: 'failed'
           });
       } catch (dbError) {
         console.error('Failed to store failed webhook update:', dbError);
