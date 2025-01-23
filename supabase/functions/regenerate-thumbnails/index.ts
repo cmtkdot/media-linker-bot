@@ -7,7 +7,7 @@ const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN')!;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-// List of file_unique_ids that need regeneration
+// List of specific file_unique_ids that need regeneration
 const FILE_UNIQUE_IDS = [
   'AgADcgQAAmnV6Uc', 'AgADDQUAAhnIkUQ', 'AgADDAUAAhnIkUQ', 'AgADQgUAAg0I-Uc',
   'AgADDgUAAhnIkUQ', 'AgADCwUAAhnIkUQ', 'AgADgAQAApzXyEY', 'AgADzQQAAmQJmUc',
@@ -58,14 +58,29 @@ Deno.serve(async (req) => {
   }
 
   try {
-    console.log('Starting thumbnail regeneration for specific videos...');
+    console.log('Starting thumbnail regeneration process...');
+    
+    let fileIds = FILE_UNIQUE_IDS;
+    const body = await req.json().catch(() => ({}));
+    
+    // If not specifically requesting the identified videos, use normal process
+    if (body.mode !== 'specific') {
+      const { data: videos, error: queryError } = await supabase
+        .from('telegram_media')
+        .select('*')
+        .eq('file_type', 'video')
+        .is('thumbnail_url', null);
+
+      if (queryError) throw queryError;
+      fileIds = videos?.map(v => v.file_unique_id) || [];
+    }
 
     // Get videos that need thumbnail regeneration
     const { data: videos, error: queryError } = await supabase
       .from('telegram_media')
       .select('*')
       .eq('file_type', 'video')
-      .in('file_unique_id', FILE_UNIQUE_IDS);
+      .in('file_unique_id', fileIds);
 
     if (queryError) throw queryError;
 
@@ -139,7 +154,6 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify({
       success: true,
-      total_videos: videos?.length || 0,
       processed: results.length,
       results
     }), {

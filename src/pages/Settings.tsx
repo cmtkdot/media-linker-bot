@@ -8,6 +8,7 @@ import { Loader2, RefreshCw } from "lucide-react";
 
 const Settings = () => {
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isRegeneratingSpecific, setIsRegeneratingSpecific] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -26,15 +27,10 @@ const Settings = () => {
   const handleGenerateThumbnails = async () => {
     setIsGenerating(true);
     try {
-      console.log('Starting thumbnail regeneration...');
-      
       const { data, error } = await supabase.functions.invoke('regenerate-thumbnails');
       
       if (error) throw error;
-
-      console.log('Regeneration response:', data);
       
-      // Refresh the stats
       await refetchThumbnails();
       await queryClient.invalidateQueries({ queryKey: ['telegram-media'] });
       
@@ -51,6 +47,34 @@ const Settings = () => {
       });
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleRegenerateSpecificThumbnails = async () => {
+    setIsRegeneratingSpecific(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('regenerate-thumbnails', {
+        body: { mode: 'specific' }
+      });
+      
+      if (error) throw error;
+
+      await refetchThumbnails();
+      await queryClient.invalidateQueries({ queryKey: ['telegram-media'] });
+      
+      toast({
+        title: "Success",
+        description: `Processed ${data.processed} specific videos. Please refresh to see updates.`,
+      });
+    } catch (error: any) {
+      console.error('Error regenerating specific thumbnails:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to regenerate specific thumbnails.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRegeneratingSpecific(false);
     }
   };
 
@@ -120,6 +144,25 @@ const Settings = () => {
                     <>
                       <RefreshCw className="w-4 h-4 mr-2" />
                       Generate Missing Thumbnails
+                    </>
+                  )}
+                </Button>
+                <Button 
+                  onClick={handleRegenerateSpecificThumbnails}
+                  disabled={isRegeneratingSpecific}
+                  className="w-full"
+                  size="lg"
+                  variant="secondary"
+                >
+                  {isRegeneratingSpecific ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Regenerating Specific Thumbnails...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      Regenerate Identified Thumbnails
                     </>
                   )}
                 </Button>
