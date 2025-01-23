@@ -28,38 +28,17 @@ const Products = () => {
       return data.map((item): MediaItem => ({
         ...item,
         file_type: item.file_type as MediaItem['file_type'],
-        telegram_data: item.telegram_data,
+        telegram_data: item.telegram_data as Record<string, any>,
         analyzed_content: item.analyzed_content ? {
-          text: item.analyzed_content.text as string,
-          labels: item.analyzed_content.labels as string[],
-          objects: item.analyzed_content.objects as string[]
+          text: String(item.analyzed_content.text || ''),
+          labels: Array.isArray(item.analyzed_content.labels) ? item.analyzed_content.labels : [],
+          objects: Array.isArray(item.analyzed_content.objects) ? item.analyzed_content.objects : []
         } : undefined,
-        glide_data: item.glide_data,
-        media_metadata: item.media_metadata
+        glide_data: item.glide_data as Record<string, any>,
+        media_metadata: item.media_metadata as Record<string, any>
       }));
     }
   });
-
-  const groupMediaByProduct = (media: MediaItem[]) => {
-    // First group by media_group_id or individual id
-    const groups = media?.reduce<Record<string, MediaItem[]>>((acc, item) => {
-      const groupId = item.telegram_data?.media_group_id || item.id;
-      if (!acc[groupId]) {
-        acc[groupId] = [];
-      }
-      acc[groupId].push(item);
-      return acc;
-    }, {});
-
-    // Sort items within each group (photos first)
-    return Object.values(groups || {}).map(group => {
-      return group.sort((a, b) => {
-        if (a.file_type === 'photo' && b.file_type !== 'photo') return -1;
-        if (a.file_type !== 'photo' && b.file_type === 'photo') return 1;
-        return 0;
-      });
-    });
-  };
 
   const handleSave = async () => {
     if (!editItem) return;
@@ -95,7 +74,26 @@ const Products = () => {
     }
   };
 
-  const productGroups = products ? groupMediaByProduct(products) : [];
+  const groupMediaByProduct = (media: MediaItem[]) => {
+    // First group by media_group_id or individual id
+    const groups = media?.reduce<Record<string, MediaItem[]>>((acc, item) => {
+      const groupId = item.telegram_data?.media_group_id || item.id;
+      if (!acc[groupId]) {
+        acc[groupId] = [];
+      }
+      acc[groupId].push(item);
+      return acc;
+    }, {});
+
+    // Sort items within each group (photos first)
+    return Object.values(groups || {}).map(group => {
+      return group.sort((a, b) => {
+        if (a.file_type === 'photo' && b.file_type !== 'photo') return -1;
+        if (a.file_type !== 'photo' && b.file_type === 'photo') return 1;
+        return 0;
+      });
+    });
+  };
 
   const handleMediaClick = (media: MediaItem, group: MediaItem[]) => {
     setSelectedMedia(media);
@@ -105,6 +103,8 @@ const Products = () => {
   const handleEdit = (item: MediaItem) => {
     setEditItem(item);
   };
+
+  const productGroups = products ? groupMediaByProduct(products) : [];
 
   return (
     <div className="container mx-auto py-8 px-4">
