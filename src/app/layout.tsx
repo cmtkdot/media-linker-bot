@@ -1,5 +1,3 @@
-import { DatabaseChatWrapper } from "@/components/DatabaseChatWrapper";
-
 export default function RootLayout({
   children,
 }: {
@@ -13,4 +11,4 @@ export default function RootLayout({
       </body>
     </html>
   );
-} 
+}

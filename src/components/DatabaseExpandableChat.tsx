@@ -159,4 +159,4 @@ export function DatabaseExpandableChat() {
       {renderContent()}
     </ExpandableChat>
   );
-} 
+}
