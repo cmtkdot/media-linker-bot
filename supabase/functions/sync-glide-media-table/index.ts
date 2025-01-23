@@ -6,8 +6,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { createSyncLogger, SyncErrorType } from "../_shared/sync-logger.ts";
 import { v4 as uuidv4 } from 'https://esm.sh/uuid@9.0.0';
 
-const BATCH_SIZE = 10;
-const MAX_RETRIES = 3;
+const BATCH_SIZE = 500; // Updated to Glide's max batch size
 
 serve(async (req: Request) => {
   const correlationId = uuidv4();
@@ -24,6 +23,7 @@ serve(async (req: Request) => {
   }
 
   try {
+    console.log('Starting sync process with correlation ID:', correlationId);
     logger.log({
       operation: 'sync_start',
       status: 'success',
@@ -50,124 +50,102 @@ serve(async (req: Request) => {
       .eq('active', true);
 
     if (configError) {
-      logger.log({
-        operation: 'fetch_config',
-        status: 'error',
-        errorType: SyncErrorType.DATABASE,
-        details: { error: configError }
-      });
+      console.error('Error fetching Glide config:', configError);
       throw configError;
     }
 
     if (!configs || configs.length === 0) {
-      logger.log({
-        operation: 'validate_config',
-        status: 'error',
-        errorType: SyncErrorType.VALIDATION,
-        details: { message: 'No active configuration found' }
-      });
       throw new Error('No active Glide configuration found');
     }
 
     const config = configs[0];
-    logger.log({
-      operation: 'config_loaded',
-      status: 'success',
-      details: { config_id: config.id }
-    });
-
-    // Initialize Glide API client
-    const glideApi = new GlideAPI(
-      config.app_id,
-      config.table_id,
-      config.api_token,
-      supabase
-    );
-
-    // Initialize queue processor
+    const glideApi = new GlideAPI(config.app_id, config.table_id, config.api_token, supabase);
     const queueProcessor = new QueueProcessor(supabase, config, glideApi, logger);
 
-    // Check for differences between Supabase and Glide
-    const { data: differences, error: diffError } = await supabase
-      .rpc('check_telegram_media_differences');
-
-    if (diffError) {
-      logger.log({
-        operation: 'check_differences',
-        status: 'error',
-        errorType: SyncErrorType.DATABASE,
-        details: { error: diffError }
-      });
-    } else if (differences?.length > 0) {
-      // Queue differences for sync
-      const batchId = uuidv4();
-      await Promise.all(differences.map(async (diff, index) => {
-        await supabase
-          .from('glide_sync_queue')
-          .insert({
-            table_name: 'telegram_media',
-            record_id: diff.record_id,
-            operation: diff.difference_type === 'missing_in_glide' ? 'INSERT' : 'UPDATE',
-            new_data: diff.supabase_data,
-            old_data: diff.glide_data,
-            priority: 2, // Higher priority for differences
-            batch_id: batchId
-          });
-      }));
-    }
-
-    // Get unprocessed items from queue, ordered by priority
-    const { data: queueItems, error: queueError } = await supabase
+    // First, process any pending deletions
+    console.log('Processing pending deletions...');
+    const { data: pendingDeletions, error: deletionError } = await supabase
       .from('glide_sync_queue')
       .select('*')
+      .eq('operation', 'DELETE')
       .is('processed_at', null)
-      .order('priority', { ascending: false })
-      .order('created_at', { ascending: true })
-      .limit(BATCH_SIZE);
+      .order('created_at', { ascending: true });
 
-    if (queueError) {
-      logger.log({
-        operation: 'fetch_queue',
-        status: 'error',
-        errorType: SyncErrorType.DATABASE,
-        details: { error: queueError }
-      });
-      throw queueError;
+    if (deletionError) {
+      console.error('Error fetching pending deletions:', deletionError);
+      throw deletionError;
     }
 
-    const result = {
-      added: 0,
-      updated: 0,
-      deleted: 0,
+    // Process deletions first
+    const deletionResults = {
+      processed: 0,
       errors: [] as string[]
     };
 
-    // Process queue items in batches
-    const batches = queueItems?.reduce((acc, item) => {
-      const batchId = item.batch_id || 'default';
-      if (!acc[batchId]) {
-        acc[batchId] = [];
-      }
-      acc[batchId].push(item);
-      return acc;
-    }, {} as Record<string, any[]>) || {};
-
-    // Process each batch
-    for (const [batchId, items] of Object.entries(batches)) {
-      try {
-        await Promise.all(items.map(item => queueProcessor.processQueueItem(item, result)));
-      } catch (error) {
-        logger.log({
-          operation: 'process_batch',
-          status: 'error',
-          errorType: SyncErrorType.UNKNOWN,
-          details: { 
-            batch_id: batchId,
-            error: error.message 
-          }
-        });
+    if (pendingDeletions && pendingDeletions.length > 0) {
+      console.log(`Found ${pendingDeletions.length} pending deletions`);
+      for (const deletion of pendingDeletions) {
+        try {
+          await queueProcessor.processQueueItem(deletion, deletionResults);
+        } catch (error) {
+          console.error(`Error processing deletion ${deletion.id}:`, error);
+          deletionResults.errors.push(`Failed to delete ${deletion.id}: ${error.message}`);
+        }
       }
     }
+
+    // Then process other sync operations in batches
+    console.log('Processing other sync operations...');
+    const result = {
+      added: 0,
+      updated: 0,
+      deleted: deletionResults.processed,
+      errors: [...deletionResults.errors]
+    };
+
+    let hasMoreItems = true;
+    let processedCount = 0;
+
+    while (hasMoreItems) {
+      const { data: queueItems, error: queueError } = await supabase
+        .from('glide_sync_queue')
+        .select('*')
+        .neq('operation', 'DELETE')
+        .is('processed_at', null)
+        .order('priority', { ascending: false })
+        .order('created_at', { ascending: true })
+        .limit(BATCH_SIZE);
+
+      if (queueError) {
+        console.error('Error fetching queue items:', queueError);
+        throw queueError;
+      }
+
+      if (!queueItems || queueItems.length === 0) {
+        hasMoreItems = false;
+        continue;
+      }
+
+      console.log(`Processing batch of ${queueItems.length} items`);
+      
+      // Process items in parallel within the batch
+      await Promise.all(queueItems.map(item => queueProcessor.processQueueItem(item, result)));
+      
+      processedCount += queueItems.length;
+      console.log(`Processed ${processedCount} items so far`);
+      
+      // Check if we need to continue processing more batches
+      hasMoreItems = queueItems.length === BATCH_SIZE;
+    }
+
+    // Clean up processed queue items older than 24 hours
+    const twentyFourHoursAgo = new Date();
+    twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
+
+    await supabase
+      .from('glide_sync_queue')
+      .delete()
+      .lt('processed_at', twentyFourHoursAgo.toISOString());
 
     // Update health check status
     await supabase
@@ -177,10 +155,12 @@ serve(async (req: Request) => {
         status: result.errors.length > 0 ? 'warning' : 'success',
         details: { 
           correlation_id: correlationId,
-          result
+          result,
+          total_processed: processedCount
         }
       });
 
+    console.log('Sync process completed:', result);
     logger.log({
       operation: 'sync_complete',
       status: 'success',
@@ -203,7 +183,8 @@ serve(async (req: Request) => {
     );
 
   } catch (error) {
-    // Record error in health checks
+    console.error('Sync process failed:', error);
+    
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!

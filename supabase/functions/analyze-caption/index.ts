@@ -18,19 +18,8 @@ serve(async (req) => {
       throw new Error('OpenAI API key is not configured');
     }
 
-    // Initialize Supabase client with environment variables
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const { caption } = await req.json();
     
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error('Supabase configuration is missing');
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    const { caption, messageId, mediaGroupId, telegramData } = await req.json();
-    
-    console.log('Analyzing data:', { messageId, mediaGroupId, caption });
-
     if (!caption) {
       console.log('No caption provided, returning null result');
       return new Response(
@@ -66,7 +55,7 @@ serve(async (req) => {
             6. notes: Any text in parentheses () should be captured as notes
                - Multiple parentheses should be combined with spaces
 
-            Return ONLY a valid JSON object with these exact fields if not available try to extract atleast the product name which should always be present. Never reply with sentences just json data.`
+            Return ONLY a valid JSON object with these exact fields.`
           },
           {
             role: 'user',
@@ -80,8 +69,6 @@ serve(async (req) => {
 
     if (!response.ok) {
       console.error('OpenAI API error:', response.status, response.statusText);
-      const errorData = await response.text();
-      console.error('Error details:', errorData);
       throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
     }
 
@@ -94,64 +81,18 @@ serve(async (req) => {
       const result = JSON.parse(data.choices[0].message.content.trim());
       console.log('Parsed result:', result);
 
-      // Update the telegram_media table with the analyzed content
-      if (messageId) {
-        const { error: updateError } = await supabase
-          .from('telegram_media')
-          .update({
-            analyzed_content: result,
-            product_name: result.product_name,
-            product_code: result.product_code,
-            quantity: result.quantity,
-            vendor_uid: result.vendor_uid,
-            purchase_date: result.purchase_date,
-            notes: result.notes
-          })
-          .eq('id', messageId);
-
-        if (updateError) {
-          console.error('Error updating telegram_media:', updateError);
-          throw updateError;
-        }
-      }
-
-      // If this is part of a media group, update all related media
-      if (mediaGroupId) {
-        const { error: groupUpdateError } = await supabase
-          .from('telegram_media')
-          .update({
-            analyzed_content: result,
-            product_name: result.product_name,
-            product_code: result.product_code,
-            quantity: result.quantity,
-            vendor_uid: result.vendor_uid,
-            purchase_date: result.purchase_date,
-            notes: result.notes
-          })
-          .eq('telegram_data->>media_group_id', mediaGroupId);
-
-        if (groupUpdateError) {
-          console.error('Error updating media group:', groupUpdateError);
-          throw groupUpdateError;
-        }
-      }
-
       return new Response(
         JSON.stringify(result),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     } catch (parseError) {
       console.error('Error parsing OpenAI response:', parseError);
-      console.error('Raw response content:', data.choices[0].message.content);
       throw new Error(`Failed to parse OpenAI response: ${parseError.message}`);
     }
   } catch (error) {
     console.error('Error in analyze-caption function:', error);
     return new Response(
-      JSON.stringify({ 
-        error: `Failed to parse OpenAI response: ${error.message}`,
-        details: error.stack
-      }),
+      JSON.stringify({ error: error.message }),
       { 
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
