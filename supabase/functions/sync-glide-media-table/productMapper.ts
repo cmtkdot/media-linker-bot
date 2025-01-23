@@ -5,8 +5,7 @@ export function mapSupabaseToGlide(supabaseRow: TelegramMedia): Record<string, a
     id: supabaseRow.id,
     product_name: supabaseRow.product_name,
     vendor_uid: supabaseRow.vendor_uid,
-    has_analyzed_content: !!supabaseRow.analyzed_content,
-    message_url: supabaseRow.message_url
+    has_analyzed_content: !!supabaseRow.analyzed_content
   });
 
   const mappedData: Record<string, any> = {};

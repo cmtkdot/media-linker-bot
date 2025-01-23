@@ -55,8 +55,6 @@ export interface GlideSyncQueueItem {
   processed_at?: string | null;
   error?: string | null;
   retry_count?: number;
-  batch_id?: string;
-  priority?: number;
   onDelete?: (id: string) => void;
 }
 

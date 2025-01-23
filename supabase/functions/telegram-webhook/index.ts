@@ -1,90 +1,224 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { handleWebhookUpdate } from "../_shared/webhook-handler.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from "../_shared/cors.ts";
-
-const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN') || '';
-const TELEGRAM_WEBHOOK_SECRET = Deno.env.get('TELEGRAM_WEBHOOK_SECRET') || '';
+import { handleWebhookUpdate } from "../_shared/webhook-handler.ts";
 
 serve(async (req) => {
+  console.log('Received webhook request:', req.method);
+
+  if (req.method === 'OPTIONS') {
+    console.log('Handling CORS preflight request');
+    return new Response(null, { headers: corsHeaders });
+  }
+
   try {
-    // Handle CORS
-    if (req.method === 'OPTIONS') {
-      return new Response('ok', { headers: corsHeaders });
+    const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN');
+    const TELEGRAM_WEBHOOK_SECRET = Deno.env.get('TELEGRAM_WEBHOOK_SECRET');
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    
+    if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_WEBHOOK_SECRET || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      console.error('Missing required environment variables');
+      throw new Error('Missing required environment variables');
     }
 
-    // Create Supabase client
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
+    const webhookSecret = req.headers.get('X-Telegram-Bot-Api-Secret-Token');
+    if (webhookSecret !== TELEGRAM_WEBHOOK_SECRET) {
+      console.error('Invalid webhook secret received');
+      return new Response(
+        JSON.stringify({ error: 'Invalid webhook secret' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
+      );
+    }
 
-    // Parse request body
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const update = await req.json();
-    console.log('Received webhook update:', {
+    
+    console.log('Processing Telegram update:', {
       update_id: update.update_id,
-      has_message: !!update.message,
-      has_channel_post: !!update.channel_post
+      message_id: update.message?.message_id,
+      chat_id: update.message?.chat?.id,
+      message_type: update.message?.photo ? 'photo' : 
+                   update.message?.video ? 'video' : 
+                   update.message?.document ? 'document' : 
+                   update.message?.animation ? 'animation' : 'unknown'
     });
 
-    try {
-      const result = await handleWebhookUpdate(update, supabaseClient, TELEGRAM_BOT_TOKEN);
-      console.log('Successfully processed webhook:', result);
+    const result = await handleWebhookUpdate(update, supabase, TELEGRAM_BOT_TOKEN);
 
-      return new Response(
-        JSON.stringify(result),
-        { 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 200 
+    const message = update.message || update.channel_post;
+    if (message) {
+      const { data: messageRecord } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('message_id', message.message_id)
+        .eq('chat_id', message.chat.id)
+        .maybeSingle();
+
+      if (messageRecord) {
+        let fileId, fileUniqueId, fileType;
+        if (message.photo) {
+          const photo = message.photo[message.photo.length - 1];
+          fileId = photo.file_id;
+          fileUniqueId = photo.file_unique_id;
+          fileType = 'photo';
+        } else if (message.video) {
+          fileId = message.video.file_id;
+          fileUniqueId = message.video.file_unique_id;
+          fileType = 'video';
+        } else if (message.document) {
+          fileId = message.document.file_id;
+          fileUniqueId = message.document.file_unique_id;
+          fileType = 'document';
+        } else if (message.animation) {
+          fileId = message.animation.file_id;
+          fileUniqueId = message.animation.file_unique_id;
+          fileType = 'animation';
         }
-      );
-    } catch (error) {
-      console.error('Error in webhook handler:', {
-        error: error.message,
-        stack: error.stack,
-        update_id: update.update_id
-      });
 
-      // Store failed webhook update for retry
-      try {
-        await supabaseClient
-          .from('failed_webhook_updates')
-          .insert({
-            message_id: update.message?.message_id || update.channel_post?.message_id,
-            chat_id: update.message?.chat?.id || update.channel_post?.chat?.id,
-            error_message: error.message,
-            error_stack: error.stack,
-            message_data: update
-          });
-      } catch (dbError) {
-        console.error('Failed to store failed webhook update:', dbError);
+        if (fileId && fileUniqueId) {
+          const { data: existingMedia } = await supabase
+            .from('telegram_media')
+            .select('*')
+            .eq('file_unique_id', fileUniqueId)
+            .maybeSingle();
+
+          const messageCreatedAt = new Date(messageRecord.created_at);
+          
+          // Generate URLs
+          const chatId = message.chat.id.toString();
+          const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
+          const chatUrl = `https://t.me/c/${chatId.substring(4)}`;
+
+          // Check if file exists in storage
+          const { data: storageData } = await supabase.storage
+            .from('media')
+            .list('', {
+              search: fileUniqueId
+            });
+
+          let publicUrl;
+          if (storageData && storageData.length > 0) {
+            const { data } = await supabase.storage
+              .from('media')
+              .getPublicUrl(storageData[0].name);
+            publicUrl = data.publicUrl;
+          } else {
+            publicUrl = fileType === 'photo' 
+              ? `https://kzfamethztziwqiocbwz.supabase.co/storage/v1/object/public/media/${fileUniqueId}.jpg`
+              : `https://kzfamethztziwqiocbwz.supabase.co/storage/v1/object/public/media/${fileUniqueId}.MOV`;
+          }
+          
+          if (existingMedia) {
+            const mediaCreatedAt = new Date(existingMedia.created_at);
+            
+            if (messageCreatedAt > mediaCreatedAt) {
+              console.log('Updating existing telegram_media record:', existingMedia.id);
+              
+              const { error: updateError } = await supabase
+                .from('telegram_media')
+                .update({
+                  file_id: fileId,
+                  message_id: messageRecord.id,
+                  caption: messageRecord.caption,
+                  product_name: messageRecord.product_name,
+                  product_code: messageRecord.product_code,
+                  quantity: messageRecord.quantity,
+                  vendor_uid: messageRecord.vendor_uid,
+                  purchase_date: messageRecord.purchase_date,
+                  notes: messageRecord.notes,
+                  analyzed_content: messageRecord.analyzed_content,
+                  public_url: publicUrl,
+                  message_url: messageUrl,
+                  chat_url: chatUrl,
+                  telegram_data: {
+                    message_id: message.message_id,
+                    chat_id: message.chat.id,
+                    media_group_id: message.media_group_id,
+                    date: message.date,
+                    caption: message.caption
+                  },
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', existingMedia.id);
+
+              if (updateError) {
+                console.error('Error updating telegram_media record:', updateError);
+              } else {
+                console.log('Successfully updated telegram_media record:', existingMedia.id);
+              }
+            } else {
+              console.log('Skipping update as message is older than existing media record');
+            }
+          } else {
+            console.log('Creating new telegram_media record for message:', messageRecord.id);
+            
+            const { error: insertError } = await supabase
+              .from('telegram_media')
+              .insert({
+                file_id: fileId,
+                file_unique_id: fileUniqueId,
+                file_type: fileType,
+                message_id: messageRecord.id,
+                caption: messageRecord.caption,
+                product_name: messageRecord.product_name,
+                product_code: messageRecord.product_code,
+                quantity: messageRecord.quantity,
+                vendor_uid: messageRecord.vendor_uid,
+                purchase_date: messageRecord.purchase_date,
+                notes: messageRecord.notes,
+                analyzed_content: messageRecord.analyzed_content,
+                public_url: publicUrl,
+                message_url: messageUrl,
+                chat_url: chatUrl,
+                telegram_data: {
+                  message_id: message.message_id,
+                  chat_id: message.chat.id,
+                  media_group_id: message.media_group_id,
+                  date: message.date,
+                  caption: message.caption
+                },
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              });
+
+            if (insertError) {
+              console.error('Error creating telegram_media record:', insertError);
+            } else {
+              console.log('Successfully created telegram_media record for message:', messageRecord.id);
+            }
+          }
+        }
       }
-
-      return new Response(
-        JSON.stringify({ 
-          error: 'Error processing webhook update',
-          details: error.message
-        }),
-        { 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 500 
-        }
-      );
     }
+    
+    console.log('Successfully processed update:', {
+      update_id: update.update_id,
+      message_id: update.message?.message_id,
+      chat_id: update.message?.chat?.id,
+      result
+    });
+    
+    return new Response(
+      JSON.stringify({ ok: true, result }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+
   } catch (error) {
-    console.error('Critical error in webhook endpoint:', {
+    console.error('Error in webhook handler:', {
       error: error.message,
       stack: error.stack
     });
-
+    
     return new Response(
       JSON.stringify({ 
-        error: 'Critical error in webhook endpoint',
+        ok: false,
+        error: 'Internal server error',
         details: error.message
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500 
+        status: error.status || 500
       }
     );
   }
