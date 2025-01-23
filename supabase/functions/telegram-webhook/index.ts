@@ -48,6 +48,9 @@ serve(async (req) => {
 
     const message = update.message || update.channel_post;
     if (message) {
+      const chatId = message.chat.id.toString();
+      const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
+
       const { data: messageRecord } = await supabase
         .from('messages')
         .select('*')
@@ -85,11 +88,6 @@ serve(async (req) => {
 
           const messageCreatedAt = new Date(messageRecord.created_at);
           
-          // Generate URLs
-          const chatId = message.chat.id.toString();
-          const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
-          const chatUrl = `https://t.me/c/${chatId.substring(4)}`;
-
           // Check if file exists in storage
           const { data: storageData } = await supabase.storage
             .from('media')
@@ -130,7 +128,6 @@ serve(async (req) => {
                   analyzed_content: messageRecord.analyzed_content,
                   public_url: publicUrl,
                   message_url: messageUrl,
-                  chat_url: chatUrl,
                   telegram_data: {
                     message_id: message.message_id,
                     chat_id: message.chat.id,
@@ -170,7 +167,6 @@ serve(async (req) => {
                 analyzed_content: messageRecord.analyzed_content,
                 public_url: publicUrl,
                 message_url: messageUrl,
-                chat_url: chatUrl,
                 telegram_data: {
                   message_id: message.message_id,
                   chat_id: message.chat.id,
