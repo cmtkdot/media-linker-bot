@@ -1,18 +1,17 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders } from "../_shared/cors.ts";
-import { handleWebhookUpdate } from "../_shared/webhook-handler.ts";
-import { withDatabaseRetry } from "../_shared/database-retry.ts";
 import { analyzeCaptionWithAI } from "../_shared/caption-analyzer.ts";
+import { handleMediaGroup } from "../_shared/media-group-handler.ts";
 import { processMediaFiles } from "../_shared/media-processor.ts";
-import { extractVideoMetadata } from "../_shared/metadata-extractor.ts";
 import { handleProcessingError } from "../_shared/error-handler.ts";
-import { downloadAndStoreThumbnail } from "../_shared/thumbnail-handler.ts";
-import { handleMessageProcessing } from "../_shared/message-manager.ts";
+import { withDatabaseRetry } from "../_shared/database-retry.ts";
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
 serve(async (req) => {
-  console.log('Received webhook request:', req.method);
-
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -55,140 +54,60 @@ serve(async (req) => {
       media_group_id: message.media_group_id
     });
 
-    // Check for existing message
-    const { data: existingMessage } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('message_id', message.message_id)
-      .eq('chat_id', message.chat_id)
-      .maybeSingle();
-
-    // Generate message URL early
-    const chatId = message.chat.id.toString();
-    const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
-
-    // Early caption analysis and metadata extraction
+    // Early caption analysis
     let analyzedContent = null;
-    let thumbnailUrl = null;
-    let mediaMetadata = null;
-
-    // Handle caption analysis
     if (message.caption) {
       try {
-        analyzedContent = await analyzeCaptionWithAI(message.caption);
+        analyzedContent = await analyzeCaptionWithAI(message.caption, supabase);
       } catch (error) {
         console.error('Error analyzing caption:', error);
       }
     }
 
-    // Handle video metadata and thumbnail
-    if (message.video) {
-      mediaMetadata = extractVideoMetadata(message);
-      if (message.video.thumb) {
-        try {
-          thumbnailUrl = await downloadAndStoreThumbnail(
-            message.video.thumb,
-            TELEGRAM_BOT_TOKEN,
-            supabase
-          );
-        } catch (error) {
-          console.error('Error processing thumbnail:', error);
-        }
-      }
+    // Generate message URL
+    const chatId = message.chat.id.toString();
+    const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
+
+    // Create message record with retry
+    const messageRecord = await withDatabaseRetry(async () => {
+      const messageData = {
+        message_id: message.message_id,
+        chat_id: message.chat.id,
+        sender_info: message.from || message.sender_chat || {},
+        message_type: determineMessageType(message),
+        message_data: message,
+        caption: message.caption,
+        media_group_id: message.media_group_id,
+        message_url: messageUrl,
+        analyzed_content: analyzedContent,
+        product_name: analyzedContent?.product_name,
+        product_code: analyzedContent?.product_code,
+        quantity: analyzedContent?.quantity,
+        vendor_uid: analyzedContent?.vendor_uid,
+        purchase_date: analyzedContent?.purchase_date,
+        notes: analyzedContent?.notes,
+        status: 'pending'
+      };
+
+      const { data, error } = await supabase
+        .from('messages')
+        .upsert(messageData)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    }, 0, `create_message_${message.message_id}`);
+
+    // Handle media group if present
+    if (message.media_group_id) {
+      await handleMediaGroup(supabase, message, messageRecord);
     }
 
-    // If message exists, check for missing telegram_media records
-    if (existingMessage) {
-      console.log('Found existing message, checking for missing media records');
-      
-      const hasMedia = message.photo || message.video || message.document || message.animation;
-      if (hasMedia) {
-        // Check for existing media records
-        const { data: existingMedia } = await supabase
-          .from('telegram_media')
-          .select('*')
-          .eq('message_id', existingMessage.id);
-
-        if (!existingMedia || existingMedia.length === 0) {
-          console.log('No telegram_media records found for existing message, processing media');
-          try {
-            await processMediaFiles(
-              message,
-              existingMessage,
-              supabase,
-              TELEGRAM_BOT_TOKEN,
-              {
-                ...mediaMetadata,
-                thumbnail_url: thumbnailUrl,
-                message_url: messageUrl,
-                analyzed_content: analyzedContent
-              }
-            );
-          } catch (error) {
-            console.error('Error processing missing media:', error);
-            await handleProcessingError(
-              supabase,
-              error,
-              existingMessage,
-              0,
-              true
-            );
-          }
-        } else {
-          console.log('Existing media records found:', existingMedia.length);
-        }
-      }
-
-      return new Response(
-        JSON.stringify({ 
-          ok: true, 
-          message: 'Existing message checked for missing media',
-          messageId: existingMessage.id 
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Process new message using shared handler
-    const { messageRecord, success, error } = await handleMessageProcessing(
-      supabase,
-      message,
-      null,
-      {
-        ...analyzedContent,
-        thumbnail_url: thumbnailUrl,
-        message_url: messageUrl
-      }
-    );
-
-    if (!success) {
-      throw new Error(error || 'Failed to process message');
-    }
-
-    // Process media if present
-    if (message.photo || message.video || message.document || message.animation) {
-      try {
-        await processMediaFiles(
-          message,
-          messageRecord,
-          supabase,
-          TELEGRAM_BOT_TOKEN,
-          {
-            ...mediaMetadata,
-            thumbnail_url: thumbnailUrl,
-            message_url: messageUrl,
-            analyzed_content: analyzedContent
-          }
-        );
-      } catch (error) {
-        await handleProcessingError(
-          supabase,
-          error,
-          messageRecord,
-          0,
-          true
-        );
-      }
+    // Process media files if present
+    const hasMedia = message.photo || message.video || message.document || message.animation;
+    if (hasMedia && messageRecord) {
+      await processMediaFiles(message, messageRecord, supabase, TELEGRAM_BOT_TOKEN);
     }
 
     return new Response(
@@ -201,11 +120,7 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Error in webhook handler:', {
-      error: error.message,
-      stack: error.stack
-    });
-    
+    console.error('Error in webhook handler:', error);
     return new Response(
       JSON.stringify({ 
         ok: false,
@@ -214,8 +129,16 @@ serve(async (req) => {
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: error.status || 500
+        status: 500
       }
     );
   }
 });
+
+function determineMessageType(message: any): string {
+  if (message.photo && message.photo.length > 0) return 'photo';
+  if (message.video) return 'video';
+  if (message.document) return 'document';
+  if (message.animation) return 'animation';
+  return 'unknown';
+}
