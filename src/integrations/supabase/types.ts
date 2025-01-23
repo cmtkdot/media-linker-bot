@@ -168,6 +168,60 @@ export type Database = {
           },
         ]
       }
+      media_groups: {
+        Row: {
+          analyzed_content: Json | null
+          caption: string | null
+          created_at: string | null
+          id: string
+          last_sync_attempt: string | null
+          media_group_id: string
+          notes: string | null
+          product_code: string | null
+          product_name: string | null
+          purchase_date: string | null
+          quantity: number | null
+          sync_error: string | null
+          sync_status: string | null
+          updated_at: string | null
+          vendor_uid: string | null
+        }
+        Insert: {
+          analyzed_content?: Json | null
+          caption?: string | null
+          created_at?: string | null
+          id?: string
+          last_sync_attempt?: string | null
+          media_group_id: string
+          notes?: string | null
+          product_code?: string | null
+          product_name?: string | null
+          purchase_date?: string | null
+          quantity?: number | null
+          sync_error?: string | null
+          sync_status?: string | null
+          updated_at?: string | null
+          vendor_uid?: string | null
+        }
+        Update: {
+          analyzed_content?: Json | null
+          caption?: string | null
+          created_at?: string | null
+          id?: string
+          last_sync_attempt?: string | null
+          media_group_id?: string
+          notes?: string | null
+          product_code?: string | null
+          product_name?: string | null
+          purchase_date?: string | null
+          quantity?: number | null
+          sync_error?: string | null
+          sync_status?: string | null
+          updated_at?: string | null
+          vendor_uid?: string | null
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           analyzed_content: Json | null
