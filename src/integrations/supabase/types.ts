@@ -668,6 +668,15 @@ export type Database = {
       }
     }
     Functions: {
+      check_message_sync_status: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          total_messages: number
+          synced_messages: number
+          unsynced_messages: number
+          duplicate_file_ids: number
+        }[]
+      }
       check_queue_health: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -773,6 +782,14 @@ export type Database = {
           old_thumbnail: string
           new_thumbnail: string
           has_telegram_thumb: boolean
+        }[]
+      }
+      safe_sync_messages_to_telegram_media: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          synced_count: number
+          error_count: number
+          details: Json
         }[]
       }
       sync_all_media_groups: {
