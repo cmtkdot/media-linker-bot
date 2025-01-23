@@ -258,57 +258,6 @@ export type Database = {
         }
         Relationships: []
       }
-      media_sync_queue: {
-        Row: {
-          created_at: string | null
-          error_message: string | null
-          file_unique_id: string
-          id: string
-          last_retry_at: string | null
-          max_retries: number | null
-          next_retry_at: string | null
-          operation_data: Json
-          operation_type: string
-          priority: number | null
-          processed_at: string | null
-          retry_count: number | null
-          status: string
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          error_message?: string | null
-          file_unique_id: string
-          id?: string
-          last_retry_at?: string | null
-          max_retries?: number | null
-          next_retry_at?: string | null
-          operation_data?: Json
-          operation_type: string
-          priority?: number | null
-          processed_at?: string | null
-          retry_count?: number | null
-          status?: string
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          error_message?: string | null
-          file_unique_id?: string
-          id?: string
-          last_retry_at?: string | null
-          max_retries?: number | null
-          next_retry_at?: string | null
-          operation_data?: Json
-          operation_type?: string
-          priority?: number | null
-          processed_at?: string | null
-          retry_count?: number | null
-          status?: string
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
       messages: {
         Row: {
           analyzed_content: Json | null
