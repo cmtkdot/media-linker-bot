@@ -17,7 +17,7 @@ Deno.serve(async (req) => {
       .from('telegram_media')
       .select('telegram_data->media_group_id, caption')
       .neq('telegram_data->media_group_id', null)
-      .limit(1000); // Add a reasonable limit
+      .limit(1000);
 
     if (groupError) throw groupError;
 
@@ -26,6 +26,43 @@ Deno.serve(async (req) => {
     
     let updatedGroups = 0;
     let syncedMedia = 0;
+    let analyzedCaptions = 0;
+
+    // First, process all individual media items with captions but no analyzed content
+    const { data: mediaWithCaptions, error: mediaError } = await supabase
+      .from('telegram_media')
+      .select('*')
+      .not('caption', 'is', null)
+      .is('analyzed_content', null);
+
+    if (mediaError) throw mediaError;
+
+    console.log('Processing individual media items:', mediaWithCaptions?.length || 0);
+
+    // Analyze captions for individual items
+    for (const media of (mediaWithCaptions || [])) {
+      try {
+        console.log('Analyzing caption for media:', media.id);
+        
+        const { data: analyzedContent, error: analysisError } = await supabase.functions.invoke('analyze-caption', {
+          body: { 
+            caption: media.caption,
+            messageId: media.id
+          }
+        });
+
+        if (analysisError) {
+          console.error('Error analyzing caption:', analysisError);
+          continue;
+        }
+
+        if (analyzedContent) {
+          analyzedCaptions++;
+        }
+      } catch (error) {
+        console.error('Error processing media item:', error);
+      }
+    }
 
     // Process each media group
     for (const mediaGroupId of uniqueGroups) {
@@ -112,7 +149,8 @@ Deno.serve(async (req) => {
       JSON.stringify({
         success: true,
         updated_groups: updatedGroups,
-        synced_media: syncedMedia
+        synced_media: syncedMedia,
+        analyzed_captions: analyzedCaptions
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
