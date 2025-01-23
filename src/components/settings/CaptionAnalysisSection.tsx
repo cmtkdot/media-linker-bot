@@ -14,15 +14,14 @@ export const CaptionAnalysisSection = () => {
   const { data: analysisStats, refetch: refetchStats } = useQuery({
     queryKey: ['captionAnalysisStats'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { count, error } = await supabase
         .from('telegram_media')
-        .select('id')
-        .is('analyzed_content', null)
-        .count();
+        .select('id', { count: 'exact', head: true })
+        .is('analyzed_content', null);
       
       if (error) throw error;
       return {
-        pending_analysis: data?.[0]?.count || 0
+        pending_analysis: count || 0
       };
     }
   });
