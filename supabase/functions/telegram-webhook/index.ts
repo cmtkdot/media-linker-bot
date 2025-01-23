@@ -110,23 +110,40 @@ serve(async (req) => {
         messageRecord = newMessage;
       } catch (error) {
         console.error('Error creating message record:', error);
-        // Continue processing even if message creation fails
       }
     }
 
     // Check for existing media records
     const hasMedia = message.photo || message.video || message.document || message.animation;
     if (hasMedia) {
+      let mediaFileId;
+      if (message.photo) {
+        mediaFileId = message.photo[message.photo.length - 1].file_unique_id;
+      } else if (message.video) {
+        mediaFileId = message.video.file_unique_id;
+      } else if (message.document) {
+        mediaFileId = message.document.file_unique_id;
+      } else if (message.animation) {
+        mediaFileId = message.animation.file_unique_id;
+      }
+
       const { data: existingMedia } = await supabase
         .from('telegram_media')
         .select('*')
-        .eq('message_id', messageRecord?.id);
+        .eq('file_unique_id', mediaFileId)
+        .maybeSingle();
 
-      // Process media if no existing media records found
-      if (!existingMedia || existingMedia.length === 0) {
-        console.log('No existing media found, processing media files');
+      // Process media if no existing media record found or if existing record needs message_id update
+      if (!existingMedia || (existingMedia && !existingMedia.message_id && messageRecord)) {
+        console.log('Processing media:', {
+          file_unique_id: mediaFileId,
+          existing_media_id: existingMedia?.id,
+          needs_message_id_update: existingMedia && !existingMedia.message_id
+        });
+
         try {
           await processMediaFiles(message, messageRecord, supabase, TELEGRAM_BOT_TOKEN);
+          console.log('Media processing completed successfully');
         } catch (error) {
           console.error('Error processing media:', error);
           await handleProcessingError(
@@ -138,9 +155,10 @@ serve(async (req) => {
           );
         }
       } else {
-        console.log('Media already exists for this message:', {
-          message_id: messageRecord?.id,
-          media_count: existingMedia.length
+        console.log('Media already exists:', {
+          file_unique_id: mediaFileId,
+          media_id: existingMedia.id,
+          has_message_id: !!existingMedia.message_id
         });
       }
     }
