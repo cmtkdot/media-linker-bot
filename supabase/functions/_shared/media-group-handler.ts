@@ -1,13 +1,72 @@
 import { analyzeCaptionWithAI } from './caption-analyzer.ts';
+import { SupabaseClient } from '@supabase/supabase-js';
 
-export async function handleMediaGroup(supabase: any, message: any, messageRecord: any) {
+interface TelegramMessage {
+  media_group_id?: string;
+  caption?: string;
+  message_id: number;
+  chat: {
+    id: number;
+    username?: string;
+    type: string;
+  };
+  date: number;
+}
+
+interface AnalyzedContent {
+  product_name?: string;
+  product_code?: string;
+  quantity?: number;
+  vendor_uid?: string;
+  purchase_date?: string;
+  notes?: string;
+  text?: string;
+  labels?: string[];
+}
+
+interface MediaItem {
+  id: string;
+  file_type: string;
+  thumbnail_url?: string;
+  telegram_data: {
+    media_group_id?: string;
+    message_id: number;
+    chat_id: number;
+    chat?: {
+      username?: string;
+      type: string;
+    };
+  };
+}
+
+interface MessageRecord {
+  id: string;
+  message_id: number;
+  chat_id: number;
+  caption?: string;
+  media_group_id?: string;
+  processed_at?: string;
+}
+
+function getMessageUrl(message: TelegramMessage): string | null {
+  if (!message.chat?.username || message.chat.type !== 'channel') {
+    return null;
+  }
+  return `https://t.me/${message.chat.username}/${message.message_id}`;
+}
+
+export async function handleMediaGroup(
+  supabase: SupabaseClient,
+  message: TelegramMessage,
+  messageRecord: MessageRecord
+) {
   if (!message.media_group_id) return null;
 
   console.log('Processing media group:', message.media_group_id);
   
   try {
     // First analyze caption if present
-    let analyzedContent = null;
+    let analyzedContent: AnalyzedContent | null = null;
     if (message.caption) {
       try {
         analyzedContent = await analyzeCaptionWithAI(message.caption, supabase);
@@ -16,12 +75,14 @@ export async function handleMediaGroup(supabase: any, message: any, messageRecor
       }
     }
 
+    // Get message URL
+    const messageUrl = getMessageUrl(message);
+
     // Create or update media group record
     const { data: mediaGroup, error: groupError } = await supabase
       .from('media_groups')
       .upsert({
         media_group_id: message.media_group_id,
-        caption: message.caption,
         analyzed_content: analyzedContent,
         product_name: analyzedContent?.product_name,
         product_code: analyzedContent?.product_code,
@@ -39,20 +100,20 @@ export async function handleMediaGroup(supabase: any, message: any, messageRecor
       throw groupError;
     }
 
-    // Update all media in the group
+    // Update all media in the group with shared analyzed content
     const { error: mediaUpdateError } = await supabase
       .from('telegram_media')
       .update({
-        caption: message.caption,
         product_name: analyzedContent?.product_name,
         product_code: analyzedContent?.product_code,
         quantity: analyzedContent?.quantity,
         vendor_uid: analyzedContent?.vendor_uid,
         purchase_date: analyzedContent?.purchase_date,
         notes: analyzedContent?.notes,
-        analyzed_content: analyzedContent
+        analyzed_content: analyzedContent,
+        message_url: messageUrl
       })
-      .eq('telegram_data->media_group_id', message.media_group_id);
+      .eq('telegram_data->>media_group_id', message.media_group_id);
 
     if (mediaUpdateError) {
       console.error('Error updating media records:', mediaUpdateError);
