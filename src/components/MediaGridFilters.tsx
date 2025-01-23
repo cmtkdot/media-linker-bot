@@ -1,15 +1,9 @@
 import React from "react";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Grid, Table } from "lucide-react";
+import { Grid, Table, Filter, SortAsc, SortDesc, Search, Tag, Video, Image } from "lucide-react";
 import { MediaSearchBarProps } from "@/types/media";
+import { DropdownMenu } from "@/components/ui/dropdown-menu";
 
 const MediaGridFilters = ({
   search,
@@ -36,61 +30,60 @@ const MediaGridFilters = ({
           onChange={(e) => onSearchChange(e.target.value)}
           className="h-9 md:max-w-[300px]"
         />
-        <Select value={selectedChannel} onValueChange={onChannelChange}>
-          <SelectTrigger className="w-[180px] h-9">
-            <SelectValue placeholder="Select channel" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All channels</SelectItem>
-            {channels.map((channel) => (
-              <SelectItem key={channel} value={channel}>
-                {channel}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={selectedType} onValueChange={onTypeChange}>
-          <SelectTrigger className="w-[180px] h-9">
-            <SelectValue placeholder="Select type" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All types</SelectItem>
-            <SelectItem value="photo">Photos</SelectItem>
-            <SelectItem value="video">Videos</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={selectedVendor} onValueChange={onVendorChange}>
-          <SelectTrigger className="w-[180px] h-9">
-            <SelectValue placeholder="Select vendor" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All vendors</SelectItem>
-            {vendors.map((vendor) => (
-              <SelectItem key={vendor} value={vendor}>
-                {vendor}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={selectedSort} onValueChange={onSortChange}>
-          <SelectTrigger className="w-[180px] h-9">
-            <SelectValue placeholder="Sort by" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="created_desc">Newest first</SelectItem>
-            <SelectItem value="created_asc">Oldest first</SelectItem>
-            <SelectItem value="purchase_desc">Purchase date (newest)</SelectItem>
-            <SelectItem value="purchase_asc">Purchase date (oldest)</SelectItem>
-            <SelectItem value="name_asc">Product name (A-Z)</SelectItem>
-            <SelectItem value="name_desc">Product name (Z-A)</SelectItem>
-            <SelectItem value="caption_asc">Caption (A-Z)</SelectItem>
-            <SelectItem value="caption_desc">Caption (Z-A)</SelectItem>
-            <SelectItem value="code_asc">Product code (A-Z)</SelectItem>
-            <SelectItem value="code_desc">Product code (Z-A)</SelectItem>
-            <SelectItem value="vendor_asc">Vendor (A-Z)</SelectItem>
-            <SelectItem value="vendor_desc">Vendor (Z-A)</SelectItem>
-          </SelectContent>
-        </Select>
+        
+        <DropdownMenu
+          options={[
+            { label: "All channels", onClick: () => onChannelChange("all") },
+            ...channels.map(channel => ({
+              label: channel,
+              onClick: () => onChannelChange(channel)
+            }))
+          ]}
+        >
+          {selectedChannel === "all" ? "All channels" : selectedChannel}
+        </DropdownMenu>
+
+        <DropdownMenu
+          options={[
+            { label: "All types", onClick: () => onTypeChange("all"), Icon: <Filter className="h-4 w-4" /> },
+            { label: "Photos", onClick: () => onTypeChange("photo"), Icon: <Image className="h-4 w-4" /> },
+            { label: "Videos", onClick: () => onTypeChange("video"), Icon: <Video className="h-4 w-4" /> }
+          ]}
+        >
+          {selectedType === "all" ? "All types" : selectedType}
+        </DropdownMenu>
+
+        <DropdownMenu
+          options={[
+            { label: "All vendors", onClick: () => onVendorChange("all"), Icon: <Tag className="h-4 w-4" /> },
+            ...vendors.map(vendor => ({
+              label: vendor,
+              onClick: () => onVendorChange(vendor),
+              Icon: <Tag className="h-4 w-4" />
+            }))
+          ]}
+        >
+          {selectedVendor === "all" ? "All vendors" : selectedVendor}
+        </DropdownMenu>
+
+        <DropdownMenu
+          options={[
+            { label: "Newest first", onClick: () => onSortChange("created_desc"), Icon: <SortDesc className="h-4 w-4" /> },
+            { label: "Oldest first", onClick: () => onSortChange("created_asc"), Icon: <SortAsc className="h-4 w-4" /> },
+            { label: "Purchase date (newest)", onClick: () => onSortChange("purchase_desc"), Icon: <SortDesc className="h-4 w-4" /> },
+            { label: "Purchase date (oldest)", onClick: () => onSortChange("purchase_asc"), Icon: <SortAsc className="h-4 w-4" /> },
+            { label: "Product name (A-Z)", onClick: () => onSortChange("name_asc"), Icon: <SortAsc className="h-4 w-4" /> },
+            { label: "Product name (Z-A)", onClick: () => onSortChange("name_desc"), Icon: <SortDesc className="h-4 w-4" /> },
+            { label: "Caption (A-Z)", onClick: () => onSortChange("caption_asc"), Icon: <SortAsc className="h-4 w-4" /> },
+            { label: "Caption (Z-A)", onClick: () => onSortChange("caption_desc"), Icon: <SortDesc className="h-4 w-4" /> },
+            { label: "Product code (A-Z)", onClick: () => onSortChange("code_asc"), Icon: <SortAsc className="h-4 w-4" /> },
+            { label: "Product code (Z-A)", onClick: () => onSortChange("code_desc"), Icon: <SortDesc className="h-4 w-4" /> },
+            { label: "Vendor (A-Z)", onClick: () => onSortChange("vendor_asc"), Icon: <SortAsc className="h-4 w-4" /> },
+            { label: "Vendor (Z-A)", onClick: () => onSortChange("vendor_desc"), Icon: <SortDesc className="h-4 w-4" /> }
+          ]}
+        >
+          Sort by
+        </DropdownMenu>
       </div>
       <div className="flex items-center space-x-2">
         <Button
