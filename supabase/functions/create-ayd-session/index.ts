@@ -1,62 +1,88 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { corsHeaders } from "../_shared/cors.ts"
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const AYD_API_KEY = Deno.env.get('AYD_API_KEY')
-    if (!AYD_API_KEY) {
-      throw new Error('AYD_API_KEY is not set')
+    console.log('Starting AYD session creation...');
+    
+    // Parse request body
+    const { name, email } = await req.json();
+    
+    if (!name || !email) {
+      throw new Error('Name and email are required');
     }
 
-    // Get request body
-    const body = await req.json()
-    console.log('Creating AYD session with body:', body)
+    // Get the API key from Supabase secrets
+    const AYD_API_KEY = Deno.env.get('AYD_API_KEY');
+    if (!AYD_API_KEY) {
+      console.error('AYD_API_KEY is not configured');
+      throw new Error('AYD_API_KEY is not set');
+    }
 
-    // Make request to AYD API with better error handling
-    const response = await fetch('https://api.ayd.ai/v1/sessions', {
+    console.log('Creating chatbot session for:', { name, email });
+
+    const response = await fetch('https://www.askyourdatabase.com/api/chatbot/v2/session', {
       method: 'POST',
       headers: {
+        'Content-Type': 'application/json',
         'Authorization': `Bearer ${AYD_API_KEY}`,
-        'Content-Type': 'application/json'
       },
-      body: JSON.stringify(body)
-    }).catch(error => {
-      console.error('Network error when calling AYD API:', error);
-      throw new Error(`Failed to connect to AYD API: ${error.message}`);
+      body: JSON.stringify({
+        chatbotid: 'ffa05499087f66d554e38ff4fadf4972',
+        name,
+        email,
+      }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('AYD API error response:', {
+      console.error('AYD API error:', {
         status: response.status,
         statusText: response.statusText,
-        body: errorText
+        error: errorText
       });
-      throw new Error(`AYD API responded with status ${response.status}: ${errorText}`);
+      throw new Error(`AYD API error: ${response.status} ${errorText}`);
     }
 
-    const data = await response.json()
-    console.log('AYD API response:', data)
+    const data = await response.json();
+    console.log('Chatbot session created successfully:', data);
 
-    return new Response(JSON.stringify(data), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: response.status
-    })
-
+    return new Response(
+      JSON.stringify(data),
+      { 
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json' 
+        },
+        status: 200,
+      },
+    );
   } catch (error) {
-    console.error('Error in create-ayd-session:', error)
+    console.error('Error in create-ayd-session:', error);
+    
+    // Return a structured error response
     return new Response(
       JSON.stringify({ 
         error: error.message,
-        details: error.stack
-      }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 500
-    })
+        details: error.stack,
+        timestamp: new Date().toISOString()
+      }),
+      {
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json' 
+        },
+        status: 500,
+      },
+    );
   }
-})
+});

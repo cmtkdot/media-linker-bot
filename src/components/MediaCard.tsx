@@ -10,6 +10,28 @@ interface MediaCardProps {
 }
 
 const MediaCard = ({ item, onPreview, onEdit }: MediaCardProps) => {
+  // Fallback image from Unsplash for when media URLs are missing
+  const fallbackImage = "https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d";
+
+  // Helper to get the most appropriate URL
+  const getDisplayUrl = () => {
+    if (item.file_type === 'video') {
+      return item.thumbnail_url || item.default_public_url || item.public_url || fallbackImage;
+    }
+    return item.public_url || item.default_public_url || fallbackImage;
+  };
+
+  // Log missing URLs for debugging
+  if (!item.public_url && !item.default_public_url) {
+    console.warn('Media item missing URLs:', {
+      id: item.id,
+      file_type: item.file_type,
+      public_url: item.public_url,
+      default_public_url: item.default_public_url,
+      thumbnail_url: item.thumbnail_url
+    });
+  }
+
   return (
     <Card className="group relative overflow-hidden">
       <CardContent className="p-0">
@@ -19,9 +41,15 @@ const MediaCard = ({ item, onPreview, onEdit }: MediaCardProps) => {
             {item.file_type === 'video' ? (
               <div className="relative w-full h-full">
                 <img
-                  src={item.thumbnail_url || item.default_public_url}
-                  alt={item.caption || ''}
+                  src={getDisplayUrl()}
+                  alt={item.caption || 'Video thumbnail'}
                   className="w-full h-full object-cover"
+                  onError={(e) => {
+                    const img = e.target as HTMLImageElement;
+                    if (img.src !== fallbackImage) {
+                      img.src = fallbackImage;
+                    }
+                  }}
                 />
                 <div className="absolute inset-0 flex items-center justify-center">
                   <PlayCircle className="w-12 h-12 text-white opacity-75" />
@@ -29,9 +57,15 @@ const MediaCard = ({ item, onPreview, onEdit }: MediaCardProps) => {
               </div>
             ) : (
               <img
-                src={item.public_url || item.default_public_url}
-                alt={item.caption || ''}
+                src={getDisplayUrl()}
+                alt={item.caption || 'Media item'}
                 className="w-full h-full object-cover"
+                onError={(e) => {
+                  const img = e.target as HTMLImageElement;
+                  if (img.src !== fallbackImage) {
+                    img.src = fallbackImage;
+                  }
+                }}
               />
             )}
           </div>

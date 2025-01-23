@@ -135,60 +135,6 @@ export type Database = {
           },
         ]
       }
-      media_groups: {
-        Row: {
-          analyzed_content: Json
-          caption: string | null
-          created_at: string | null
-          id: string
-          last_sync_attempt: string | null
-          media_group_id: string
-          notes: string | null
-          product_code: string | null
-          product_name: string | null
-          purchase_date: string | null
-          quantity: number | null
-          sync_error: string | null
-          sync_status: string | null
-          updated_at: string | null
-          vendor_uid: string | null
-        }
-        Insert: {
-          analyzed_content?: Json
-          caption?: string | null
-          created_at?: string | null
-          id?: string
-          last_sync_attempt?: string | null
-          media_group_id: string
-          notes?: string | null
-          product_code?: string | null
-          product_name?: string | null
-          purchase_date?: string | null
-          quantity?: number | null
-          sync_error?: string | null
-          sync_status?: string | null
-          updated_at?: string | null
-          vendor_uid?: string | null
-        }
-        Update: {
-          analyzed_content?: Json
-          caption?: string | null
-          created_at?: string | null
-          id?: string
-          last_sync_attempt?: string | null
-          media_group_id?: string
-          notes?: string | null
-          product_code?: string | null
-          product_name?: string | null
-          purchase_date?: string | null
-          quantity?: number | null
-          sync_error?: string | null
-          sync_status?: string | null
-          updated_at?: string | null
-          vendor_uid?: string | null
-        }
-        Relationships: []
-      }
       messages: {
         Row: {
           analyzed_content: Json | null
@@ -280,7 +226,6 @@ export type Database = {
         Row: {
           analyzed_content: Json | null
           caption: string | null
-          chat_url: string | null
           created_at: string
           default_public_url: string | null
           extracted_media_group_id: string | null
@@ -313,7 +258,6 @@ export type Database = {
         Insert: {
           analyzed_content?: Json | null
           caption?: string | null
-          chat_url?: string | null
           created_at?: string
           default_public_url?: string | null
           extracted_media_group_id?: string | null
@@ -346,7 +290,6 @@ export type Database = {
         Update: {
           analyzed_content?: Json | null
           caption?: string | null
-          chat_url?: string | null
           created_at?: string
           default_public_url?: string | null
           extracted_media_group_id?: string | null
@@ -571,26 +514,6 @@ export type Database = {
           error_count: number
           details: Json
         }[]
-      }
-      sync_all_media_groups: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          media_group_id: string
-          synced_items: number
-          status: string
-        }[]
-      }
-      sync_media_group_captions: {
-        Args: {
-          media_group_id: string
-        }
-        Returns: undefined
-      }
-      sync_media_group_content: {
-        Args: {
-          p_media_group_id: string
-        }
-        Returns: undefined
       }
       sync_messages_to_telegram_media: {
         Args: Record<PropertyKey, never>
