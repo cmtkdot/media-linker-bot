@@ -19,7 +19,7 @@ const MediaCard = ({ item, onPreview, onEdit }: MediaCardProps) => {
             {item.file_type === 'video' ? (
               <div className="relative w-full h-full">
                 <img
-                  src={item.thumbnail_url || item.default_public_url}
+                  src={item.thumbnail_url || item.public_url || item.default_public_url}
                   alt={item.caption || ''}
                   className="w-full h-full object-cover"
                 />

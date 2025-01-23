@@ -534,6 +534,15 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      sync_missing_video_metadata: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          video_id: string
+          product_name: string
+          updated_thumbnail: string
+          source: string
+        }[]
+      }
       validate_storage_consistency: {
         Args: Record<PropertyKey, never>
         Returns: {
