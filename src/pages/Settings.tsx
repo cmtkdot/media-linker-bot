@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2 } from "lucide-react";
+import { Loader2, RefreshCw } from "lucide-react";
 
 const Settings = () => {
   const [isGenerating, setIsGenerating] = useState(false);
@@ -26,32 +26,27 @@ const Settings = () => {
   const handleGenerateThumbnails = async () => {
     setIsGenerating(true);
     try {
-      console.log('Starting thumbnail generation...');
+      console.log('Starting thumbnail regeneration...');
       
-      const { error: genError } = await supabase.rpc('generate_missing_thumbnails');
-      if (genError) {
-        console.error('Error generating thumbnails:', genError);
-        throw genError;
-      }
+      const { data, error } = await supabase.functions.invoke('regenerate-thumbnails');
+      
+      if (error) throw error;
 
-      // Wait a moment for the operation to complete
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      console.log('Regeneration response:', data);
       
       // Refresh the stats
       await refetchThumbnails();
       await queryClient.invalidateQueries({ queryKey: ['telegram-media'] });
       
-      console.log('Thumbnail generation completed');
-      
       toast({
         title: "Success",
-        description: "Thumbnails have been generated successfully. Please refresh the page to see the updates.",
+        description: `Processed ${data.processed} videos. Please refresh the page to see the updates.`,
       });
     } catch (error: any) {
       console.error('Error in handleGenerateThumbnails:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to generate thumbnails. Please try again.",
+        description: error.message || "Failed to regenerate thumbnails. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -122,7 +117,10 @@ const Settings = () => {
                       Generating Thumbnails...
                     </>
                   ) : (
-                    'Generate Missing Thumbnails'
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      Generate Missing Thumbnails
+                    </>
                   )}
                 </Button>
               </div>
