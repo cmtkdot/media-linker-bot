@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { Loader2 } from "lucide-react";
 
 const Settings = () => {
   const [isGenerating, setIsGenerating] = useState(false);
@@ -11,7 +12,7 @@ const Settings = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: thumbnailStats, refetch } = useQuery({
+  const { data: thumbnailStats, refetch: refetchThumbnails } = useQuery({
     queryKey: ['thumbnailStats'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -33,22 +34,24 @@ const Settings = () => {
         throw genError;
       }
 
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Wait a moment for the operation to complete
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
-      await refetch();
+      // Refresh the stats
+      await refetchThumbnails();
       await queryClient.invalidateQueries({ queryKey: ['telegram-media'] });
       
       console.log('Thumbnail generation completed');
       
       toast({
         title: "Success",
-        description: "Thumbnails have been generated successfully",
+        description: "Thumbnails have been generated successfully. Please refresh the page to see the updates.",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error in handleGenerateThumbnails:', error);
       toast({
         title: "Error",
-        description: "Failed to generate thumbnails. Please try again.",
+        description: error.message || "Failed to generate thumbnails. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -71,11 +74,11 @@ const Settings = () => {
       // Invalidate queries to refresh data
       await queryClient.invalidateQueries({ queryKey: ['telegram-media'] });
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error syncing with Glide:', error);
       toast({
         title: "Sync Failed",
-        description: error.message,
+        description: error.message || "Failed to sync with Glide",
         variant: "destructive",
       });
     } finally {
@@ -88,7 +91,7 @@ const Settings = () => {
       <h1 className="text-3xl font-bold mb-6">Settings</h1>
       
       <div className="grid gap-6">
-        <Card>
+        <Card className="border-2">
           <CardHeader>
             <CardTitle>Video Thumbnails</CardTitle>
             <CardDescription>
@@ -97,8 +100,9 @@ const Settings = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
+              <div className="flex flex-col gap-4">
+                <div className="bg-muted p-4 rounded-lg">
+                  <p className="font-medium">Current Status:</p>
                   <p className="text-sm text-muted-foreground">
                     Total videos: {thumbnailStats?.total_videos || 0}
                   </p>
@@ -109,15 +113,24 @@ const Settings = () => {
                 <Button 
                   onClick={handleGenerateThumbnails}
                   disabled={isGenerating || !thumbnailStats?.missing_thumbnails}
+                  className="w-full"
+                  size="lg"
                 >
-                  {isGenerating ? "Generating..." : "Generate Thumbnails"}
+                  {isGenerating ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Generating Thumbnails...
+                    </>
+                  ) : (
+                    'Generate Missing Thumbnails'
+                  )}
                 </Button>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-2">
           <CardHeader>
             <CardTitle>Glide Sync</CardTitle>
             <CardDescription>
@@ -125,14 +138,21 @@ const Settings = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex justify-end">
-              <Button 
-                onClick={handleSyncWithGlide}
-                disabled={isSyncing}
-              >
-                {isSyncing ? "Syncing..." : "Sync with Glide"}
-              </Button>
-            </div>
+            <Button 
+              onClick={handleSyncWithGlide}
+              disabled={isSyncing}
+              className="w-full"
+              size="lg"
+            >
+              {isSyncing ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Syncing with Glide...
+                </>
+              ) : (
+                'Sync Missing Records with Glide'
+              )}
+            </Button>
           </CardContent>
         </Card>
       </div>
