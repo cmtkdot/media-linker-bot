@@ -46,15 +46,18 @@ const MediaGrid = () => {
         supabase
           .from('telegram_media')
           .select('telegram_data')
-          .not('telegram_data->chat->title', 'is', null),
+          .not('telegram_data', 'is', null),
         supabase
           .from('telegram_media')
           .select('vendor_uid')
           .not('vendor_uid', 'is', null)
       ]);
 
-      const channels = [...new Set(channelsResult.data?.map(item => 
-        (item.telegram_data as any).chat?.title).filter(Boolean) || [])];
+      // Extract unique channel titles from telegram_data
+      const channels = [...new Set(channelsResult.data?.map(item => {
+        const data = item.telegram_data;
+        return data?.chat?.title;
+      }).filter(Boolean) || [])];
       
       const vendors = [...new Set(vendorsResult.data?.map(item => 
         item.vendor_uid).filter(Boolean) || [])];
@@ -75,7 +78,8 @@ const MediaGrid = () => {
       }
 
       if (selectedChannel !== "all") {
-        query = query.eq('telegram_data->>chat->>title', selectedChannel);
+        // Use containment operator @> for JSONB query
+        query = query.filter('telegram_data', 'cs', `{"chat":{"title":"${selectedChannel}"}}`);
       }
 
       if (selectedType !== "all") {
