@@ -191,6 +191,7 @@ export type Database = {
           retry_count: number | null
           sender_info: Json
           status: string | null
+          thumbnail_url: string | null
           updated_at: string
           vendor_uid: string | null
         }
@@ -216,6 +217,7 @@ export type Database = {
           retry_count?: number | null
           sender_info?: Json
           status?: string | null
+          thumbnail_url?: string | null
           updated_at?: string
           vendor_uid?: string | null
         }
@@ -241,6 +243,7 @@ export type Database = {
           retry_count?: number | null
           sender_info?: Json
           status?: string | null
+          thumbnail_url?: string | null
           updated_at?: string
           vendor_uid?: string | null
         }
@@ -542,6 +545,7 @@ export type Database = {
           retry_count: number | null
           sender_info: Json
           status: string | null
+          thumbnail_url: string | null
           updated_at: string
           vendor_uid: string | null
         }

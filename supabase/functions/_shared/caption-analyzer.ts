@@ -1,31 +1,21 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-export async function analyzeCaptionWithAI(caption: string, supabaseUrl: string, supabaseKey: string) {
-  if (!caption?.trim()) {
-    console.log('No caption to analyze');
-    return null;
-  }
-
-  console.log('Analyzing caption:', caption);
+export async function analyzeCaptionWithAI(
+  caption: string,
+  supabaseUrl: string,
+  supabaseKey: string
+): Promise<any> {
+  const supabase = createClient(supabaseUrl, supabaseKey);
+  
   try {
-    const supabase = createClient(supabaseUrl, supabaseKey);
     const { data, error } = await supabase.functions.invoke('analyze-caption', {
-      body: { 
-        caption,
-        // Don't pass IDs when just analyzing
-        isAnalysisOnly: true
-      },
+      body: { caption }
     });
 
-    if (error) {
-      console.error('Error invoking analyze-caption function:', error);
-      throw error;
-    }
-    
-    console.log('Caption analysis result:', data);
-    return data || null;
+    if (error) throw error;
+    return data;
   } catch (error) {
-    console.error('Error analyzing caption:', error);
+    console.error('Error in caption analysis:', error);
     return null;
   }
 }
