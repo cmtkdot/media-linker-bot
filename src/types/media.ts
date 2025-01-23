@@ -1,51 +1,24 @@
-export type MediaFileType = 'photo' | 'video' | 'document' | 'animation';
-
 export interface MediaItem {
   id: string;
   file_id: string;
   file_unique_id: string;
-  file_type: MediaFileType;
-  public_url?: string;
-  default_public_url?: string;
-  thumbnail_url?: string;
-  product_name?: string;
-  product_code?: string;
-  quantity?: number;
+  file_type: 'photo' | 'video' | 'document' | 'animation';
+  public_url: string | null;
+  default_public_url: string | null;
+  thumbnail_url: string | null;
+  caption: string | null;
+  product_name: string | null;
+  product_code: string | null;
+  vendor_uid: string | null;
+  purchase_date: string | null;
+  notes: string | null;
   telegram_data: Record<string, any>;
   glide_data: Record<string, any>;
   media_metadata: Record<string, any>;
-  caption?: string;
-  vendor_uid?: string;
-  purchase_date?: string;
-  notes?: string;
   analyzed_content?: {
-    text: string;
-    labels: string[];
-    objects: string[];
+    text?: string;
+    labels?: string[];
+    objects?: string[];
   };
-  message_url?: string;
-  glide_app_url?: string;
-}
-
-export interface SupabaseMediaItem extends Omit<MediaItem, 'file_type' | 'telegram_data' | 'glide_data' | 'media_metadata' | 'analyzed_content'> {
-  file_type: string;
-  telegram_data: any;
-  glide_data: any;
-  media_metadata: any;
-  analyzed_content?: any;
-}
-
-export interface MediaSearchBarProps {
-  search: string;
-  onSearchChange: (value: string) => void;
-  view: 'grid' | 'table';
-  onViewChange: (view: 'grid' | 'table') => void;
-  selectedChannel: string;
-  onChannelChange: (channel: string) => void;
-  selectedType: string;
-  onTypeChange: (type: string) => void;
-  selectedVendor: string;
-  onVendorChange: (vendor: string) => void;
-  channels: string[];
-  vendors: string[];
+  relatedMedia?: MediaItem[];
 }

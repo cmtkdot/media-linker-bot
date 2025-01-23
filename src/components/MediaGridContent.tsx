@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { MediaItem } from "@/types/media";
 import MediaCard from "./MediaCard";
 import MediaViewer from "./MediaViewer";
@@ -17,34 +17,35 @@ const MediaGridContent = ({ items = [], view, isLoading, error, onMediaUpdate }:
   const [editItem, setEditItem] = useState<MediaItem | null>(null);
   const [viewerOpen, setViewerOpen] = useState(false);
 
+  // Group media items by product name and caption
+  const groupedMedia = useMemo(() => {
+    const groups = new Map<string, MediaItem[]>();
+    
+    items.forEach(item => {
+      const key = `${item.product_name}-${item.caption}`;
+      if (!groups.has(key)) {
+        groups.set(key, []);
+      }
+      groups.get(key)?.push(item);
+    });
+
+    return groups;
+  }, [items]);
+
+  // Convert grouped media to array format
+  const groupedItems = useMemo(() => {
+    return Array.from(groupedMedia.values()).map(group => group[0]);
+  }, [groupedMedia]);
+
   const handleView = (item: MediaItem) => {
-    setSelectedMedia(item);
+    const key = `${item.product_name}-${item.caption}`;
+    const relatedItems = groupedMedia.get(key) || [];
+    setSelectedMedia({ ...item, relatedMedia: relatedItems });
     setViewerOpen(true);
   };
 
   const handleEdit = (item: MediaItem) => {
     setEditItem(item);
-  };
-
-  const handlePrevious = () => {
-    if (!selectedMedia) return;
-    const currentIndex = items.findIndex(item => item.id === selectedMedia.id);
-    if (currentIndex > 0) {
-      setSelectedMedia(items[currentIndex - 1]);
-    }
-  };
-
-  const handleNext = () => {
-    if (!selectedMedia) return;
-    const currentIndex = items.findIndex(item => item.id === selectedMedia.id);
-    if (currentIndex < items.length - 1) {
-      setSelectedMedia(items[currentIndex + 1]);
-    }
-  };
-
-  const getCurrentIndex = () => {
-    if (!selectedMedia) return -1;
-    return items.findIndex(item => item.id === selectedMedia.id);
   };
 
   if (isLoading) {
@@ -66,7 +67,7 @@ const MediaGridContent = ({ items = [], view, isLoading, error, onMediaUpdate }:
           ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" 
           : "space-y-4"
       }>
-        {items.map((item) => (
+        {groupedItems.map((item) => (
           <MediaCard
             key={item.id}
             item={item}
@@ -80,10 +81,7 @@ const MediaGridContent = ({ items = [], view, isLoading, error, onMediaUpdate }:
         open={viewerOpen}
         onOpenChange={setViewerOpen}
         media={selectedMedia}
-        onPrevious={handlePrevious}
-        onNext={handleNext}
-        hasPrevious={getCurrentIndex() > 0}
-        hasNext={getCurrentIndex() < items.length - 1}
+        relatedMedia={selectedMedia?.relatedMedia || []}
       />
 
       <MediaEditDialog
