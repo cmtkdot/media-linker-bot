@@ -52,21 +52,16 @@ serve(async (req) => {
         messages: [
           {
             role: 'system',
-            content: `Extract product information from captions following these strict rules:
-            1. product_name: Everything before the # symbol, trimmed
-            2. product_code: Text between #and x, excluding any parentheses content
-               - If vendor_uid is found, it should be part of product_code
-            3. quantity: ONLY the number after "x" and before any parentheses
-               - Example: "x 3 (20 behind)" should extract just 3
-               - Ignore any numbers inside parentheses
-            4. vendor_uid: Letters before numbers in the product code
-               - Example: "FISH011625" should extract "FISH"
-            5. purchase_date: Convert 6 digits from code (mmDDyy) to YYYY-MM-DD
-               - Example: "011625" should become "2025-01-16"
-            6. notes: Any text in parentheses () should be captured as notes
-               - Multiple parentheses should be combined with spaces
+            content: `You are a JSON extraction assistant. Extract product information from captions following these rules and return ONLY a JSON object with these fields (no markdown, no explanations):
+            - product_name: Everything before the # symbol, trimmed
+            - product_code: Text between # and x, excluding parentheses
+            - quantity: Number after "x" and before parentheses
+            - vendor_uid: Letters before numbers in product code
+            - purchase_date: Convert 6 digits from code (mmDDyy) to YYYY-MM-DD
+            - notes: Text in parentheses () combined with spaces
 
-            Return ONLY a valid JSON object with these exact fields if not available try to extract atleast the product name which should always be present. Never reply with sentences just json data.`
+            Example input: "Cherry Runtz #FISH011625 x 3 (20 behind) (fresh batch)"
+            Example output: {"product_name":"Cherry Runtz","product_code":"FISH011625","quantity":3,"vendor_uid":"FISH","purchase_date":"2025-01-16","notes":"20 behind fresh batch"}`
           },
           {
             role: 'user',
@@ -91,7 +86,9 @@ serve(async (req) => {
     }
 
     try {
-      const result = JSON.parse(data.choices[0].message.content.trim());
+      // Remove any markdown formatting if present
+      const cleanContent = data.choices[0].message.content.replace(/```json\n|\n```/g, '');
+      const result = JSON.parse(cleanContent);
       console.log('Parsed result:', result);
 
       // Update the telegram_media table with the analyzed content
@@ -149,7 +146,7 @@ serve(async (req) => {
     console.error('Error in analyze-caption function:', error);
     return new Response(
       JSON.stringify({ 
-        error: `Failed to parse OpenAI response: ${error.message}`,
+        error: error.message,
         details: error.stack
       }),
       { 
