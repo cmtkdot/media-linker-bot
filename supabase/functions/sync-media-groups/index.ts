@@ -16,17 +16,19 @@ Deno.serve(async (req) => {
     const { data: mediaGroups, error: groupError } = await supabase
       .from('telegram_media')
       .select('telegram_data->media_group_id, caption')
-      .not('telegram_data->media_group_id', 'is', null)
-      .distinct();
+      .neq('telegram_data->media_group_id', null)
+      .limit(1000); // Add a reasonable limit
 
     if (groupError) throw groupError;
 
+    // Get unique media group IDs
+    const uniqueGroups = [...new Set(mediaGroups?.map(g => g.media_group_id))];
+    
     let updatedGroups = 0;
     let syncedMedia = 0;
 
     // Process each media group
-    for (const group of (mediaGroups || [])) {
-      const mediaGroupId = group.media_group_id;
+    for (const mediaGroupId of uniqueGroups) {
       if (!mediaGroupId) continue;
 
       console.log('Processing media group:', mediaGroupId);
