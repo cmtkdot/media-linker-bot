@@ -6,7 +6,7 @@ import { columns } from "./columns";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2 } from "lucide-react";
-import type { FailedWebhookUpdate, GlideConfig } from "@/types/glide";
+import type { GlideSyncQueueItem, GlideConfig } from "@/types/glide";
 
 interface GlideDataGridProps {
   configs: GlideConfig[];
@@ -14,16 +14,17 @@ interface GlideDataGridProps {
 
 export function GlideDataGrid({ configs }: GlideDataGridProps) {
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
-  const [isRetrying, setIsRetrying] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: failedUpdates, isLoading } = useQuery({
-    queryKey: ['failed-webhook-updates'],
+  const { data: syncQueue, isLoading } = useQuery({
+    queryKey: ['glide-sync-queue'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('failed_webhook_updates')
+        .from('glide_sync_queue')
         .select('*')
+        .is('processed_at', null)
         .order('created_at', { ascending: false });
       
       if (error) throw error;
@@ -31,24 +32,24 @@ export function GlideDataGrid({ configs }: GlideDataGridProps) {
       return (data || []).map(item => ({
         ...item,
         onDelete: handleDelete
-      })) as FailedWebhookUpdate[];
+      })) as GlideSyncQueueItem[];
     }
   });
 
   // Subscribe to real-time changes
   useEffect(() => {
     const channel = supabase
-      .channel('failed-webhook-changes')
+      .channel('glide-sync-changes')
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
-          table: 'failed_webhook_updates'
+          table: 'glide_sync_queue'
         },
         () => {
           // Refetch data when changes occur
-          queryClient.invalidateQueries({ queryKey: ['failed-webhook-updates'] });
+          queryClient.invalidateQueries({ queryKey: ['glide-sync-queue'] });
         }
       )
       .subscribe();
@@ -61,7 +62,7 @@ export function GlideDataGrid({ configs }: GlideDataGridProps) {
   const handleDelete = async (id: string) => {
     try {
       const { error } = await supabase
-        .from('failed_webhook_updates')
+        .from('glide_sync_queue')
         .delete()
         .eq('id', id);
 
@@ -69,7 +70,7 @@ export function GlideDataGrid({ configs }: GlideDataGridProps) {
 
       toast({
         title: "Record deleted",
-        description: "The failed update record has been removed.",
+        description: "The sync queue record has been removed.",
       });
 
       // Remove from selected rows if it was selected
@@ -84,7 +85,7 @@ export function GlideDataGrid({ configs }: GlideDataGridProps) {
     }
   };
 
-  const handleRetry = async (recordIds?: string[]) => {
+  const handleSync = async (recordIds?: string[]) => {
     if (!configs[0]?.id) {
       toast({
         title: "No configuration found",
@@ -94,11 +95,12 @@ export function GlideDataGrid({ configs }: GlideDataGridProps) {
       return;
     }
 
-    setIsRetrying(true);
+    setIsSyncing(true);
     try {
       const { data, error } = await supabase.functions.invoke('sync-glide-media-table', {
         body: { 
-          operation: 'retryFailed', 
+          operation: 'syncBidirectional', 
+          tableId: configs[0].id,
           recordIds 
         }
       });
@@ -106,30 +108,30 @@ export function GlideDataGrid({ configs }: GlideDataGridProps) {
       if (error) throw error;
 
       toast({
-        title: "Retry Completed",
-        description: `Successfully retried ${data.retried} records`,
+        title: "Sync Completed",
+        description: `Added: ${data.added}, Updated: ${data.updated}, Deleted: ${data.deleted}`,
       });
 
       if (data.errors?.length > 0) {
-        console.error('Retry errors:', data.errors);
+        console.error('Sync errors:', data.errors);
         toast({
-          title: "Retry Completed with Errors",
+          title: "Sync Completed with Errors",
           description: "Check console for details",
           variant: "destructive",
         });
       }
 
-      // Clear selected rows after successful retry
+      // Clear selected rows after successful sync
       setSelectedRows([]);
     } catch (error) {
-      console.error('Retry error:', error);
+      console.error('Sync error:', error);
       toast({
-        title: "Retry Failed",
+        title: "Sync Failed",
         description: error.message,
         variant: "destructive",
       });
     } finally {
-      setIsRetrying(false);
+      setIsSyncing(false);
     }
   };
 
@@ -138,36 +140,36 @@ export function GlideDataGrid({ configs }: GlideDataGridProps) {
       <div className="flex justify-end gap-2">
         <Button
           variant="outline"
-          onClick={() => handleRetry(selectedRows)}
-          disabled={isRetrying || selectedRows.length === 0}
+          onClick={() => handleSync(selectedRows)}
+          disabled={isSyncing || selectedRows.length === 0}
         >
-          {isRetrying ? (
+          {isSyncing ? (
             <>
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Retrying Selected...
+              Syncing Selected...
             </>
           ) : (
-            `Retry Selected (${selectedRows.length})`
+            `Sync Selected (${selectedRows.length})`
           )}
         </Button>
         <Button
-          onClick={() => handleRetry()}
-          disabled={isRetrying || !failedUpdates?.length}
+          onClick={() => handleSync()}
+          disabled={isSyncing || !syncQueue?.length}
         >
-          {isRetrying ? (
+          {isSyncing ? (
             <>
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Retrying All...
+              Syncing All...
             </>
           ) : (
-            'Retry All'
+            'Sync All'
           )}
         </Button>
       </div>
       <div className="rounded-md border">
         <DataTable 
           columns={columns} 
-          data={failedUpdates || []} 
+          data={syncQueue || []} 
           onRowSelectionChange={setSelectedRows}
         />
       </div>

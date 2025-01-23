@@ -105,17 +105,3 @@ export interface GlideApiRequest {
   mutations: GlideMutation[];
 }
 
-export interface FailedWebhookUpdate {
-  id: string;
-  message_id: number | null;
-  chat_id: number | null;
-  error_message: string;
-  error_stack: string | null;
-  retry_count: number | null;
-  last_retry_at: string | null;
-  message_data: Json | null;
-  status: string | null;
-  created_at: string;
-  updated_at: string;
-  onDelete?: (id: string) => void;
-}
