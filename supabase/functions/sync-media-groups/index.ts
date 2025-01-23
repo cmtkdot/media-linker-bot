@@ -15,7 +15,7 @@ Deno.serve(async (req) => {
     // First, get all media groups that need updating
     const { data: mediaGroups, error: groupError } = await supabase
       .from('telegram_media')
-      .select('telegram_data->media_group_id')
+      .select('telegram_data->media_group_id, caption')
       .not('telegram_data->media_group_id', 'is', null)
       .distinct();
 
@@ -29,45 +29,80 @@ Deno.serve(async (req) => {
       const mediaGroupId = group.media_group_id;
       if (!mediaGroupId) continue;
 
-      // Get the most recent telegram_media record with analyzed content
-      const { data: latestMedia } = await supabase
+      console.log('Processing media group:', mediaGroupId);
+
+      // Get all media in this group
+      const { data: groupMedia } = await supabase
         .from('telegram_media')
         .select('*')
         .eq('telegram_data->>media_group_id', mediaGroupId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+        .order('created_at', { ascending: false });
 
-      if (!latestMedia) continue;
+      if (!groupMedia?.length) continue;
 
-      // Update or create media_group
-      const { error: upsertError } = await supabase
-        .from('media_groups')
-        .upsert({
-          media_group_id: mediaGroupId,
-          caption: latestMedia.caption,
-          analyzed_content: latestMedia.analyzed_content,
-          product_name: latestMedia.product_name,
-          product_code: latestMedia.product_code,
-          quantity: latestMedia.quantity,
-          vendor_uid: latestMedia.vendor_uid,
-          purchase_date: latestMedia.purchase_date,
-          notes: latestMedia.notes
+      // Find the first item with a caption
+      const mediaWithCaption = groupMedia.find(m => m.caption);
+      
+      if (mediaWithCaption && (!mediaWithCaption.analyzed_content || Object.keys(mediaWithCaption.analyzed_content).length === 0)) {
+        console.log('Analyzing caption for media group:', mediaGroupId);
+        
+        // Call analyze-caption function
+        const { data: analyzedContent, error: analysisError } = await supabase.functions.invoke('analyze-caption', {
+          body: { 
+            caption: mediaWithCaption.caption,
+            messageId: mediaWithCaption.id,
+            mediaGroupId: mediaGroupId
+          }
         });
 
-      if (upsertError) {
-        console.error(`Error updating media group ${mediaGroupId}:`, upsertError);
-        continue;
-      }
+        if (analysisError) {
+          console.error('Error analyzing caption:', analysisError);
+          continue;
+        }
 
-      updatedGroups++;
+        console.log('Analyzed content:', analyzedContent);
 
-      // Sync all media in the group
-      const { error: syncError } = await supabase
-        .rpc('sync_media_group_captions', { media_group_id: mediaGroupId });
+        // Update media_groups table
+        const { error: upsertError } = await supabase
+          .from('media_groups')
+          .upsert({
+            media_group_id: mediaGroupId,
+            caption: mediaWithCaption.caption,
+            analyzed_content: analyzedContent,
+            product_name: analyzedContent?.product_name,
+            product_code: analyzedContent?.product_code,
+            quantity: analyzedContent?.quantity,
+            vendor_uid: analyzedContent?.vendor_uid,
+            purchase_date: analyzedContent?.purchase_date,
+            notes: analyzedContent?.notes,
+            sync_status: 'completed'
+          });
 
-      if (!syncError) {
-        syncedMedia++;
+        if (upsertError) {
+          console.error('Error updating media group:', upsertError);
+          continue;
+        }
+
+        updatedGroups++;
+
+        // Sync all media in the group
+        const { error: syncError } = await supabase
+          .from('telegram_media')
+          .update({
+            caption: mediaWithCaption.caption,
+            analyzed_content: analyzedContent,
+            product_name: analyzedContent?.product_name,
+            product_code: analyzedContent?.product_code,
+            quantity: analyzedContent?.quantity,
+            vendor_uid: analyzedContent?.vendor_uid,
+            purchase_date: analyzedContent?.purchase_date,
+            notes: analyzedContent?.notes
+          })
+          .eq('telegram_data->>media_group_id', mediaGroupId);
+
+        if (!syncError) {
+          syncedMedia += groupMedia.length;
+        }
       }
     }
 
