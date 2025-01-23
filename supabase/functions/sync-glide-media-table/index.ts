@@ -97,10 +97,13 @@ serve(async (req: Request) => {
             default_public_url: record.default_public_url
           };
 
-          // Update or insert the record
+          // Update or insert the record with proper ON CONFLICT handling
           const { error: upsertError } = await supabase
             .from(config.supabase_table_name)
-            .upsert(glideData);
+            .upsert(glideData, {
+              onConflict: 'file_unique_id',
+              ignoreDuplicates: false
+            });
 
           if (upsertError) {
             throw upsertError;
