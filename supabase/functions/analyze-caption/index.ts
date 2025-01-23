@@ -57,11 +57,11 @@ serve(async (req) => {
             - product_name: Everything before the # symbol, trimmed. If no # symbol, use the first line or full text.
 
             Optional fields (only include if confident):
-            - product_code: Text between # and x, excluding parentheses
-            - quantity: Number after "x" and before parentheses
-            - vendor_uid: Letters before numbers in product code
+            - product_code: Text between # and x, excluding parentheses. this is usually cannabis strain names
+            - quantity: Number after "x" and before parentheses and any spaces
+            - vendor_uid: Letters before numbers in product code. Common Vendor UID are: [ "WOO\nCARL\nENC\nDNY\nHEFF\nEST\nCUS\nHIP\nBNC\nQB\nKV\nFISH\nQ\nBRAV\nP\nJWD\nBO\nLOTO\nOM\nCMTK\nMRW\nFT\nCHAD\nSHR\nCBN\nSPOB\nPEPE\nTURK\nM\nPBA\nDBRO\nZ\nCHO\nRB\nKPEE\nDINO\nKC\nPRM\nANT\nKNG\nTOM\nFAKE\nFAKEVEN\nERN\nCOO\nBCH\nJM\nWITE\nANDY\nBRC\nBCHO"])
             - purchase_date: Convert 6 digits from code (mmDDyy) to YYYY-MM-DD if present
-            - notes: Text in parentheses () combined with spaces
+            - notes: Text in parentheses () combined with spaces or any other text after that is not part of the extracted information
 
             Return ONLY a JSON object with these fields (no markdown).
             If you can only extract product_name, that's fine - return just that field.
