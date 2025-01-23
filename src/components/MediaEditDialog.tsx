@@ -1,12 +1,9 @@
 import React from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { Trash } from "lucide-react";
+import { Dialog } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { MediaItem } from "@/types/media";
+import MediaEditDialogContent from "./MediaEditDialogContent";
 
 interface MediaEditDialogProps {
   editItem: MediaItem | null;
@@ -16,7 +13,7 @@ interface MediaEditDialogProps {
   formatDate: (date: string | null) => string | null;
 }
 
-const MediaEditDialog = ({ editItem, onClose, onSave, onItemChange, formatDate }: MediaEditDialogProps) => {
+const MediaEditDialog = ({ editItem, onClose, onSave, onItemChange }: MediaEditDialogProps) => {
   const { toast } = useToast();
 
   const handleDelete = async () => {
@@ -115,6 +112,18 @@ const MediaEditDialog = ({ editItem, onClose, onSave, onItemChange, formatDate }
       // First save to Supabase
       await onSave();
 
+      // Add to Glide sync queue
+      const { error: queueError } = await supabase
+        .from('glide_sync_queue')
+        .insert({
+          table_name: 'telegram_media',
+          record_id: editItem.id,
+          operation: 'UPDATE',
+          new_data: editItem
+        });
+
+      if (queueError) throw queueError;
+
       // Then update Telegram message if needed
       if (editItem.telegram_data?.message_id && editItem.telegram_data?.chat?.id) {
         await updateTelegramMessage({
@@ -142,134 +151,14 @@ const MediaEditDialog = ({ editItem, onClose, onSave, onItemChange, formatDate }
 
   return (
     <Dialog open={!!editItem} onOpenChange={() => onClose()}>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
-          <DialogTitle>Edit Media</DialogTitle>
-        </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="caption" className="text-right">
-              Caption
-            </Label>
-            <Input
-              id="caption"
-              value={editItem.caption || ''}
-              className="col-span-3"
-              onChange={(e) => onItemChange('caption', e.target.value)}
-            />
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="product_name" className="text-right">
-              Product Name
-            </Label>
-            <Input
-              id="product_name"
-              value={editItem.product_name || ''}
-              className="col-span-3"
-              onChange={(e) => {
-                onItemChange('product_name', e.target.value);
-                if (editItem.analyzed_content?.text === editItem.caption) {
-                  const updatedItem = { ...editItem, product_name: e.target.value };
-                  onItemChange('caption', generateCaption(updatedItem));
-                }
-              }}
-            />
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="product_code" className="text-right">
-              Product Code
-            </Label>
-            <Input
-              id="product_code"
-              value={editItem.product_code || ''}
-              className="col-span-3"
-              onChange={(e) => {
-                onItemChange('product_code', e.target.value);
-                if (editItem.analyzed_content?.text === editItem.caption) {
-                  const updatedItem = { ...editItem, product_code: e.target.value };
-                  onItemChange('caption', generateCaption(updatedItem));
-                }
-              }}
-            />
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="quantity" className="text-right">
-              Quantity
-            </Label>
-            <Input
-              id="quantity"
-              type="number"
-              value={editItem.quantity || ''}
-              className="col-span-3"
-              onChange={(e) => {
-                onItemChange('quantity', parseInt(e.target.value) || null);
-                if (editItem.analyzed_content?.text === editItem.caption) {
-                  const updatedItem = { ...editItem, quantity: parseInt(e.target.value) || null };
-                  onItemChange('caption', generateCaption(updatedItem));
-                }
-              }}
-            />
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="vendor_uid" className="text-right">
-              Vendor UID
-            </Label>
-            <Input
-              id="vendor_uid"
-              value={editItem.vendor_uid || ''}
-              className="col-span-3"
-              onChange={(e) => {
-                onItemChange('vendor_uid', e.target.value);
-                if (editItem.analyzed_content?.text === editItem.caption) {
-                  const updatedItem = { ...editItem, vendor_uid: e.target.value };
-                  onItemChange('caption', generateCaption(updatedItem));
-                }
-              }}
-            />
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="purchase_date" className="text-right">
-              Purchase Date
-            </Label>
-            <Input
-              id="purchase_date"
-              type="date"
-              value={formatDate(editItem.purchase_date) || ''}
-              className="col-span-3"
-              onChange={(e) => onItemChange('purchase_date', e.target.value)}
-            />
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="notes" className="text-right">
-              Notes
-            </Label>
-            <Input
-              id="notes"
-              value={editItem.notes || ''}
-              className="col-span-3"
-              onChange={(e) => onItemChange('notes', e.target.value)}
-            />
-          </div>
-        </div>
-        <div className="flex justify-between">
-          <Button
-            variant="destructive"
-            onClick={handleDelete}
-            className="bg-red-500 hover:bg-red-600 text-white"
-          >
-            <Trash className="w-4 h-4 mr-2" />
-            Delete
-          </Button>
-          <div className="space-x-2">
-            <Button variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button onClick={handleSave}>
-              Save changes
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
+      <MediaEditDialogContent
+        editItem={editItem}
+        onClose={onClose}
+        onDelete={handleDelete}
+        onSave={handleSave}
+        onItemChange={onItemChange}
+        generateCaption={generateCaption}
+      />
     </Dialog>
   );
 };
