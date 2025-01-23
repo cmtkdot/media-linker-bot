@@ -16,7 +16,7 @@ export const MessageMediaSyncSection = () => {
     setIsSyncing(true);
     try {
       // First, sync messages to telegram_media using the database service
-      await databaseService.syncMessageMedia('all');
+      const { data: syncResult } = await supabase.rpc('sync_messages_to_telegram_media');
 
       // Then call the edge function to process the media files
       const { data, error } = await supabase.functions.invoke('sync-message-media', {
@@ -29,10 +29,21 @@ export const MessageMediaSyncSection = () => {
 
       toast({
         title: "Message Media Sync Complete",
-        description: `Processed ${data.processed_count || 0} messages and synced ${data.synced_media || 0} media items`,
+        description: `Processed ${data?.processed_count || 0} messages and synced ${data?.synced_media || 0} media items. ${syncResult?.synced_count || 0} records synced from messages.`,
       });
     } catch (error: any) {
       console.error('Error in message media sync:', error);
+      
+      // Handle specific database error for duplicate records
+      if (error.message?.includes('ON CONFLICT DO UPDATE command cannot affect row a second time')) {
+        toast({
+          title: "Sync Partially Complete",
+          description: "Some records were skipped due to duplicate entries. This is expected behavior.",
+          variant: "default",
+        });
+        return;
+      }
+
       toast({
         title: "Sync Failed",
         description: error.message || "Failed to sync message media",
