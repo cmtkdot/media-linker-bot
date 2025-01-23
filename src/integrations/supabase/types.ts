@@ -9,6 +9,42 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      failed_media_operations: {
+        Row: {
+          created_at: string | null
+          error_message: string | null
+          file_unique_id: string
+          id: string
+          last_retry: string | null
+          operation_data: Json
+          retry_count: number | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          error_message?: string | null
+          file_unique_id: string
+          id?: string
+          last_retry?: string | null
+          operation_data: Json
+          retry_count?: number | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          error_message?: string | null
+          file_unique_id?: string
+          id?: string
+          last_retry?: string | null
+          operation_data?: Json
+          retry_count?: number | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       failed_webhook_updates: {
         Row: {
           chat_id: number | null
