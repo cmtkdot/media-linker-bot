@@ -367,7 +367,7 @@ export type Database = {
         Update: {
           analyzed_content?: Json | null
           caption?: string | null
-          chat_id?: number
+          chat_id: number
           created_at?: string
           id?: string
           last_retry_at?: string | null
@@ -406,7 +406,7 @@ export type Database = {
           check_type: string
           created_at?: string | null
           details?: Json | null
-          id?: string
+          id: string
           last_check_time?: string | null
           status: string
         }
@@ -452,7 +452,7 @@ export type Database = {
           error_count?: number | null
           id?: string
           metadata?: Json | null
-          operation_type?: string
+          operation_type: string
           records_processed?: number | null
           start_time?: string
           success_count?: number | null
@@ -735,6 +735,12 @@ export type Database = {
           issue: string
         }[]
       }
+      get_all_tables: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          table_name: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
@@ -754,7 +760,7 @@ export type Tables<
   TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
     ? keyof (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
         Database[PublicTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never,
 > = PublicTableNameOrOptions extends { schema: keyof Database }
   ? (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
       Database[PublicTableNameOrOptions["schema"]]["Views"])[TableName] extends {
