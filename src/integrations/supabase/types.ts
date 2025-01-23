@@ -476,7 +476,7 @@ export type Database = {
           last_synced_at: string | null
           media_group_id: string | null
           media_metadata: Json
-          message_id: string | null
+          message_id: string
           message_url: string | null
           notes: string | null
           processed: boolean | null
@@ -509,7 +509,7 @@ export type Database = {
           last_synced_at?: string | null
           media_group_id?: string | null
           media_metadata?: Json
-          message_id?: string | null
+          message_id: string
           message_url?: string | null
           notes?: string | null
           processed?: boolean | null
@@ -542,7 +542,7 @@ export type Database = {
           last_synced_at?: string | null
           media_group_id?: string | null
           media_metadata?: Json
-          message_id?: string | null
+          message_id?: string
           message_url?: string | null
           notes?: string | null
           processed?: boolean | null
