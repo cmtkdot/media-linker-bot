@@ -25,7 +25,6 @@ export interface MediaItem {
   };
   message_url?: string;
   glide_app_url?: string;
-  related_media?: MediaItem[];
 }
 
 export interface SupabaseMediaItem extends Omit<MediaItem, 'file_type' | 'telegram_data' | 'glide_data' | 'media_metadata' | 'analyzed_content'> {

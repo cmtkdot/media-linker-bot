@@ -7,9 +7,8 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { X } from "lucide-react";
+import { X, ChevronLeft, ChevronRight } from "lucide-react";
 import { MediaItem } from "@/types/media";
-import InteractiveBentoGallery from "./ui/interactive-bento-gallery";
 
 interface MediaViewerProps {
   open: boolean;
@@ -21,25 +20,18 @@ interface MediaViewerProps {
   hasNext?: boolean;
 }
 
-const MediaViewer = ({
-  open,
-  onOpenChange,
+const MediaViewer = ({ 
+  open, 
+  onOpenChange, 
   media,
   onPrevious,
   onNext,
   hasPrevious = false,
-  hasNext = false,
+  hasNext = false 
 }: MediaViewerProps) => {
   if (!media) return null;
 
-  const allMediaItems = [media, ...(media.related_media || [])].map((item, index) => ({
-    id: index + 1,
-    type: item.file_type === 'video' ? 'video' : 'image',
-    title: item.product_name || 'Untitled',
-    desc: item.caption || 'No caption',
-    url: item.public_url || item.default_public_url || '',
-    span: index === 0 ? 'md:col-span-2 md:row-span-2' : 'md:col-span-1 md:row-span-1'
-  }));
+  const mediaUrl = media.public_url || media.default_public_url;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -54,12 +46,106 @@ const MediaViewer = ({
             </Button>
           </DialogClose>
         </DialogHeader>
+        
+        <div className="flex flex-col lg:flex-row gap-4">
+          {/* Media Column */}
+          <div className="flex-[1.5] min-h-0 relative">
+            <div className="relative bg-black/5 rounded-lg overflow-hidden flex items-center justify-center" style={{ 
+              height: '50vh',
+              maxHeight: 'calc(100vh - 300px)',
+              minHeight: '300px'
+            }}>
+              {media.file_type === "video" ? (
+                <video
+                  src={mediaUrl}
+                  className="h-full w-full object-contain"
+                  controls
+                  autoPlay
+                  playsInline
+                />
+              ) : (
+                <img
+                  src={mediaUrl}
+                  alt={media.caption || "Media preview"}
+                  className="h-full w-full object-contain"
+                />
+              )}
+            </div>
+            
+            {/* Navigation Buttons */}
+            <div className="absolute inset-y-0 left-0 right-0 flex items-center justify-between pointer-events-none">
+              {hasPrevious && (
+                <Button
+                  onClick={onPrevious}
+                  className="relative ps-12 ml-4 pointer-events-auto"
+                  variant="secondary"
+                >
+                  Previous
+                  <span className="pointer-events-none absolute inset-y-0 start-0 flex w-9 items-center justify-center bg-primary-foreground/15">
+                    <ChevronLeft className="opacity-60" size={16} strokeWidth={2} aria-hidden="true" />
+                  </span>
+                </Button>
+              )}
+              {hasNext && (
+                <Button
+                  onClick={onNext}
+                  className="relative pe-12 mr-4 pointer-events-auto"
+                  variant="secondary"
+                >
+                  Next
+                  <span className="pointer-events-none absolute inset-y-0 end-0 flex w-9 items-center justify-center bg-primary-foreground/15">
+                    <ChevronRight className="opacity-60" size={16} strokeWidth={2} aria-hidden="true" />
+                  </span>
+                </Button>
+              )}
+            </div>
+          </div>
 
-        <InteractiveBentoGallery
-          mediaItems={allMediaItems}
-          title={media.product_name || "Media Gallery"}
-          description={media.caption || "Browse through related media items"}
-        />
+          {/* Details Column */}
+          <div className="flex-1 flex flex-col space-y-4">
+            {media.caption && (
+              <p className="text-muted-foreground text-sm">{media.caption}</p>
+            )}
+            <div className="grid gap-3 text-sm">
+              {media.product_name && (
+                <div>
+                  <span className="font-medium">Product: </span>
+                  {media.product_name}
+                </div>
+              )}
+              {media.product_code && (
+                <div>
+                  <span className="font-medium">Code: </span>
+                  #{media.product_code}
+                </div>
+              )}
+              {media.quantity && (
+                <div>
+                  <span className="font-medium">Quantity: </span>
+                  {media.quantity}
+                </div>
+              )}
+              {media.vendor_uid && (
+                <div>
+                  <span className="font-medium">Vendor: </span>
+                  {media.vendor_uid}
+                </div>
+              )}
+              {media.purchase_date && (
+                <div>
+                  <span className="font-medium">Purchase Date: </span>
+                  {new Date(media.purchase_date).toLocaleDateString()}
+                </div>
+              )}
+              {media.notes && (
+                <div>
+                  <span className="font-medium">Notes: </span>
+                  {media.notes}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );
