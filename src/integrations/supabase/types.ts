@@ -583,6 +583,15 @@ export type Database = {
           source: string
         }[]
       }
+      update_all_video_thumbnails: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          video_id: string
+          old_thumbnail: string
+          new_thumbnail: string
+          status: string
+        }[]
+      }
       validate_storage_consistency: {
         Args: Record<PropertyKey, never>
         Returns: {
