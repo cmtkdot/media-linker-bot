@@ -7,7 +7,6 @@ import { createSyncLogger, SyncErrorType } from "../_shared/sync-logger.ts";
 import { v4 as uuidv4 } from 'https://esm.sh/uuid@9.0.0';
 
 const BATCH_SIZE = 10;
-const MAX_RETRIES = 3;
 
 serve(async (req: Request) => {
   const correlationId = uuidv4();
@@ -60,114 +59,96 @@ serve(async (req: Request) => {
     }
 
     if (!configs || configs.length === 0) {
-      logger.log({
-        operation: 'validate_config',
-        status: 'error',
-        errorType: SyncErrorType.VALIDATION,
-        details: { message: 'No active configuration found' }
-      });
       throw new Error('No active Glide configuration found');
     }
 
     const config = configs[0];
-    logger.log({
-      operation: 'config_loaded',
-      status: 'success',
-      details: { config_id: config.id }
-    });
-
-    // Initialize Glide API client
-    const glideApi = new GlideAPI(
-      config.app_id,
-      config.table_id,
-      config.api_token,
-      supabase
-    );
-
-    // Initialize queue processor
+    const glideApi = new GlideAPI(config.app_id, config.table_id, config.api_token, supabase);
     const queueProcessor = new QueueProcessor(supabase, config, glideApi, logger);
 
-    // Check for differences between Supabase and Glide
-    const { data: differences, error: diffError } = await supabase
-      .rpc('check_telegram_media_differences');
+    // First, process any pending deletions
+    const { data: pendingDeletions, error: deletionError } = await supabase
+      .from('glide_sync_queue')
+      .select('*')
+      .eq('operation', 'DELETE')
+      .is('processed_at', null)
+      .order('created_at', { ascending: true });
 
-    if (diffError) {
-      logger.log({
-        operation: 'check_differences',
-        status: 'error',
-        errorType: SyncErrorType.DATABASE,
-        details: { error: diffError }
-      });
-    } else if (differences?.length > 0) {
-      // Queue differences for sync
-      const batchId = uuidv4();
-      await Promise.all(differences.map(async (diff, index) => {
-        await supabase
-          .from('glide_sync_queue')
-          .insert({
-            table_name: 'telegram_media',
-            record_id: diff.record_id,
-            operation: diff.difference_type === 'missing_in_glide' ? 'INSERT' : 'UPDATE',
-            new_data: diff.supabase_data,
-            old_data: diff.glide_data,
-            priority: 2, // Higher priority for differences
-            batch_id: batchId
+    if (deletionError) throw deletionError;
+
+    // Process deletions first
+    if (pendingDeletions && pendingDeletions.length > 0) {
+      for (const deletion of pendingDeletions) {
+        try {
+          await glideApi.deleteRow(deletion.record_id);
+          await supabase
+            .from('glide_sync_queue')
+            .update({ 
+              processed_at: new Date().toISOString(),
+              error: null 
+            })
+            .eq('id', deletion.id);
+        } catch (error) {
+          logger.log({
+            operation: 'process_deletion',
+            status: 'error',
+            errorType: SyncErrorType.API,
+            details: { error: error.message, record_id: deletion.record_id }
           });
-      }));
+        }
+      }
     }
 
-    // Get unprocessed items from queue, ordered by priority
+    // Then process other sync operations
     const { data: queueItems, error: queueError } = await supabase
       .from('glide_sync_queue')
       .select('*')
+      .neq('operation', 'DELETE')
       .is('processed_at', null)
       .order('priority', { ascending: false })
       .order('created_at', { ascending: true })
       .limit(BATCH_SIZE);
 
-    if (queueError) {
-      logger.log({
-        operation: 'fetch_queue',
-        status: 'error',
-        errorType: SyncErrorType.DATABASE,
-        details: { error: queueError }
-      });
-      throw queueError;
-    }
+    if (queueError) throw queueError;
 
     const result = {
       added: 0,
       updated: 0,
-      deleted: 0,
+      deleted: pendingDeletions?.length || 0,
       errors: [] as string[]
     };
 
-    // Process queue items in batches
-    const batches = queueItems?.reduce((acc, item) => {
-      const batchId = item.batch_id || 'default';
-      if (!acc[batchId]) {
-        acc[batchId] = [];
-      }
-      acc[batchId].push(item);
-      return acc;
-    }, {} as Record<string, any[]>) || {};
+    // Process remaining queue items
+    if (queueItems && queueItems.length > 0) {
+      const batches = queueItems.reduce((acc, item) => {
+        const batchId = item.batch_id || 'default';
+        if (!acc[batchId]) acc[batchId] = [];
+        acc[batchId].push(item);
+        return acc;
+      }, {} as Record<string, any[]>);
 
-    // Process each batch
-    for (const [batchId, items] of Object.entries(batches)) {
-      try {
-        await Promise.all(items.map(item => queueProcessor.processQueueItem(item, result)));
-      } catch (error) {
-        logger.log({
-          operation: 'process_batch',
-          status: 'error',
-          errorType: SyncErrorType.UNKNOWN,
-          details: { 
-            batch_id: batchId,
-            error: error.message 
-          }
-        });
+      for (const [batchId, items] of Object.entries(batches)) {
+        try {
+          await Promise.all(items.map(item => queueProcessor.processQueueItem(item, result)));
+        } catch (error) {
+          logger.log({
+            operation: 'process_batch',
+            status: 'error',
+            errorType: SyncErrorType.UNKNOWN,
+            details: { batch_id: batchId, error: error.message }
+          });
+        }
       }
     }
+
+    // Clean up processed queue items older than 24 hours
+    const twentyFourHoursAgo = new Date();
+    twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
+
+    await supabase
+      .from('glide_sync_queue')
+      .delete()
+      .lt('processed_at', twentyFourHoursAgo.toISOString());
 
     // Update health check status
     await supabase
