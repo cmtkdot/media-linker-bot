@@ -24,10 +24,11 @@ export async function processMedia(
       let mediaFile = null;
       let mediaType = '';
 
+      // Determine media type and file
       for (const type of mediaTypes) {
         if (message[type]) {
           mediaFile = type === 'photo' 
-            ? message[type][message[type].length - 1] 
+            ? message[type][message[type].length - 1] // Get highest resolution photo
             : message[type];
           mediaType = type;
           break;
@@ -37,6 +38,12 @@ export async function processMedia(
       if (!mediaFile) {
         throw new Error('No media file found in message');
       }
+
+      console.log('Processing media file:', {
+        type: mediaType,
+        file_id: mediaFile.file_id,
+        message_id: messageRecord?.id
+      });
 
       // Process the media file
       const result = await processMediaFile(
