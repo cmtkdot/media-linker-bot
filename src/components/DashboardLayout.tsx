@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { useSupabaseClient } from "@supabase/auth-helpers-react";
 import { ThemeToggle } from "./ThemeToggle";
 import { ShootingStars } from "./ui/shooting-stars";
+import { AnimatedGridPattern } from "./ui/animated-grid-pattern";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -19,10 +20,16 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
-      {/* Background with stars */}
+      {/* Background with animated grid pattern */}
       <div className="absolute inset-0">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.15)_0%,rgba(0,0,0,0)_80%)]" />
-        <div className="stars absolute inset-0" />
+        <AnimatedGridPattern
+          numSquares={30}
+          maxOpacity={0.1}
+          duration={3}
+          repeatDelay={1}
+          className="[mask-image:radial-gradient(500px_circle_at_center,white,transparent)] inset-x-0 inset-y-[-30%] h-[200%] skew-y-12"
+        />
       </div>
 
       {/* Shooting stars layers */}
@@ -73,30 +80,6 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           </div>
         </main>
       </div>
-
-      <style>
-        {`
-          .stars {
-            background-image: 
-              radial-gradient(2px 2px at 20px 30px, #eee, rgba(0,0,0,0)),
-              radial-gradient(2px 2px at 40px 70px, #fff, rgba(0,0,0,0)),
-              radial-gradient(2px 2px at 50px 160px, #ddd, rgba(0,0,0,0)),
-              radial-gradient(2px 2px at 90px 40px, #fff, rgba(0,0,0,0)),
-              radial-gradient(2px 2px at 130px 80px, #fff, rgba(0,0,0,0)),
-              radial-gradient(2px 2px at 160px 120px, #ddd, rgba(0,0,0,0));
-            background-repeat: repeat;
-            background-size: 200px 200px;
-            animation: twinkle 5s ease-in-out infinite;
-            opacity: 0.5;
-          }
-
-          @keyframes twinkle {
-            0% { opacity: 0.5; }
-            50% { opacity: 0.8; }
-            100% { opacity: 0.5; }
-          }
-        `}
-      </style>
     </div>
   );
 };
