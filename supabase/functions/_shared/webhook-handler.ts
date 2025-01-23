@@ -32,7 +32,6 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
         });
 
       if (!storageData || storageData.length === 0) {
-        // Download and store thumbnail if it doesn't exist
         const response = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${message.video.thumb.file_id}`);
         const fileData = await response.json();
         
@@ -64,6 +63,11 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
       }
     }
 
+    // Generate message URL
+    const chatId = message.chat.id.toString();
+    const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
+    const chatUrl = `https://t.me/c/${chatId.substring(4)}`;
+
     // Analyze caption if present
     let analyzedContent = null;
     if (message.caption) {
@@ -82,7 +86,13 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
 
     // Prepare message data
     const messageData = {
-      ...message,
+      message_id: message.message_id,
+      chat_id: message.chat.id,
+      sender_info: message.from || message.sender_chat || {},
+      message_type: determineMessageType(message),
+      message_data: message,
+      caption: message.caption,
+      media_group_id: message.media_group_id,
       analyzed_content: analyzedContent,
       product_name: analyzedContent?.product_name || null,
       product_code: analyzedContent?.product_code || null,
@@ -90,7 +100,11 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
       vendor_uid: analyzedContent?.vendor_uid || null,
       purchase_date: analyzedContent?.purchase_date || null,
       notes: analyzedContent?.notes || null,
-      thumbnail_url: thumbnailUrl
+      thumbnail_url: thumbnailUrl,
+      message_url: messageUrl,
+      chat_url: chatUrl,
+      status: 'pending',
+      retry_count: 0
     };
 
     // Insert or update message record
@@ -101,48 +115,31 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
       .eq('chat_id', message.chat.id)
       .maybeSingle();
 
+    let messageRecord;
     if (existingMessage) {
-      const { error: updateError } = await supabase
+      const { data, error: updateError } = await supabase
         .from('messages')
-        .update({
-          caption: message.caption,
-          analyzed_content: analyzedContent,
-          product_name: messageData.product_name,
-          product_code: messageData.product_code,
-          quantity: messageData.quantity,
-          vendor_uid: messageData.vendor_uid,
-          purchase_date: messageData.purchase_date,
-          notes: messageData.notes,
-          thumbnail_url: thumbnailUrl,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', existingMessage.id);
+        .update(messageData)
+        .eq('id', existingMessage.id)
+        .select()
+        .single();
 
       if (updateError) throw updateError;
+      messageRecord = data;
     } else {
-      const { error: insertError } = await supabase
+      const { data, error: insertError } = await supabase
         .from('messages')
-        .insert([messageData]);
+        .insert([messageData])
+        .select()
+        .single();
 
       if (insertError) throw insertError;
+      messageRecord = data;
     }
-
-    await delay(1000);
-
-    // Get the message record
-    const { data: messageRecord, error: messageError } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('message_id', message.message_id)
-      .eq('chat_id', message.chat.id)
-      .maybeSingle();
-
-    if (messageError) throw messageError;
-    if (!messageRecord) throw new Error('Message record not found after creation');
 
     // Process media files
     const hasMedia = message.photo || message.video || message.document || message.animation;
-    if (hasMedia) {
+    if (hasMedia && messageRecord) {
       await processMediaFiles(messageData, messageRecord, supabase, botToken);
     }
 
@@ -150,13 +147,13 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
       update_id: update.update_id,
       message_id: message.message_id,
       chat_id: message.chat.id,
-      record_id: messageRecord.id
+      record_id: messageRecord?.id
     });
 
     return {
       success: true,
       message: 'Update processed successfully',
-      messageId: messageRecord.id
+      messageId: messageRecord?.id
     };
 
   } catch (error) {
@@ -169,4 +166,12 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
     });
     throw error;
   }
+}
+
+function determineMessageType(message: any): string {
+  if (message.photo && message.photo.length > 0) return 'photo';
+  if (message.video) return 'video';
+  if (message.document) return 'document';
+  if (message.animation) return 'animation';
+  return 'unknown';
 }
