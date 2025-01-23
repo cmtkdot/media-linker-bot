@@ -94,8 +94,23 @@ export class QueueProcessor {
         }
 
         case 'UPDATE': {
-          if (!item.new_data || !item.old_data?.telegram_media_row_id) {
-            throw new Error('New data and Glide row ID are required for UPDATE operation');
+          // Get the current record from telegram_media to ensure we have the telegram_media_row_id
+          const { data: currentRecord, error: fetchError } = await this.supabase
+            .from('telegram_media')
+            .select('telegram_media_row_id')
+            .eq('id', item.record_id)
+            .single();
+
+          if (fetchError) {
+            throw new Error(`Failed to fetch current record: ${fetchError.message}`);
+          }
+
+          if (!currentRecord?.telegram_media_row_id) {
+            throw new Error(`Record ${item.record_id} does not have a Glide row ID`);
+          }
+
+          if (!item.new_data) {
+            throw new Error('New data is required for UPDATE operation');
           }
 
           // Map updated data to Glide format
@@ -104,7 +119,7 @@ export class QueueProcessor {
           // Update existing row in Glide with retry logic
           await this.withRetry(
             async () => {
-              await this.glideApi.updateRow(item.old_data!.telegram_media_row_id!, glideData);
+              await this.glideApi.updateRow(currentRecord.telegram_media_row_id!, glideData);
             },
             0,
             { operation: 'update', itemId: item.id }
