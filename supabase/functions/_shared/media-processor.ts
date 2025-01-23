@@ -1,79 +1,10 @@
 import { getAndDownloadTelegramFile } from './telegram-service.ts';
 import { getMimeType } from './media-validators.ts';
-import { SupabaseClient } from '@supabase/supabase-js';
-
-interface MediaFile {
-  type: 'photo' | 'video' | 'document' | 'animation';
-  file: {
-    file_id: string;
-    file_unique_id: string;
-    width?: number;
-    height?: number;
-    duration?: number;
-  };
-}
-
-interface TelegramMessage {
-  message_id: number;
-  chat: {
-    id: number;
-    title?: string;
-    type?: string;
-  };
-  sender_chat?: {
-    id: number;
-    title?: string;
-    type?: string;
-  };
-  date: number;
-  caption?: string;
-  media_group_id?: string;
-  photo?: Array<{
-    file_id: string;
-    file_unique_id: string;
-    width: number;
-    height: number;
-  }>;
-  video?: {
-    file_id: string;
-    file_unique_id: string;
-    width: number;
-    height: number;
-    duration: number;
-  };
-  document?: {
-    file_id: string;
-    file_unique_id: string;
-    file_name?: string;
-  };
-  animation?: {
-    file_id: string;
-    file_unique_id: string;
-    width: number;
-    height: number;
-    duration: number;
-  };
-}
-
-interface MessageRecord {
-  id: string;
-  product_name?: string;
-  product_code?: string;
-  quantity?: number;
-  vendor_uid?: string;
-  purchase_date?: string;
-  notes?: string;
-  analyzed_content?: {
-    text?: string;
-    labels?: string[];
-    objects?: string[];
-  };
-}
 
 export async function processMediaFiles(
-  message: TelegramMessage,
-  messageRecord: MessageRecord,
-  supabase: SupabaseClient,
+  message: any,
+  messageRecord: any,
+  supabase: any,
   botToken: string
 ) {
   console.log('Processing media files for message:', {
@@ -85,7 +16,7 @@ export async function processMediaFiles(
 
   try {
     // Determine media files to process
-    const mediaFiles: MediaFile[] = [];
+    const mediaFiles = [];
     if (message.photo) {
       mediaFiles.push({
         type: 'photo',

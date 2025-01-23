@@ -2,14 +2,14 @@ import React from "react";
 import { Dialog } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { MediaItem, TelegramMessageUpdate } from "@/types/media";
+import { MediaItem } from "@/types/media";
 import MediaEditDialogContent from "./MediaEditDialogContent";
 
 interface MediaEditDialogProps {
   editItem: MediaItem | null;
   onClose: () => void;
   onSave: () => Promise<void>;
-  onItemChange: <K extends keyof MediaItem>(field: K, value: MediaItem[K]) => void;
+  onItemChange: (field: keyof MediaItem, value: any) => void;
   formatDate: (date: string | null) => string | null;
 }
 
@@ -79,7 +79,7 @@ const MediaEditDialog = ({ editItem, onClose, onSave, onItemChange }: MediaEditD
     }
   };
 
-  const updateTelegramMessage = async (updates: TelegramMessageUpdate) => {
+  const updateTelegramMessage = async (updates: any) => {
     if (!editItem?.telegram_data?.message_id || !editItem?.telegram_data?.chat?.id) {
       console.warn('Missing telegram data for update:', editItem);
       return;
