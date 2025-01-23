@@ -17,7 +17,8 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
       message_id: message.message_id,
       chat_id: message.chat.id,
       media_group_id: message.media_group_id,
-      has_caption: !!message.caption
+      has_caption: !!message.caption,
+      caption: message.caption // Log the actual caption for debugging
     });
 
     // Step 1: If this is part of a media group, check for existing data
@@ -40,6 +41,7 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
     let analyzedContent = null;
     if (message.caption) {
       try {
+        console.log('Analyzing caption:', message.caption);
         analyzedContent = await analyzeCaptionWithAI(
           message.caption,
           Deno.env.get('SUPABASE_URL') || '',
@@ -48,24 +50,35 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
         console.log('Caption analysis result:', analyzedContent);
       } catch (error) {
         console.error('Error analyzing caption:', error);
+        // Don't throw here, continue with null analyzedContent
       }
     } else if (existingGroupData?.analyzed_content) {
       analyzedContent = existingGroupData.analyzed_content;
       message.caption = existingGroupData.caption;
-      console.log('Using existing group caption and analysis');
+      console.log('Using existing group caption and analysis:', {
+        caption: message.caption,
+        analyzed_content: analyzedContent
+      });
     }
 
     // Step 3: Process message with analyzed content
     const messageData = {
       ...message,
       analyzed_content: analyzedContent,
-      product_name: analyzedContent?.product_name || existingGroupData?.product_name,
-      product_code: analyzedContent?.product_code || existingGroupData?.product_code,
-      quantity: analyzedContent?.quantity || existingGroupData?.quantity,
-      vendor_uid: analyzedContent?.vendor_uid || existingGroupData?.vendor_uid,
-      purchase_date: analyzedContent?.purchase_date || existingGroupData?.purchase_date,
-      notes: analyzedContent?.notes || existingGroupData?.notes
+      product_name: analyzedContent?.product_name || existingGroupData?.product_name || null,
+      product_code: analyzedContent?.product_code || existingGroupData?.product_code || null,
+      quantity: analyzedContent?.quantity || existingGroupData?.quantity || null,
+      vendor_uid: analyzedContent?.vendor_uid || existingGroupData?.vendor_uid || null,
+      purchase_date: analyzedContent?.purchase_date || existingGroupData?.purchase_date || null,
+      notes: analyzedContent?.notes || existingGroupData?.notes || null
     };
+
+    console.log('Prepared message data:', {
+      message_id: messageData.message_id,
+      product_name: messageData.product_name,
+      caption: messageData.caption,
+      analyzed_content: messageData.analyzed_content
+    });
 
     try {
       await processMessageBatch([messageData], supabase);
@@ -148,7 +161,8 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
         quantity: messageData.quantity,
         vendor_uid: messageData.vendor_uid,
         purchase_date: messageData.purchase_date,
-        notes: messageData.notes
+        notes: messageData.notes,
+        caption: message.caption // Ensure caption is saved
       })
       .eq('id', messageRecord.id);
 
@@ -165,7 +179,9 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
       message_id: message.message_id,
       chat_id: message.chat.id,
       record_id: messageRecord.id,
-      analyzed_content: !!analyzedContent
+      analyzed_content: !!analyzedContent,
+      final_product_name: messageData.product_name,
+      final_caption: message.caption
     });
 
     return {
