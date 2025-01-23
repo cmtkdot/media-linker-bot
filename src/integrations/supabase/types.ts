@@ -713,10 +713,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      generate_missing_thumbnails: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
       generate_video_thumbnails_from_metadata: {
         Args: Record<PropertyKey, never>
         Returns: {
