@@ -3,10 +3,16 @@ import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { MediaItem } from "@/types/media";
 
-type MediaResponse = {
-  data: MediaItem[] | null;
-  error: Error | null;
-};
+interface SyncResponse {
+  updated_groups: number;
+  synced_media: number;
+}
+
+interface AnalyzedMedia {
+  id: string;
+  caption: string | null;
+  product_name: string | null;
+}
 
 export const useMediaActions = (refetch: () => Promise<unknown>) => {
   const [isSyncing, setIsSyncing] = useState(false);
@@ -16,10 +22,7 @@ export const useMediaActions = (refetch: () => Promise<unknown>) => {
   const handleSync = async () => {
     setIsSyncing(true);
     try {
-      const { data, error } = await supabase.functions.invoke<{
-        updated_groups: number;
-        synced_media: number;
-      }>('sync-media-groups');
+      const { data, error } = await supabase.functions.invoke<SyncResponse>('sync-media-groups');
 
       if (error) throw error;
 
@@ -46,9 +49,9 @@ export const useMediaActions = (refetch: () => Promise<unknown>) => {
     try {
       const { data: unanalyzedMedia, error: mediaError } = await supabase
         .from('telegram_media')
-        .select('*')
+        .select('id, caption, product_name')
         .is('product_name', null)
-        .not('caption', 'is', null) as MediaResponse;
+        .not('caption', 'is', null) as { data: AnalyzedMedia[] | null, error: Error | null };
 
       if (mediaError) throw mediaError;
 
@@ -66,23 +69,6 @@ export const useMediaActions = (refetch: () => Promise<unknown>) => {
       });
 
       for (const item of unanalyzedMedia) {
-        if (item.telegram_data && typeof item.telegram_data === 'object' && 'media_group_id' in item.telegram_data) {
-          const mediaGroupId = item.telegram_data.media_group_id;
-          
-          if (mediaGroupId) {
-            const { data: groupItems } = await supabase
-              .from('telegram_media')
-              .select('analyzed_content, product_name')
-              .eq('telegram_data->media_group_id', mediaGroupId)
-              .not('product_name', 'is', null)
-              .limit(1) as MediaResponse;
-
-            if (groupItems && groupItems.length > 0) {
-              continue;
-            }
-          }
-        }
-
         const { error: analysisError } = await supabase.functions.invoke('analyze-caption', {
           body: { 
             caption: item.caption,
