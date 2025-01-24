@@ -9,6 +9,11 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { RefreshCw, Loader2, Brain } from "lucide-react";
 
+type FilterOptions = {
+  channels: string[];
+  vendors: string[];
+};
+
 const MediaGrid = () => {
   const [view, setView] = useState<'grid' | 'table'>('grid');
   const [search, setSearch] = useState("");
@@ -20,7 +25,7 @@ const MediaGrid = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const { toast } = useToast();
 
-  const { data: filterOptions } = useQuery({
+  const { data: filterOptions } = useQuery<FilterOptions>({
     queryKey: ['filter-options'],
     queryFn: async () => {
       const [channelsResult, vendorsResult] = await Promise.all([
@@ -96,8 +101,16 @@ const MediaGrid = () => {
       if (queryError) throw queryError;
 
       return (queryResult as any[]).map((item): MediaItem => ({
-        ...item,
-        file_type: item.file_type as MediaItem['file_type'],
+        id: item.id,
+        file_id: item.file_id,
+        file_unique_id: item.file_unique_id,
+        file_type: item.file_type,
+        public_url: item.public_url,
+        default_public_url: item.default_public_url,
+        thumbnail_url: item.thumbnail_url,
+        product_name: item.product_name,
+        product_code: item.product_code,
+        quantity: item.quantity,
         telegram_data: item.telegram_data || {},
         glide_data: item.glide_data || {},
         media_metadata: item.media_metadata || {},
@@ -106,8 +119,15 @@ const MediaGrid = () => {
           labels: item.analyzed_content.labels || [],
           objects: item.analyzed_content.objects || []
         } : undefined,
+        caption: item.caption,
+        vendor_uid: item.vendor_uid,
+        purchase_date: item.purchase_date,
+        notes: item.notes,
+        message_url: item.message_url,
+        glide_app_url: item.glide_app_url,
         created_at: item.created_at,
-        updated_at: item.updated_at
+        updated_at: item.updated_at,
+        telegram_media_row_id: item.telegram_media_row_id
       }));
     }
   });
