@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { MediaItem } from "@/types/media";
+import { MediaItem, MediaFileType } from "@/types/media";
 
 export const useMediaData = (
   search: string,
@@ -64,20 +64,20 @@ export const useMediaData = (
         id: item.id,
         file_id: item.file_id,
         file_unique_id: item.file_unique_id,
-        file_type: item.file_type,
+        file_type: item.file_type as MediaFileType,
         public_url: item.public_url,
         default_public_url: item.default_public_url,
         thumbnail_url: item.thumbnail_url,
         product_name: item.product_name,
         product_code: item.product_code,
         quantity: item.quantity,
-        telegram_data: item.telegram_data || {},
-        glide_data: item.glide_data || {},
-        media_metadata: item.media_metadata || {},
+        telegram_data: item.telegram_data as Record<string, any>,
+        glide_data: item.glide_data as Record<string, any>,
+        media_metadata: item.media_metadata as Record<string, any>,
         analyzed_content: item.analyzed_content ? {
-          text: item.analyzed_content.text || '',
-          labels: item.analyzed_content.labels || [],
-          objects: item.analyzed_content.objects || []
+          text: (item.analyzed_content as any).text || '',
+          labels: (item.analyzed_content as any).labels || [],
+          objects: (item.analyzed_content as any).objects || []
         } : undefined,
         caption: item.caption,
         vendor_uid: item.vendor_uid,

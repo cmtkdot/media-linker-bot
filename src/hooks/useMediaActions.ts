@@ -2,6 +2,11 @@ import { useState } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
+interface SyncResponse {
+  updated_groups: number;
+  synced_media: number;
+}
+
 export const useMediaActions = (refetch: () => Promise<any>) => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -10,7 +15,7 @@ export const useMediaActions = (refetch: () => Promise<any>) => {
   const handleSync = async () => {
     setIsSyncing(true);
     try {
-      const { data, error } = await supabase.functions.invoke('sync-media-groups');
+      const { data, error } = await supabase.functions.invoke<SyncResponse>('sync-media-groups');
 
       if (error) throw error;
 
