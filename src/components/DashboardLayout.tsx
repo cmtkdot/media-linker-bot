@@ -48,7 +48,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
         <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <div className="container flex h-16 items-center justify-between px-4">
             <div className="flex items-center gap-6">
-              <Link to="/" className="text-xl font-semibold">Media Manager</Link>
+              <Link to="/" className="text-xl font-semibold"></Link>
               <Link to="/products" className="text-muted-foreground hover:text-foreground transition-colors">
                 Products
               </Link>
