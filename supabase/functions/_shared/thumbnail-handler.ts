@@ -40,6 +40,6 @@ export async function downloadAndStoreThumbnail(
     return publicUrl;
   } catch (error) {
     console.error('Error processing thumbnail:', error);
-    return null;
+    throw error; // Throw error to be handled by caller
   }
 }

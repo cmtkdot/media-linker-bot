@@ -24,7 +24,8 @@ serve(async (req) => {
     console.log('Received webhook update:', {
       update_id: update.update_id,
       has_message: !!update.message,
-      has_channel_post: !!update.channel_post
+      has_channel_post: !!update.channel_post,
+      media_group_id: update.message?.media_group_id || update.channel_post?.media_group_id
     });
 
     try {
@@ -42,19 +43,21 @@ serve(async (req) => {
       console.error('Error in webhook handler:', {
         error: error.message,
         stack: error.stack,
-        update_id: update.update_id
+        update_id: update.update_id,
+        media_group_id: update.message?.media_group_id || update.channel_post?.media_group_id
       });
 
       // Store failed webhook update for retry
       try {
         await supabaseClient
-          .from('failed_webhook_updates')
+          .from('unified_processing_queue')
           .insert({
-            message_id: update.message?.message_id || update.channel_post?.message_id,
-            chat_id: update.message?.chat?.id || update.channel_post?.chat?.id,
+            queue_type: 'webhook',
+            data: update,
             error_message: error.message,
-            error_stack: error.stack,
-            message_data: update
+            chat_id: update.message?.chat?.id || update.channel_post?.chat?.id,
+            message_id: update.message?.message_id || update.channel_post?.message_id,
+            correlation_id: crypto.randomUUID()
           });
       } catch (dbError) {
         console.error('Failed to store failed webhook update:', dbError);

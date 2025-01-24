@@ -66,14 +66,16 @@ export async function processMediaFiles(
 
   console.log('Processing media files:', { 
     mediaFiles, 
-    media_group_id: message.media_group_id 
+    media_group_id: message.media_group_id,
+    correlation_id: correlationId
   });
 
   for (const { type, file } of mediaFiles) {
     try {
       console.log(`Processing ${type} file:`, { 
         file_id: file.file_id,
-        media_group_id: message.media_group_id
+        media_group_id: message.media_group_id,
+        correlation_id: correlationId
       });
 
       const { data: existingMedia } = await withDatabaseRetry(
@@ -88,7 +90,8 @@ export async function processMediaFiles(
 
       if (existingMedia) {
         console.log('Media already exists:', {
-          id: existingMedia.id
+          id: existingMedia.id,
+          correlation_id: correlationId
         });
         continue;
       }
@@ -97,11 +100,16 @@ export async function processMediaFiles(
       const fileExt = filePath.split('.').pop() || '';
       const fileName = `${file.file_unique_id}.${fileExt}`;
 
-      // Handle video thumbnail
+      // Handle video thumbnail with new state tracking
+      let thumbnailState = 'pending';
+      let thumbnailSource = null;
       let thumbnailUrl: string | null = null;
+      let thumbnailError: string | null = null;
+
       if (type === 'video' && message.video?.thumb) {
         console.log('Processing video thumbnail:', {
-          thumb_file_id: message.video.thumb.file_id
+          thumb_file_id: message.video.thumb.file_id,
+          correlation_id: correlationId
         });
         
         try {
@@ -112,10 +120,20 @@ export async function processMediaFiles(
           );
           
           if (thumbnailUrl) {
-            console.log('Successfully processed video thumbnail:', thumbnailUrl);
+            thumbnailState = 'downloaded';
+            thumbnailSource = 'telegram';
+            console.log('Successfully processed video thumbnail:', {
+              thumbnailUrl,
+              correlation_id: correlationId
+            });
           }
         } catch (thumbError) {
-          console.error('Error processing video thumbnail:', thumbError);
+          console.error('Error processing video thumbnail:', {
+            error: thumbError,
+            correlation_id: correlationId
+          });
+          thumbnailState = 'failed';
+          thumbnailError = thumbError.message;
         }
       }
 
@@ -149,6 +167,9 @@ export async function processMediaFiles(
               message_id: messageRecord.id,
               public_url: publicUrl,
               thumbnail_url: thumbnailUrl,
+              thumbnail_state: thumbnailState,
+              thumbnail_source: thumbnailSource,
+              thumbnail_error: thumbnailError,
               caption: message.caption,
               telegram_data: {
                 message_id: message.message_id,
@@ -166,11 +187,17 @@ export async function processMediaFiles(
 
       // If this is part of a media group, handle group syncing
       if (message.media_group_id) {
-        console.log('Processing media group:', message.media_group_id);
+        console.log('Processing media group:', {
+          media_group_id: message.media_group_id,
+          correlation_id: correlationId
+        });
         await handleMediaGroup(supabase, message, messageRecord);
       }
     } catch (error) {
-      console.error('Error processing media file:', error);
+      console.error('Error processing media file:', {
+        error,
+        correlation_id: correlationId
+      });
       throw error;
     }
   }
