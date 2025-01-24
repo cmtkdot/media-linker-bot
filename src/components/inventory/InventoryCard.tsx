@@ -1,48 +1,53 @@
+'use client';
+
 import { MediaItem } from "@/types/media";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PlayCircle, Eye, Edit, ChevronLeft, ChevronRight } from "lucide-react";
+import { PlayCircle, Eye, Edit, ChevronLeft, ChevronRight, Info } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import { cn } from "@/lib/utils";
+import { useMediaQuery } from "@/hooks/use-media-query";
 
-interface MediaCardProps {
+interface InventoryCardProps {
   item: MediaItem;
   onPreview: () => void;
   onEdit: (item: MediaItem) => void;
   relatedMedia?: MediaItem[];
 }
 
-const MediaCard = ({ item, onPreview, onEdit, relatedMedia = [] }: MediaCardProps) => {
+export function InventoryCard({ item, onPreview, onEdit, relatedMedia = [] }: InventoryCardProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isHovering, setIsHovering] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const isMobile = useMediaQuery("(max-width: 768px)");
   const fallbackImage = "https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d";
 
   // Combine current item with related media
   const allMedia = [item, ...relatedMedia.filter(m => m.id !== item.id)];
   const currentItem = allMedia[currentIndex];
   
-  // Auto-advance to video on hover if available
+  // Auto-advance to video on hover if available and not on mobile
   useEffect(() => {
-    if (isHovering) {
+    if (isHovering && !isMobile) {
       const videoIndex = allMedia.findIndex(m => m.file_type === 'video');
       if (videoIndex !== -1 && videoIndex !== currentIndex) {
         setCurrentIndex(videoIndex);
       }
     }
-  }, [isHovering, allMedia]);
+  }, [isHovering, allMedia, isMobile, currentIndex]);
 
-  // Auto-play video on hover
+  // Auto-play video on hover if not on mobile
   useEffect(() => {
-    if (isHovering && videoRef.current && currentItem.file_type === 'video') {
+    if (isHovering && !isMobile && videoRef.current && currentItem.file_type === 'video') {
       videoRef.current.play().catch(console.error);
     }
-  }, [isHovering, currentItem]);
+  }, [isHovering, currentItem, isMobile]);
 
   const getDisplayUrl = (mediaItem: MediaItem) => {
     if (mediaItem.file_type === 'video') {
       if (mediaItem.thumbnail_state === 'downloaded' || mediaItem.thumbnail_state === 'generated') {
-        return !isHovering ? mediaItem.thumbnail_url : mediaItem.public_url;
+        return !isHovering || isMobile ? mediaItem.thumbnail_url : mediaItem.public_url;
       }
       return mediaItem.public_url || mediaItem.default_public_url || fallbackImage;
     }
@@ -57,17 +62,50 @@ const MediaCard = ({ item, onPreview, onEdit, relatedMedia = [] }: MediaCardProp
     setCurrentIndex((prev) => (prev - 1 + allMedia.length) % allMedia.length);
   };
 
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    const touchStartX = touch.clientX;
+    const touchStartY = touch.clientY;
+
+    const handleTouchMove = (e: TouchEvent) => {
+      const touch = e.touches[0];
+      const deltaX = touch.clientX - touchStartX;
+      const deltaY = touch.clientY - touchStartY;
+
+      // Only handle horizontal swipes
+      if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
+        if (deltaX > 0) {
+          handlePrevious();
+        } else {
+          handleNext();
+        }
+        cleanup();
+      }
+    };
+
+    const cleanup = () => {
+      document.removeEventListener('touchmove', handleTouchMove);
+      document.removeEventListener('touchend', cleanup);
+    };
+
+    document.addEventListener('touchmove', handleTouchMove);
+    document.addEventListener('touchend', cleanup);
+  };
+
   return (
     <Card 
       className="group relative overflow-hidden"
-      onMouseEnter={() => setIsHovering(true)}
+      onMouseEnter={() => !isMobile && setIsHovering(true)}
       onMouseLeave={() => {
-        setIsHovering(false);
-        if (videoRef.current) {
-          videoRef.current.pause();
-          videoRef.current.currentTime = 0;
+        if (!isMobile) {
+          setIsHovering(false);
+          if (videoRef.current) {
+            videoRef.current.pause();
+            videoRef.current.currentTime = 0;
+          }
         }
       }}
+      onTouchStart={handleTouchStart}
     >
       <CardContent className="p-0">
         <div className="relative aspect-square">
@@ -75,7 +113,7 @@ const MediaCard = ({ item, onPreview, onEdit, relatedMedia = [] }: MediaCardProp
           <div className="absolute inset-0 bg-gray-100">
             {currentItem.file_type === 'video' ? (
               <div className="relative w-full h-full">
-                {isHovering ? (
+                {isHovering && !isMobile ? (
                   <video
                     ref={videoRef}
                     src={getDisplayUrl(currentItem)}
@@ -118,9 +156,12 @@ const MediaCard = ({ item, onPreview, onEdit, relatedMedia = [] }: MediaCardProp
             )}
           </div>
 
-          {/* Navigation arrows */}
+          {/* Navigation arrows - show on hover for desktop, always for mobile */}
           {allMedia.length > 1 && (
-            <div className="absolute inset-0 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className={cn(
+              "absolute inset-0 flex items-center justify-between transition-opacity",
+              isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+            )}>
               <Button
                 variant="ghost"
                 size="icon"
@@ -167,27 +208,66 @@ const MediaCard = ({ item, onPreview, onEdit, relatedMedia = [] }: MediaCardProp
             </div>
           )}
 
-          {/* Hover overlay with actions */}
-          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity">
-            <div className="absolute inset-0 flex items-center justify-center gap-2">
-              <Button size="sm" variant="secondary" onClick={onPreview}>
-                <Eye className="w-4 h-4 mr-1" />
-                View
-              </Button>
-              <Button size="sm" variant="secondary" onClick={() => onEdit(currentItem)}>
-                <Edit className="w-4 h-4 mr-1" />
-                Edit
-              </Button>
-            </div>
+          {/* Action buttons */}
+          <div className={cn(
+            "absolute top-2 right-2 flex gap-2 transition-opacity",
+            isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+          )}>
+            <Button
+              size="icon"
+              variant="secondary"
+              className="h-8 w-8 bg-black/20 hover:bg-black/40"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowInfo(!showInfo);
+              }}
+            >
+              <Info className="h-4 w-4 text-white" />
+            </Button>
+            <Button
+              size="icon"
+              variant="secondary"
+              className="h-8 w-8 bg-black/20 hover:bg-black/40"
+              onClick={(e) => {
+                e.stopPropagation();
+                onPreview();
+              }}
+            >
+              <Eye className="h-4 w-4 text-white" />
+            </Button>
+            <Button
+              size="icon"
+              variant="secondary"
+              className="h-8 w-8 bg-black/20 hover:bg-black/40"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit(currentItem);
+              }}
+            >
+              <Edit className="h-4 w-4 text-white" />
+            </Button>
           </div>
         </div>
 
-        {/* Media info */}
-        <div className="p-3">
-          <p className="text-sm font-medium truncate">
-            {currentItem.caption || 'Untitled'}
-          </p>
-          <p className="text-xs text-muted-foreground">
+        {/* Info panel - slides up on mobile */}
+        <div className={cn(
+          "absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-black/40 text-white transition-transform duration-300 p-4",
+          showInfo ? "translate-y-0" : "translate-y-full"
+        )}>
+          <h3 className="font-medium text-sm mb-1">
+            {currentItem.product_name || 'Untitled Product'}
+          </h3>
+          {currentItem.caption && (
+            <p className="text-sm opacity-90 line-clamp-2">
+              {currentItem.caption}
+            </p>
+          )}
+          {currentItem.product_code && (
+            <p className="text-sm opacity-90 mt-1">
+              Code: {currentItem.product_code}
+            </p>
+          )}
+          <p className="text-xs opacity-75 mt-2">
             {currentItem.file_type.charAt(0).toUpperCase() + currentItem.file_type.slice(1)}
             {allMedia.length > 1 && ` • ${currentIndex + 1}/${allMedia.length}`}
           </p>
@@ -195,6 +275,4 @@ const MediaCard = ({ item, onPreview, onEdit, relatedMedia = [] }: MediaCardProp
       </CardContent>
     </Card>
   );
-};
-
-export default MediaCard;
+}
