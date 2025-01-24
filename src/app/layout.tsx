@@ -1,3 +1,5 @@
+import { DatabaseChatWrapper } from "@/components/DatabaseChatWrapper";
+
 export default function RootLayout({
   children,
 }: {
