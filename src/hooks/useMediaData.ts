@@ -12,10 +12,13 @@ type MediaQueryResult = {
   telegram_data: Record<string, any>;
   glide_data: Record<string, any>;
   media_metadata: Record<string, any>;
-  analyzed_content: Record<string, any>;
-  message_media_data: Record<string, any>;
-  thumbnail_state: string;
-  thumbnail_source: string;
+  analyzed_content: Record<string, any> | null;
+  message_media_data: Record<string, any> | null;
+  thumbnail_state: string | null;
+  thumbnail_source: string | null;
+  thumbnail_url: string | null;
+  thumbnail_error: string | null;
+  default_public_url: string | null;
   [key: string]: any;
 };
 
