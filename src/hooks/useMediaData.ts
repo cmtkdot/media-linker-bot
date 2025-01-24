@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { MediaItem, ThumbnailSource } from "@/types/media";
+import { MediaItem, MessageMediaData, ThumbnailSource } from "@/types/media";
 
 type MediaQueryResult = {
   id: string;
@@ -11,8 +11,8 @@ type MediaQueryResult = {
   telegram_data: Record<string, any>;
   glide_data: Record<string, any>;
   media_metadata: Record<string, any>;
+  message_media_data: MessageMediaData;
   analyzed_content: Record<string, any> | null;
-  message_media_data: Record<string, any> | null;
   thumbnail_state: string | null;
   thumbnail_source: string | null;
   thumbnail_url: string | null;
@@ -49,7 +49,29 @@ const mapToMediaItem = (item: MediaQueryResult): MediaItem => ({
   telegram_data: item.telegram_data,
   glide_data: item.glide_data,
   media_metadata: item.media_metadata,
-  message_media_data: item.message_media_data || {},
+  message_media_data: {
+    message: {
+      url: item.message_url || '',
+      media_group_id: item.media_group_id || '',
+      caption: item.caption || '',
+      message_id: item.message_media_data?.message?.message_id || 0,
+      chat_id: item.message_media_data?.message?.chat_id || 0,
+      date: item.message_media_data?.message?.date || 0
+    },
+    sender: item.message_media_data?.sender || {
+      sender_info: {},
+      chat_info: {}
+    },
+    analysis: {
+      analyzed_content: item.analyzed_content || {}
+    },
+    meta: {
+      created_at: item.created_at,
+      updated_at: item.updated_at,
+      status: 'pending',
+      error: null
+    }
+  },
   vendor_uid: item.vendor_uid,
   purchase_date: item.purchase_date,
   notes: item.notes,
