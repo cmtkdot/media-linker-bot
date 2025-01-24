@@ -1,5 +1,7 @@
 import { Json } from "@/integrations/supabase/types";
 
+export type ThumbnailSource = 'telegram' | 'app_generated' | 'media_group' | 'default';
+
 export interface TelegramPhotoSize {
   width: number;
   height: number;
@@ -76,7 +78,7 @@ export interface MediaItem {
   default_public_url?: string;
   thumbnail_url?: string;
   thumbnail_state?: 'pending' | 'downloaded' | 'generated' | 'failed' | 'default';
-  thumbnail_source?: 'telegram' | 'app_generated' | 'media_group' | 'default';
+  thumbnail_source?: ThumbnailSource;
   thumbnail_error?: string;
   product_name?: string;
   product_code?: string;

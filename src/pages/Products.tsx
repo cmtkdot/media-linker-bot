@@ -12,7 +12,7 @@ const Products = () => {
   const [viewerOpen, setViewerOpen] = useState(false);
   const [editItem, setEditItem] = useState<MediaItem | null>(null);
 
-  const { data: products = [] } = useQuery({
+  const { data: products = [], refetch } = useQuery({
     queryKey: ['products'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -86,7 +86,6 @@ const Products = () => {
 
       if (error) throw error;
 
-      // Refetch data after update
       await refetch();
     } catch (error) {
       console.error('Error saving changes:', error);
