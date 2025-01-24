@@ -35,6 +35,31 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
       }
     }
 
+    // Create message media data structure
+    const messageMediaData = {
+      message: {
+        url: messageUrl,
+        media_group_id: message.media_group_id,
+        caption: message.caption,
+        message_id: message.message_id,
+        chat_id: message.chat.id,
+        date: message.date
+      },
+      sender: {
+        sender_info: message.from || message.sender_chat || {},
+        chat_info: message.chat || {}
+      },
+      analysis: {
+        analyzed_content: analyzedContent || {}
+      },
+      meta: {
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        status: 'pending',
+        error: null
+      }
+    };
+
     // Create or update message record with retry
     const messageRecord = await withDatabaseRetry(async () => {
       const messageData = {
@@ -89,7 +114,7 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
     // Process media files if present
     const hasMedia = message.photo || message.video || message.document || message.animation;
     if (hasMedia && messageRecord) {
-      await processMediaFiles(message, messageRecord, supabase, botToken);
+      await processMediaFiles(message, messageRecord, messageMediaData, supabase, botToken);
     }
 
     console.log('Successfully processed update:', {

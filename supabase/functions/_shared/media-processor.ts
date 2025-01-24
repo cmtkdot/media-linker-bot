@@ -4,52 +4,12 @@ import { getMimeType } from './media-validators.ts';
 import { downloadAndStoreThumbnail } from './thumbnail-handler.ts';
 import { withDatabaseRetry } from './database-retry.ts';
 import { handleMediaGroup } from './media-group-handler.ts';
-import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-interface TelegramMessage {
-  photo?: Array<{
-    file_id: string;
-    file_unique_id: string;
-  }>;
-  video?: {
-    file_id: string;
-    file_unique_id: string;
-    thumb?: {
-      file_id: string;
-    };
-  };
-  document?: {
-    file_id: string;
-    file_unique_id: string;
-  };
-  animation?: {
-    file_id: string;
-    file_unique_id: string;
-  };
-  message_id: number;
-  chat: {
-    id: number;
-    username?: string;
-    type: string;
-  };
-  media_group_id?: string;
-  caption?: string;
-  date: number;
-}
-
-interface MessageRecord {
-  id: string;
-  message_id: number;
-  chat_id: number;
-  caption?: string;
-  media_group_id?: string;
-  processed_at?: string;
-}
 
 export async function processMediaFiles(
-  message: TelegramMessage,
-  messageRecord: MessageRecord,
-  supabase: SupabaseClient,
+  message: any,
+  messageRecord: any,
+  messageMediaData: any,
+  supabase: any,
   botToken: string,
   correlationId = crypto.randomUUID()
 ) {
@@ -93,6 +53,20 @@ export async function processMediaFiles(
           id: existingMedia.id,
           correlation_id: correlationId
         });
+
+        // Update existing record with new message data
+        const { error: updateError } = await supabase
+          .from('telegram_media')
+          .update({ 
+            message_id: messageRecord?.id,
+            message_media_data: messageMediaData
+          })
+          .eq('id', existingMedia.id);
+
+        if (updateError) {
+          console.error('Error updating message_id:', updateError);
+        }
+
         continue;
       }
 
@@ -100,7 +74,7 @@ export async function processMediaFiles(
       const fileExt = filePath.split('.').pop() || '';
       const fileName = `${file.file_unique_id}.${fileExt}`;
 
-      // Handle video thumbnail with new state tracking
+      // Handle video thumbnail
       let thumbnailState = 'pending';
       let thumbnailSource = null;
       let thumbnailUrl: string | null = null;
@@ -122,16 +96,10 @@ export async function processMediaFiles(
           if (thumbnailUrl) {
             thumbnailState = 'downloaded';
             thumbnailSource = 'telegram';
-            console.log('Successfully processed video thumbnail:', {
-              thumbnailUrl,
-              correlation_id: correlationId
-            });
+            console.log('Successfully processed thumbnail:', thumbnailUrl);
           }
         } catch (thumbError) {
-          console.error('Error processing video thumbnail:', {
-            error: thumbError,
-            correlation_id: correlationId
-          });
+          console.error('Error processing thumbnail:', thumbError);
           thumbnailState = 'failed';
           thumbnailError = thumbError.message;
         }
@@ -155,7 +123,6 @@ export async function processMediaFiles(
         .from('media')
         .getPublicUrl(fileName);
 
-      // Create media record with telegram_data containing media_group_id
       await withDatabaseRetry(
         async () => {
           const { error: insertError } = await supabase
@@ -178,14 +145,14 @@ export async function processMediaFiles(
                 media_group_id: message.media_group_id,
                 date: message.date,
                 storage_path: fileName
-              }
+              },
+              message_media_data: messageMediaData
             }]);
 
           if (insertError) throw insertError;
         }
       );
 
-      // If this is part of a media group, handle group syncing
       if (message.media_group_id) {
         console.log('Processing media group:', {
           media_group_id: message.media_group_id,
