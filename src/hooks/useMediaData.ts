@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { MediaItem, TelegramMessageData } from "@/types/media";
+import { MediaItem, TelegramMessageData, MessageMediaData } from "@/types/media";
 
 export const useMediaData = (
   search: string,
@@ -62,9 +62,34 @@ export const useMediaData = (
 
       return queryResult.map((item): MediaItem => {
         const messageData = item.telegram_data?.message_data as TelegramMessageData;
-        
+        const mediaMessageData: MessageMediaData = {
+          message: {
+            url: item.message_url || '',
+            media_group_id: messageData?.media_group_id || '',
+            caption: messageData?.caption || '',
+            message_id: messageData?.message_id || 0,
+            chat_id: messageData?.chat?.id || 0,
+            date: messageData?.date || 0
+          },
+          sender: {
+            sender_info: item.sender_info || {},
+            chat_info: messageData?.chat || {}
+          },
+          analysis: {
+            analyzed_content: item.analyzed_content || {}
+          },
+          meta: {
+            created_at: item.created_at,
+            updated_at: item.updated_at,
+            status: item.processing_error ? 'error' : item.processed ? 'processed' : 'pending',
+            error: item.processing_error
+          }
+        };
+
         return {
           ...item,
+          caption: messageData?.caption,
+          media_group_id: messageData?.media_group_id,
           file_type: item.file_type as MediaItem['file_type'],
           telegram_data: {
             message_data: messageData,
@@ -72,29 +97,7 @@ export const useMediaData = (
           },
           glide_data: item.glide_data || {},
           media_metadata: item.media_metadata || {},
-          message_media_data: {
-            message: {
-              url: item.message_url || '',
-              media_group_id: messageData?.media_group_id || '',
-              caption: messageData?.caption || '',
-              message_id: messageData?.message_id || 0,
-              chat_id: messageData?.chat?.id || 0,
-              date: messageData?.date || 0
-            },
-            sender: {
-              sender_info: item.sender_info || {},
-              chat_info: messageData?.chat || {}
-            },
-            analysis: {
-              analyzed_content: item.analyzed_content || {}
-            },
-            meta: {
-              created_at: item.created_at,
-              updated_at: item.updated_at,
-              status: item.processing_error ? 'error' : item.processed ? 'processed' : 'pending',
-              error: item.processing_error
-            }
-          },
+          message_media_data: mediaMessageData,
           thumbnail_state: (item.thumbnail_state || 'pending') as MediaItem['thumbnail_state'],
           thumbnail_source: (item.thumbnail_source || 'default') as MediaItem['thumbnail_source'],
         };
