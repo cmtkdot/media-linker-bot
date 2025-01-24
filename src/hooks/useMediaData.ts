@@ -18,8 +18,8 @@ export const useMediaData = (
         
         if (searchError) throw searchError;
         
-        return searchResults.map((item): MediaItem => {
-          const messageData = item.telegram_data?.message_data as TelegramMessageData;
+        return searchResults.map((item: any): MediaItem => {
+          const messageData = (item.telegram_data as any)?.message_data as TelegramMessageData;
           const mediaMessageData: MessageMediaData = {
             message: {
               url: item.message_url || '',
@@ -51,13 +51,13 @@ export const useMediaData = (
             file_type: item.file_type as MediaItem['file_type'],
             telegram_data: {
               message_data: messageData,
-              ...item.telegram_data
+              ...item.telegram_data as Record<string, any>
             },
             glide_data: item.glide_data || {},
             media_metadata: item.media_metadata || {},
             message_media_data: mediaMessageData,
             thumbnail_state: (item.thumbnail_state || 'pending') as MediaItem['thumbnail_state'],
-            thumbnail_source: (item.thumbnail_source || 'default') as MediaItem['thumbnail_source'],
+            thumbnail_source: (item.thumbnail_source || 'default') as ThumbnailSource,
           };
         });
       }
@@ -101,8 +101,8 @@ export const useMediaData = (
       
       if (queryError) throw queryError;
 
-      return (queryResult || []).map((item): MediaItem => {
-        const messageData = item.telegram_data?.message_data as TelegramMessageData;
+      return (queryResult || []).map((item: any): MediaItem => {
+        const messageData = (item.telegram_data as any)?.message_data as TelegramMessageData;
         const mediaMessageData: MessageMediaData = {
           message: {
             url: item.message_url || '',
@@ -134,13 +134,13 @@ export const useMediaData = (
           file_type: item.file_type as MediaItem['file_type'],
           telegram_data: {
             message_data: messageData,
-            ...item.telegram_data
+            ...item.telegram_data as Record<string, any>
           },
           glide_data: item.glide_data || {},
           media_metadata: item.media_metadata || {},
           message_media_data: mediaMessageData,
           thumbnail_state: (item.thumbnail_state || 'pending') as MediaItem['thumbnail_state'],
-          thumbnail_source: (item.thumbnail_source || 'default') as MediaItem['thumbnail_source'],
+          thumbnail_source: (item.thumbnail_source || 'default') as ThumbnailSource,
         };
       });
     }
