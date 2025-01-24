@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { MediaItem, TelegramMessageData, MessageMediaData, ThumbnailSource } from "@/types/media";
+import { Json } from "@/integrations/supabase/types";
 
 type MediaQueryResult = {
   id: string;
@@ -94,7 +95,7 @@ export const useMediaData = (
         
         if (searchError) throw searchError;
         
-        return searchResults.map((item: MediaQueryResult) => mapToMediaItem(item));
+        return (searchResults as MediaQueryResult[]).map(mapToMediaItem);
       }
 
       let query = supabase.from('telegram_media').select('*');
@@ -136,7 +137,7 @@ export const useMediaData = (
       
       if (queryError) throw queryError;
 
-      return (queryResult || []).map((item: MediaQueryResult) => mapToMediaItem(item));
+      return (queryResult as MediaQueryResult[]).map(mapToMediaItem);
     }
   });
 };
