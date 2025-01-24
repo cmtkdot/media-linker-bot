@@ -70,6 +70,7 @@ export async function handleMediaGroup(
     if (message.caption) {
       try {
         analyzedContent = await analyzeCaptionWithAI(message.caption, supabase);
+        console.log('Analyzed content for media group:', analyzedContent);
       } catch (error) {
         console.error('Error analyzing caption:', error);
       }
@@ -78,49 +79,31 @@ export async function handleMediaGroup(
     // Get message URL
     const messageUrl = getMessageUrl(message);
 
-    // Create or update media group record
-    const { data: mediaGroup, error: groupError } = await supabase
-      .from('media_groups')
-      .upsert({
-        media_group_id: message.media_group_id,
-        analyzed_content: analyzedContent,
-        product_name: analyzedContent?.product_name,
-        product_code: analyzedContent?.product_code,
-        quantity: analyzedContent?.quantity,
-        vendor_uid: analyzedContent?.vendor_uid,
-        purchase_date: analyzedContent?.purchase_date,
-        notes: analyzedContent?.notes,
-        sync_status: 'pending'
-      })
-      .select()
-      .single();
-
-    if (groupError) {
-      console.error('Error updating media group:', groupError);
-      throw groupError;
-    }
-
     // Update all media in the group with shared analyzed content
-    const { error: mediaUpdateError } = await supabase
-      .from('telegram_media')
-      .update({
-        product_name: analyzedContent?.product_name,
-        product_code: analyzedContent?.product_code,
-        quantity: analyzedContent?.quantity,
-        vendor_uid: analyzedContent?.vendor_uid,
-        purchase_date: analyzedContent?.purchase_date,
-        notes: analyzedContent?.notes,
-        analyzed_content: analyzedContent,
-        message_url: messageUrl
-      })
-      .eq('telegram_data->>media_group_id', message.media_group_id);
+    if (analyzedContent || message.caption) {
+      console.log('Updating media group with analyzed content');
+      const { error: mediaUpdateError } = await supabase
+        .from('telegram_media')
+        .update({
+          caption: message.caption,
+          product_name: analyzedContent?.product_name,
+          product_code: analyzedContent?.product_code,
+          quantity: analyzedContent?.quantity,
+          vendor_uid: analyzedContent?.vendor_uid,
+          purchase_date: analyzedContent?.purchase_date,
+          notes: analyzedContent?.notes,
+          analyzed_content: analyzedContent,
+          message_url: messageUrl
+        })
+        .eq('telegram_data->>media_group_id', message.media_group_id);
 
-    if (mediaUpdateError) {
-      console.error('Error updating media records:', mediaUpdateError);
-      throw mediaUpdateError;
+      if (mediaUpdateError) {
+        console.error('Error updating media records:', mediaUpdateError);
+        throw mediaUpdateError;
+      }
     }
 
-    return mediaGroup;
+    return { success: true, media_group_id: message.media_group_id };
   } catch (error) {
     console.error('Error in handleMediaGroup:', error);
     throw error;
