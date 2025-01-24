@@ -1,5 +1,5 @@
 import { analyzeCaptionWithAI } from './caption-analyzer.ts';
-import { SupabaseClient } from '@supabase/supabase-js';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 interface TelegramMessage {
   media_group_id?: string;
