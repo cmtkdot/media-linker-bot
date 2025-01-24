@@ -1,5 +1,5 @@
 import { Card } from "@/components/ui/card";
-import { MediaItem } from "@/types/media";
+import { MediaItem, ThumbnailState, ThumbnailSource } from "@/types/media";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useState } from "react";
@@ -44,7 +44,9 @@ const Products = () => {
           telegram_data: item.telegram_data as Record<string, any>,
           analyzed_content: analyzedContent,
           glide_data: item.glide_data as Record<string, any>,
-          media_metadata: item.media_metadata as Record<string, any>
+          media_metadata: item.media_metadata as Record<string, any>,
+          thumbnail_state: (item.thumbnail_state || 'pending') as ThumbnailState,
+          thumbnail_source: (item.thumbnail_source || 'default') as ThumbnailSource
         };
       });
     }

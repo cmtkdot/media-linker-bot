@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { MediaItem } from "@/types/media";
 
 interface SyncResponse {
   updated_groups: number;
   synced_media: number;
 }
 
-export const useMediaActions = (refetch: () => Promise<any>) => {
+export const useMediaActions = (refetch: () => Promise<unknown>) => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const { toast } = useToast();
