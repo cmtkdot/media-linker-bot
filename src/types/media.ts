@@ -67,3 +67,8 @@ export interface MediaItem {
   updated_at: string;
   telegram_media_row_id?: string;
 }
+
+export interface MediaSearchBarProps {
+  search: string;
+  onSearchChange: (value: string) => void;
+}

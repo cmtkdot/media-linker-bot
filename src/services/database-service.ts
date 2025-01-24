@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { MediaItem } from "@/types/media";
+import { MediaItem, MessageMediaData } from "@/types/media";
 import { withDatabaseRetry } from "@/utils/database-retry";
 
 export class DatabaseService {
@@ -12,7 +12,36 @@ export class DatabaseService {
         .single();
 
       if (error) throw error;
-      return data as MediaItem;
+      
+      const item = data as any;
+      const messageMediaData: MessageMediaData = {
+        message: {
+          url: item.message_url || '',
+          media_group_id: item.telegram_data?.media_group_id || '',
+          caption: item.caption || '',
+          message_id: item.telegram_data?.message_id || 0,
+          chat_id: item.telegram_data?.chat_id || 0,
+          date: item.telegram_data?.date || 0
+        },
+        sender: {
+          sender_info: item.sender_info || {},
+          chat_info: item.telegram_data?.chat || {}
+        },
+        analysis: {
+          analyzed_content: item.analyzed_content || {}
+        },
+        meta: {
+          created_at: item.created_at,
+          updated_at: item.updated_at,
+          status: item.processing_error ? 'error' : item.processed ? 'processed' : 'pending',
+          error: item.processing_error
+        }
+      };
+
+      return {
+        ...item,
+        message_media_data: messageMediaData
+      } as MediaItem;
     });
   }
 
@@ -24,7 +53,37 @@ export class DatabaseService {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return data as MediaItem[];
+
+      return data.map((item: any) => {
+        const messageMediaData: MessageMediaData = {
+          message: {
+            url: item.message_url || '',
+            media_group_id: item.telegram_data?.media_group_id || '',
+            caption: item.caption || '',
+            message_id: item.telegram_data?.message_id || 0,
+            chat_id: item.telegram_data?.chat_id || 0,
+            date: item.telegram_data?.date || 0
+          },
+          sender: {
+            sender_info: item.sender_info || {},
+            chat_info: item.telegram_data?.chat || {}
+          },
+          analysis: {
+            analyzed_content: item.analyzed_content || {}
+          },
+          meta: {
+            created_at: item.created_at,
+            updated_at: item.updated_at,
+            status: item.processing_error ? 'error' : item.processed ? 'processed' : 'pending',
+            error: item.processing_error
+          }
+        };
+
+        return {
+          ...item,
+          message_media_data: messageMediaData
+        } as MediaItem;
+      });
     });
   }
 

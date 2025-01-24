@@ -7,6 +7,7 @@ import { MediaItem } from "@/types/media";
 import { MediaEditForm } from "./media/MediaEditForm";
 import { MediaDeleteConfirmation } from "./media/MediaDeleteConfirmation";
 import { useMediaEdit } from "./media/useMediaEdit";
+import { supabase } from "@/integrations/supabase/client";
 
 interface MediaEditDialogProps {
   editItem: MediaItem | null;
