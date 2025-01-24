@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { MediaItem } from "@/types/media";
+import { MediaItem, TelegramMessageData } from "@/types/media";
 import { getMediaCaption, getMediaGroupId } from "@/utils/media-helpers";
 
 export const useMediaData = (
@@ -62,53 +62,46 @@ export const useMediaData = (
       if (queryError) throw queryError;
 
       return queryResult.map((item): MediaItem => {
-        const analyzedContent = {
-          text: '',
-          labels: [],
-          objects: []
-        };
-
-        if (item.analyzed_content && typeof item.analyzed_content === 'object') {
-          const content = item.analyzed_content as Record<string, unknown>;
-          analyzedContent.text = typeof content.text === 'string' ? content.text : '';
-          analyzedContent.labels = Array.isArray(content.labels) ? content.labels : [];
-          analyzedContent.objects = Array.isArray(content.objects) ? content.objects : [];
-        }
-
-        const messageMediaData = {
-          message: {
-            url: item.message_url || '',
-            media_group_id: getMediaGroupId(item as MediaItem) || '',
-            caption: getMediaCaption(item as MediaItem) || '',
-            message_id: item.telegram_data?.message_data?.message_id || 0,
-            chat_id: item.telegram_data?.message_data?.chat?.id || 0,
-            date: item.telegram_data?.message_data?.date || 0
-          },
-          sender: {
-            sender_info: item.sender_info as Record<string, any> || {},
-            chat_info: item.telegram_data?.message_data?.chat || {}
-          },
-          analysis: {
-            analyzed_content: item.analyzed_content as Record<string, any> || {}
-          },
-          meta: {
-            created_at: item.created_at,
-            updated_at: item.updated_at,
-            status: item.processing_error ? 'error' : item.processed ? 'processed' : 'pending',
-            error: item.processing_error
-          }
-        };
+        const messageData = item.telegram_data?.message_data as TelegramMessageData;
+        const caption = messageData?.caption;
+        const mediaGroupId = messageData?.media_group_id;
 
         return {
           ...item,
-          file_type: item.file_type as MediaFileType,
-          telegram_data: item.telegram_data as Record<string, any>,
-          glide_data: item.glide_data as Record<string, any>,
-          media_metadata: item.media_metadata as Record<string, any>,
-          analyzed_content: analyzedContent,
-          message_media_data: messageMediaData,
-          thumbnail_state: (item.thumbnail_state || 'pending') as ThumbnailState,
-          thumbnail_source: (item.thumbnail_source || 'default') as ThumbnailSource
+          file_type: item.file_type as MediaItem['file_type'],
+          telegram_data: {
+            message_data: messageData,
+            ...item.telegram_data
+          },
+          glide_data: item.glide_data || {},
+          media_metadata: item.media_metadata || {},
+          message_media_data: {
+            message: {
+              url: item.message_url || '',
+              media_group_id: mediaGroupId || '',
+              caption: caption || '',
+              message_id: messageData?.message_id || 0,
+              chat_id: messageData?.chat?.id || 0,
+              date: messageData?.date || 0
+            },
+            sender: {
+              sender_info: item.sender_info || {},
+              chat_info: messageData?.chat || {}
+            },
+            analysis: {
+              analyzed_content: item.analyzed_content || {}
+            },
+            meta: {
+              created_at: item.created_at,
+              updated_at: item.updated_at,
+              status: item.processing_error ? 'error' : item.processed ? 'processed' : 'pending',
+              error: item.processing_error
+            }
+          },
+          thumbnail_state: (item.thumbnail_state || 'pending') as MediaItem['thumbnail_state'],
+          thumbnail_source: (item.thumbnail_source || 'default') as MediaItem['thumbnail_source'],
+          caption,
+          media_group_id: mediaGroupId
         };
       });
     }
