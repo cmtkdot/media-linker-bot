@@ -1,18 +1,18 @@
+import React, { useState } from "react";
 import { Card } from "@/components/ui/card";
-import { MediaItem, getMediaCaption } from "@/types/media";
+import { MediaItem, TelegramMessageData, MessageMediaData } from "@/types/media";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useState } from "react";
-import ProductMediaViewer from "@/components/ProductMediaViewer";
-import MediaEditDialog from "@/components/MediaEditDialog";
 import ProductGroup from "@/components/ProductGroup";
+import MediaEditDialog from "@/components/MediaEditDialog";
+import ProductMediaViewer from "@/components/ProductMediaViewer";
 
 const Products = () => {
   const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [editItem, setEditItem] = useState<MediaItem | null>(null);
 
-  const { data: products, refetch } = useQuery({
+  const { data: products = [] } = useQuery({
     queryKey: ['products'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -74,7 +74,7 @@ const Products = () => {
       const { error } = await supabase
         .from('telegram_media')
         .update({
-          caption: getMediaCaption(editItem),
+          caption: editItem.caption,
           product_name: editItem.product_name,
           product_code: editItem.product_code,
           quantity: editItem.quantity,
@@ -86,14 +86,15 @@ const Products = () => {
 
       if (error) throw error;
 
+      // Refetch data after update
       await refetch();
     } catch (error) {
       console.error('Error saving changes:', error);
     }
   };
 
-  const groupMediaByProduct = (media: MediaItem[] | undefined) => {
-    if (!media) return [];
+  const groupMediaByProduct = (media: MediaItem[]): MediaItem[][] => {
+    if (!media?.length) return [];
     
     const groups = media.reduce<Record<string, MediaItem[]>>((acc, item) => {
       const groupId = item.telegram_data?.media_group_id || item.id;
@@ -128,7 +129,7 @@ const Products = () => {
     <div className="container mx-auto py-8 px-4">
       <h1 className="text-4xl font-bold mb-8 text-center">Products Gallery</h1>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {products?.map((group, index) => (
+        {productGroups.map((group) => (
           <ProductGroup
             key={group[0].id}
             group={group}
@@ -142,9 +143,9 @@ const Products = () => {
         open={viewerOpen}
         onOpenChange={setViewerOpen}
         media={selectedMedia}
-        relatedMedia={selectedMedia ? products?.find(group => 
-          group.some(item => item.id === selectedMedia.id)
-        ) || [selectedMedia] : []}
+        relatedMedia={selectedMedia ? products.filter(item => 
+          item.telegram_data?.media_group_id === selectedMedia.telegram_data?.media_group_id
+        ) : []}
       />
 
       <MediaEditDialog
