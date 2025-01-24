@@ -6,7 +6,7 @@ import MediaGridFilters from "./MediaGridFilters";
 import MediaGridContent from "./MediaGridContent";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
-import { RefreshCw, Loader2 } from "lucide-react";
+import { RefreshCw, Loader2, Brain } from "lucide-react";
 
 const MediaGrid = () => {
   const [view, setView] = useState<'grid' | 'table'>('grid');
@@ -16,6 +16,7 @@ const MediaGrid = () => {
   const [selectedVendor, setSelectedVendor] = useState("all");
   const [selectedSort, setSelectedSort] = useState("created_desc");
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const { toast } = useToast();
 
   const { data: filterOptions } = useQuery({
@@ -135,6 +136,56 @@ const MediaGrid = () => {
     }
   };
 
+  const handleAnalyzeCaptions = async () => {
+    setIsAnalyzing(true);
+    try {
+      const { data: unanalyzedMedia, error: mediaError } = await supabase
+        .from('telegram_media')
+        .select('*')
+        .is('analyzed_content', null)
+        .not('caption', 'is', null);
+
+      if (mediaError) throw mediaError;
+
+      if (!unanalyzedMedia?.length) {
+        toast({
+          title: "No Unanalyzed Captions",
+          description: "All media items with captions have been analyzed.",
+        });
+        return;
+      }
+
+      const { data: result, error: analysisError } = await supabase.functions.invoke('analyze-caption', {
+        body: { 
+          batchAnalysis: true,
+          items: unanalyzedMedia.map(item => ({
+            id: item.id,
+            caption: item.caption,
+            mediaGroupId: item.telegram_data?.media_group_id
+          }))
+        }
+      });
+
+      if (analysisError) throw analysisError;
+
+      await refetch();
+
+      toast({
+        title: "Caption Analysis Complete",
+        description: `Analyzed ${result.analyzed_count} captions and synced ${result.synced_groups} media groups`,
+      });
+    } catch (error: any) {
+      console.error('Error analyzing captions:', error);
+      toast({
+        title: "Analysis Failed",
+        description: error.message || "Failed to analyze captions",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
   return (
     <div className="space-y-4 px-4 py-4">
       <div className="flex justify-between items-center">
@@ -154,25 +205,44 @@ const MediaGrid = () => {
           channels={filterOptions?.channels || []}
           vendors={filterOptions?.vendors || []}
         />
-        <Button 
-          onClick={handleSync}
-          disabled={isSyncing}
-          variant="outline"
-          size="sm"
-          className="ml-2"
-        >
-          {isSyncing ? (
-            <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Syncing...
-            </>
-          ) : (
-            <>
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Sync Media Groups
-            </>
-          )}
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            onClick={handleAnalyzeCaptions}
+            disabled={isAnalyzing}
+            variant="outline"
+            size="sm"
+          >
+            {isAnalyzing ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Analyzing...
+              </>
+            ) : (
+              <>
+                <Brain className="w-4 h-4 mr-2" />
+                Analyze Captions
+              </>
+            )}
+          </Button>
+          <Button 
+            onClick={handleSync}
+            disabled={isSyncing}
+            variant="outline"
+            size="sm"
+          >
+            {isSyncing ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Syncing...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Sync Media Groups
+              </>
+            )}
+          </Button>
+        </div>
       </div>
       
       <MediaGridContent
