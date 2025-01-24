@@ -12,6 +12,7 @@ import GlideSync from "./pages/GlideSync";
 import GlideConnections from "./pages/GlideConnections";
 import DatabaseChat from "./pages/DatabaseChat";
 import Settings from "./pages/Settings";
+import Inventory from "./pages/Inventory";
 import DashboardLayout from "@/components/DashboardLayout";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -48,6 +49,14 @@ const AppRoutes = () => (
         element={
           <ProtectedRoute>
             <Products />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/inventory"
+        element={
+          <ProtectedRoute>
+            <Inventory />
           </ProtectedRoute>
         }
       />
