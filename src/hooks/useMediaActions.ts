@@ -3,10 +3,10 @@ import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { MediaItem } from "@/types/media";
 
-interface SyncResponse {
-  updated_groups: number;
-  synced_media: number;
-}
+type MediaResponse = {
+  data: MediaItem[] | null;
+  error: Error | null;
+};
 
 export const useMediaActions = (refetch: () => Promise<unknown>) => {
   const [isSyncing, setIsSyncing] = useState(false);
@@ -16,7 +16,10 @@ export const useMediaActions = (refetch: () => Promise<unknown>) => {
   const handleSync = async () => {
     setIsSyncing(true);
     try {
-      const { data, error } = await supabase.functions.invoke<SyncResponse>('sync-media-groups');
+      const { data, error } = await supabase.functions.invoke<{
+        updated_groups: number;
+        synced_media: number;
+      }>('sync-media-groups');
 
       if (error) throw error;
 
@@ -45,7 +48,7 @@ export const useMediaActions = (refetch: () => Promise<unknown>) => {
         .from('telegram_media')
         .select('*')
         .is('product_name', null)
-        .not('caption', 'is', null) as { data: MediaItem[] | null; error: any };
+        .not('caption', 'is', null) as MediaResponse;
 
       if (mediaError) throw mediaError;
 
@@ -72,7 +75,7 @@ export const useMediaActions = (refetch: () => Promise<unknown>) => {
               .select('analyzed_content, product_name')
               .eq('telegram_data->media_group_id', mediaGroupId)
               .not('product_name', 'is', null)
-              .limit(1) as { data: MediaItem[] | null };
+              .limit(1) as MediaResponse;
 
             if (groupItems && groupItems.length > 0) {
               continue;
