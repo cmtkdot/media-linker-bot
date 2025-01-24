@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { MediaItem, MessageMediaData, ThumbnailSource } from "@/types/media";
 
-type MediaQueryResult = {
+interface MediaQueryResult {
   id: string;
   file_id: string;
   file_unique_id: string;
@@ -31,7 +31,7 @@ type MediaQueryResult = {
   created_at: string;
   updated_at: string;
   telegram_media_row_id: string | null;
-};
+}
 
 const mapToMediaItem = (item: MediaQueryResult): MediaItem => ({
   id: item.id,
@@ -49,29 +49,7 @@ const mapToMediaItem = (item: MediaQueryResult): MediaItem => ({
   telegram_data: item.telegram_data,
   glide_data: item.glide_data,
   media_metadata: item.media_metadata,
-  message_media_data: {
-    message: {
-      url: item.message_url || '',
-      media_group_id: item.media_group_id || '',
-      caption: item.caption || '',
-      message_id: item.message_media_data?.message?.message_id || 0,
-      chat_id: item.message_media_data?.message?.chat_id || 0,
-      date: item.message_media_data?.message?.date || 0
-    },
-    sender: item.message_media_data?.sender || {
-      sender_info: {},
-      chat_info: {}
-    },
-    analysis: {
-      analyzed_content: item.analyzed_content || {}
-    },
-    meta: {
-      created_at: item.created_at,
-      updated_at: item.updated_at,
-      status: 'pending',
-      error: null
-    }
-  },
+  message_media_data: item.message_media_data,
   vendor_uid: item.vendor_uid,
   purchase_date: item.purchase_date,
   notes: item.notes,
@@ -102,7 +80,7 @@ export const useMediaData = (
         
         if (searchError) throw searchError;
         
-        return (searchResults as MediaQueryResult[]).map(mapToMediaItem);
+        return (searchResults as unknown as MediaQueryResult[]).map(mapToMediaItem);
       }
 
       let query = supabase.from('telegram_media').select('*');
@@ -144,7 +122,7 @@ export const useMediaData = (
       
       if (queryError) throw queryError;
 
-      return (queryResult as MediaQueryResult[]).map(mapToMediaItem);
+      return (queryResult as unknown as MediaQueryResult[]).map(mapToMediaItem);
     }
   });
 };
