@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { MediaItem, MediaFileType, ThumbnailState, ThumbnailSource, MessageMediaData } from "@/types/media";
+import { MediaItem } from "@/types/media";
+import { getMediaCaption, getMediaGroupId } from "@/utils/media-helpers";
 
 export const useMediaData = (
   search: string,
@@ -17,11 +18,11 @@ export const useMediaData = (
         .select('*');
 
       if (search) {
-        query = query.or(`caption.ilike.%${search}%,product_name.ilike.%${search}%,product_code.ilike.%${search}%,vendor_uid.ilike.%${search}%`);
+        query = query.or(`telegram_data->message_data->caption.ilike.%${search}%,product_name.ilike.%${search}%,product_code.ilike.%${search}%,vendor_uid.ilike.%${search}%`);
       }
 
       if (selectedChannel !== "all") {
-        query = query.eq('telegram_data->>chat->>title', selectedChannel);
+        query = query.eq('telegram_data->message_data->chat->title', selectedChannel);
       }
 
       if (selectedType !== "all") {
@@ -44,7 +45,7 @@ export const useMediaData = (
           query = query.order('product_name', { ascending: sortDirection === 'asc' });
           break;
         case 'caption':
-          query = query.order('caption', { ascending: sortDirection === 'asc' });
+          query = query.order('telegram_data->message_data->caption', { ascending: sortDirection === 'asc' });
           break;
         case 'code':
           query = query.order('product_code', { ascending: sortDirection === 'asc' });
@@ -74,18 +75,18 @@ export const useMediaData = (
           analyzedContent.objects = Array.isArray(content.objects) ? content.objects : [];
         }
 
-        const messageMediaData: MessageMediaData = {
+        const messageMediaData = {
           message: {
             url: item.message_url || '',
-            media_group_id: (item.telegram_data as Record<string, any>)?.media_group_id || '',
-            caption: item.caption || '',
-            message_id: (item.telegram_data as Record<string, any>)?.message_id || 0,
-            chat_id: (item.telegram_data as Record<string, any>)?.chat_id || 0,
-            date: (item.telegram_data as Record<string, any>)?.date || 0
+            media_group_id: getMediaGroupId(item as MediaItem) || '',
+            caption: getMediaCaption(item as MediaItem) || '',
+            message_id: item.telegram_data?.message_data?.message_id || 0,
+            chat_id: item.telegram_data?.message_data?.chat?.id || 0,
+            date: item.telegram_data?.message_data?.date || 0
           },
           sender: {
             sender_info: item.sender_info as Record<string, any> || {},
-            chat_info: (item.telegram_data as Record<string, any>)?.chat || {}
+            chat_info: item.telegram_data?.message_data?.chat || {}
           },
           analysis: {
             analyzed_content: item.analyzed_content as Record<string, any> || {}
@@ -107,8 +108,7 @@ export const useMediaData = (
           analyzed_content: analyzedContent,
           message_media_data: messageMediaData,
           thumbnail_state: (item.thumbnail_state || 'pending') as ThumbnailState,
-          thumbnail_source: (item.thumbnail_source || 'default') as ThumbnailSource,
-          media_group_id: (item.telegram_data as Record<string, any>)?.media_group_id
+          thumbnail_source: (item.thumbnail_source || 'default') as ThumbnailSource
         };
       });
     }
