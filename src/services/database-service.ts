@@ -36,10 +36,14 @@ class DatabaseService {
   }
 
   async updateMediaItem(id: string, updates: Partial<MediaItem>): Promise<void> {
+    const { message_media_data, ...rest } = updates;
     return withDatabaseRetry(async () => {
       const { error } = await supabase
         .from('telegram_media')
-        .update(updates)
+        .update({
+          ...rest,
+          message_media_data: message_media_data ? JSON.parse(JSON.stringify(message_media_data)) : undefined
+        })
         .eq('id', id);
       if (error) throw error;
     });

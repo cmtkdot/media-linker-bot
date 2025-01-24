@@ -71,9 +71,9 @@ export const useMediaData = (
         product_name: item.product_name,
         product_code: item.product_code,
         quantity: item.quantity,
-        telegram_data: item.telegram_data as Record<string, any>,
-        glide_data: item.glide_data as Record<string, any>,
-        media_metadata: item.media_metadata as Record<string, any>,
+        telegram_data: item.telegram_data,
+        glide_data: item.glide_data,
+        media_metadata: item.media_metadata,
         analyzed_content: item.analyzed_content ? {
           text: (item.analyzed_content as any).text || '',
           labels: (item.analyzed_content as any).labels || [],
@@ -87,7 +87,30 @@ export const useMediaData = (
         glide_app_url: item.glide_app_url,
         created_at: item.created_at,
         updated_at: item.updated_at,
-        telegram_media_row_id: item.telegram_media_row_id
+        telegram_media_row_id: item.telegram_media_row_id,
+        message_media_data: item.message_media_data || {
+          message: {
+            url: item.message_url,
+            media_group_id: item.telegram_data?.media_group_id,
+            caption: item.caption,
+            message_id: item.telegram_data?.message_id,
+            chat_id: item.telegram_data?.chat_id,
+            date: item.telegram_data?.date
+          },
+          sender: {
+            sender_info: item.sender_info || {},
+            chat_info: item.telegram_data?.chat || {}
+          },
+          analysis: {
+            analyzed_content: item.analyzed_content || {}
+          },
+          meta: {
+            created_at: item.created_at,
+            updated_at: item.updated_at,
+            status: item.processing_error ? 'error' : item.processed ? 'processed' : 'pending',
+            error: item.processing_error
+          }
+        }
       }));
     }
   });
