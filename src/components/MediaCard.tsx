@@ -13,10 +13,20 @@ const MediaCard = ({ item, onPreview, onEdit }: MediaCardProps) => {
   // Fallback image from Unsplash for when media URLs are missing
   const fallbackImage = "https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d";
 
-  // Helper to get the most appropriate URL
+  // Helper to get the most appropriate URL with improved quality for videos
   const getDisplayUrl = () => {
     if (item.file_type === 'video') {
-      return item.thumbnail_url || item.default_public_url || item.public_url || fallbackImage;
+      // First try to get the high-quality thumbnail from telegram_data
+      if (item.telegram_data?.message_data?.video?.thumb?.file_id) {
+        const thumbData = item.telegram_data.message_data.video.thumb;
+        return `https://kzfamethztziwqiocbwz.supabase.co/storage/v1/object/public/media/${thumbData.file_unique_id}.jpg`;
+      }
+      // Then try the stored thumbnail
+      if (item.thumbnail_url && item.thumbnail_url !== item.default_public_url) {
+        return item.thumbnail_url;
+      }
+      // Finally fall back to default URLs
+      return item.default_public_url || item.public_url || fallbackImage;
     }
     return item.public_url || item.default_public_url || fallbackImage;
   };
@@ -28,7 +38,8 @@ const MediaCard = ({ item, onPreview, onEdit }: MediaCardProps) => {
       file_type: item.file_type,
       public_url: item.public_url,
       default_public_url: item.default_public_url,
-      thumbnail_url: item.thumbnail_url
+      thumbnail_url: item.thumbnail_url,
+      telegram_thumb: item.telegram_data?.message_data?.video?.thumb
     });
   }
 

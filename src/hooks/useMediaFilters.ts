@@ -1,0 +1,55 @@
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { MediaItem } from "@/types/media";
+
+export type FilterOptions = {
+  channels: string[];
+  vendors: string[];
+};
+
+export const useMediaFilters = () => {
+  const [search, setSearch] = useState("");
+  const [selectedChannel, setSelectedChannel] = useState("all");
+  const [selectedType, setSelectedType] = useState("all");
+  const [selectedVendor, setSelectedVendor] = useState("all");
+  const [selectedSort, setSelectedSort] = useState("created_desc");
+
+  const { data: filterOptions } = useQuery<FilterOptions>({
+    queryKey: ['filter-options'],
+    queryFn: async () => {
+      const [channelsResult, vendorsResult] = await Promise.all([
+        supabase
+          .from('telegram_media')
+          .select('telegram_data')
+          .not('telegram_data->chat->title', 'is', null),
+        supabase
+          .from('telegram_media')
+          .select('vendor_uid')
+          .not('vendor_uid', 'is', null)
+      ]);
+
+      const channels = [...new Set(channelsResult.data?.map(item => 
+        (item.telegram_data as any).chat?.title).filter(Boolean) || [])];
+      
+      const vendors = [...new Set(vendorsResult.data?.map(item => 
+        item.vendor_uid).filter(Boolean) || [])];
+
+      return { channels, vendors };
+    }
+  });
+
+  return {
+    search,
+    setSearch,
+    selectedChannel,
+    setSelectedChannel,
+    selectedType,
+    setSelectedType,
+    selectedVendor,
+    setSelectedVendor,
+    selectedSort,
+    setSelectedSort,
+    filterOptions
+  };
+};
