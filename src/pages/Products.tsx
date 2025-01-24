@@ -23,14 +23,12 @@ const Products = () => {
       if (error) throw error;
 
       return data.map((item): MediaItem => {
-        // Initialize analyzed_content with default values
         const analyzedContent = {
           text: '',
           labels: [],
           objects: []
         };
 
-        // Parse analyzed_content if it exists and is an object
         if (item.analyzed_content && typeof item.analyzed_content === 'object') {
           const content = item.analyzed_content as Record<string, unknown>;
           analyzedContent.text = typeof content.text === 'string' ? content.text : '';
@@ -38,15 +36,39 @@ const Products = () => {
           analyzedContent.objects = Array.isArray(content.objects) ? content.objects : [];
         }
 
+        const messageMediaData: MessageMediaData = {
+          message: {
+            url: item.message_url || '',
+            media_group_id: (item.telegram_data as Record<string, any>)?.media_group_id || '',
+            caption: item.caption || '',
+            message_id: (item.telegram_data as Record<string, any>)?.message_id || 0,
+            chat_id: (item.telegram_data as Record<string, any>)?.chat_id || 0,
+            date: (item.telegram_data as Record<string, any>)?.date || 0
+          },
+          sender: {
+            sender_info: item.sender_info as Record<string, any> || {},
+            chat_info: (item.telegram_data as Record<string, any>)?.chat || {}
+          },
+          analysis: {
+            analyzed_content: item.analyzed_content as Record<string, any> || {}
+          },
+          meta: {
+            created_at: item.created_at,
+            updated_at: item.updated_at,
+            status: item.processing_error ? 'error' : item.processed ? 'processed' : 'pending',
+            error: item.processing_error
+          }
+        };
+
         return {
           ...item,
           file_type: item.file_type as MediaItem['file_type'],
           telegram_data: item.telegram_data as Record<string, any>,
           analyzed_content: analyzedContent,
-          glide_data: item.glide_data as Record<string, any>,
-          media_metadata: item.media_metadata as Record<string, any>,
+          message_media_data: messageMediaData,
           thumbnail_state: (item.thumbnail_state || 'pending') as ThumbnailState,
-          thumbnail_source: (item.thumbnail_source || 'default') as ThumbnailSource
+          thumbnail_source: (item.thumbnail_source || 'default') as ThumbnailSource,
+          media_group_id: (item.telegram_data as Record<string, any>)?.media_group_id
         };
       });
     }
@@ -80,7 +102,6 @@ const Products = () => {
   const groupMediaByProduct = (media: MediaItem[] | undefined) => {
     if (!media) return [];
     
-    // Group by media_group_id or individual id
     const groups = media.reduce<Record<string, MediaItem[]>>((acc, item) => {
       const groupId = item.telegram_data?.media_group_id || item.id;
       if (!acc[groupId]) {
@@ -90,7 +111,6 @@ const Products = () => {
       return acc;
     }, {});
 
-    // Sort items within each group (photos first, then by creation date)
     return Object.values(groups).map(group => {
       return group.sort((a, b) => {
         if (a.file_type === 'photo' && b.file_type !== 'photo') return -1;

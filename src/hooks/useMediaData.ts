@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { MediaItem, MediaFileType, ThumbnailState, ThumbnailSource } from "@/types/media";
+import { MediaItem, MediaFileType, ThumbnailState, ThumbnailSource, MessageMediaData } from "@/types/media";
 
 export const useMediaData = (
   search: string,
@@ -61,14 +61,12 @@ export const useMediaData = (
       if (queryError) throw queryError;
 
       return queryResult.map((item): MediaItem => {
-        // Initialize analyzed_content with default values
         const analyzedContent = {
           text: '',
           labels: [],
           objects: []
         };
 
-        // Parse analyzed_content if it exists and is an object
         if (item.analyzed_content && typeof item.analyzed_content === 'object') {
           const content = item.analyzed_content as Record<string, unknown>;
           analyzedContent.text = typeof content.text === 'string' ? content.text : '';
@@ -76,22 +74,21 @@ export const useMediaData = (
           analyzedContent.objects = Array.isArray(content.objects) ? content.objects : [];
         }
 
-        const telegramData = item.telegram_data as Record<string, any>;
-        const messageMediaData = item.message_media_data as Record<string, any> || {
+        const messageMediaData: MessageMediaData = {
           message: {
-            url: item.message_url,
-            media_group_id: telegramData?.media_group_id,
-            caption: item.caption,
-            message_id: telegramData?.message_id,
-            chat_id: telegramData?.chat_id,
-            date: telegramData?.date
+            url: item.message_url || '',
+            media_group_id: (item.telegram_data as Record<string, any>)?.media_group_id || '',
+            caption: item.caption || '',
+            message_id: (item.telegram_data as Record<string, any>)?.message_id || 0,
+            chat_id: (item.telegram_data as Record<string, any>)?.chat_id || 0,
+            date: (item.telegram_data as Record<string, any>)?.date || 0
           },
           sender: {
-            sender_info: item.sender_info || {},
-            chat_info: telegramData?.chat || {}
+            sender_info: item.sender_info as Record<string, any> || {},
+            chat_info: (item.telegram_data as Record<string, any>)?.chat || {}
           },
           analysis: {
-            analyzed_content: item.analyzed_content || {}
+            analyzed_content: item.analyzed_content as Record<string, any> || {}
           },
           meta: {
             created_at: item.created_at,
@@ -102,33 +99,16 @@ export const useMediaData = (
         };
 
         return {
-          id: item.id,
-          file_id: item.file_id,
-          file_unique_id: item.file_unique_id,
+          ...item,
           file_type: item.file_type as MediaFileType,
-          public_url: item.public_url,
-          default_public_url: item.default_public_url,
-          thumbnail_url: item.thumbnail_url,
-          product_name: item.product_name,
-          product_code: item.product_code,
-          quantity: item.quantity,
-          telegram_data: telegramData,
+          telegram_data: item.telegram_data as Record<string, any>,
           glide_data: item.glide_data as Record<string, any>,
           media_metadata: item.media_metadata as Record<string, any>,
           analyzed_content: analyzedContent,
-          caption: item.caption,
-          vendor_uid: item.vendor_uid,
-          purchase_date: item.purchase_date,
-          notes: item.notes,
-          message_url: item.message_url,
-          glide_app_url: item.glide_app_url,
-          created_at: item.created_at,
-          updated_at: item.updated_at,
-          telegram_media_row_id: item.telegram_media_row_id,
+          message_media_data: messageMediaData,
           thumbnail_state: (item.thumbnail_state || 'pending') as ThumbnailState,
           thumbnail_source: (item.thumbnail_source || 'default') as ThumbnailSource,
-          thumbnail_error: item.thumbnail_error,
-          message_media_data: messageMediaData
+          media_group_id: (item.telegram_data as Record<string, any>)?.media_group_id
         };
       });
     }
