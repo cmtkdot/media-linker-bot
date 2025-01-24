@@ -1,48 +1,44 @@
 import { supabase } from "@/integrations/supabase/client";
+import { MediaItem } from "@/types/media";
 import { withDatabaseRetry } from "@/utils/database-retry";
-import type { MediaItem } from "@/types/media";
 
-interface TransactionContext {
-  insertMessage: (messageData: any) => Promise<any>;
-  insertMedia: (messageId: string, mediaData: any) => Promise<any>;
-}
+export class DatabaseService {
+  async getMediaItem(id: string): Promise<MediaItem | null> {
+    return withDatabaseRetry(async () => {
+      const { data, error } = await supabase
+        .from('telegram_media')
+        .select('*')
+        .eq('id', id)
+        .single();
 
-class DatabaseService {
-  async runTransaction<T>(
-    callback: (tx: TransactionContext) => Promise<T>
-  ): Promise<T> {
-    const transactionContext: TransactionContext = {
-      insertMessage: async (messageData) => {
-        const { data, error } = await supabase
-          .from('messages')
-          .insert(messageData)
-          .select()
-          .single();
-        if (error) throw error;
-        return data;
-      },
-      insertMedia: async (messageId, mediaData) => {
-        const { data, error } = await supabase
-          .from('telegram_media')
-          .insert({ ...mediaData, message_id: messageId })
-          .select()
-          .single();
-        if (error) throw error;
-        return data;
-      }
-    };
+      if (error) throw error;
+      return data as MediaItem;
+    });
+  }
 
-    return callback(transactionContext);
+  async getMediaItems(): Promise<MediaItem[]> {
+    return withDatabaseRetry(async () => {
+      const { data, error } = await supabase
+        .from('telegram_media')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return data as MediaItem[];
+    });
   }
 
   async updateMediaItem(id: string, updates: Partial<MediaItem>): Promise<void> {
-    const { message_media_data, ...rest } = updates;
+    const { message_media_data, telegram_data, glide_data, media_metadata, ...rest } = updates;
     return withDatabaseRetry(async () => {
       const { error } = await supabase
         .from('telegram_media')
         .update({
           ...rest,
-          message_media_data: message_media_data ? JSON.parse(JSON.stringify(message_media_data)) : undefined
+          message_media_data: message_media_data ? JSON.parse(JSON.stringify(message_media_data)) : undefined,
+          telegram_data: telegram_data ? JSON.parse(JSON.stringify(telegram_data)) : undefined,
+          glide_data: glide_data ? JSON.parse(JSON.stringify(glide_data)) : undefined,
+          media_metadata: media_metadata ? JSON.parse(JSON.stringify(media_metadata)) : undefined
         })
         .eq('id', id);
       if (error) throw error;
