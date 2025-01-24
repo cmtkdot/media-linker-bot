@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { MediaItem } from "@/types/media";
 import MediaGridFilters from "./MediaGridFilters";
 import MediaGridContent from "./MediaGridContent";
+import MediaTable from "./MediaTable";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { RefreshCw, Loader2, Brain } from "lucide-react";
@@ -245,13 +246,23 @@ const MediaGrid = () => {
         </div>
       </div>
       
-      <MediaGridContent
-        items={mediaItems || []}
-        view={view}
-        isLoading={isLoading}
-        error={error as Error | null}
-        onMediaUpdate={refetch}
-      />
+      {view === 'table' ? (
+        <MediaTable
+          data={mediaItems || []}
+          onEdit={(item) => {
+            // Handle edit action
+            console.log('Edit item:', item);
+          }}
+        />
+      ) : (
+        <MediaGridContent
+          items={mediaItems || []}
+          view={view}
+          isLoading={isLoading}
+          error={error as Error | null}
+          onMediaUpdate={refetch}
+        />
+      )}
     </div>
   );
 };
