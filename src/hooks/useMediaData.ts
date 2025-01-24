@@ -12,13 +12,12 @@ export const useMediaData = (
   return useQuery({
     queryKey: ['telegram-media', search, selectedChannel, selectedType, selectedVendor, selectedSort],
     queryFn: async () => {
-      let query = supabase.from('telegram_media').select('*');
-
       if (search) {
         const { data: searchResults, error: searchError } = await supabase
           .rpc('search_telegram_media', { search_term: search });
         
         if (searchError) throw searchError;
+        
         return searchResults.map((item): MediaItem => {
           const messageData = item.telegram_data?.message_data as TelegramMessageData;
           const mediaMessageData: MessageMediaData = {
@@ -62,6 +61,8 @@ export const useMediaData = (
           };
         });
       }
+
+      let query = supabase.from('telegram_media').select('*');
 
       if (selectedChannel !== "all") {
         query = query.eq('telegram_data->message_data->chat->title', selectedChannel);
