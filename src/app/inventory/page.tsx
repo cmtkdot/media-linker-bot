@@ -31,15 +31,14 @@ const InventoryPage = () => {
         thumbnail_state: (item.thumbnail_state || 'pending') as MediaItem['thumbnail_state'],
         thumbnail_source: (item.thumbnail_source || 'default') as MediaItem['thumbnail_source'],
       }));
-    },
-    onSuccess: (data) => {
-      setItems(data);
-    },
+    }
   });
 
   useEffect(() => {
-    refetch();
-  }, [refetch]);
+    if (data) {
+      setItems(data);
+    }
+  }, [data]);
 
   return (
     <div className="container mx-auto py-8">
