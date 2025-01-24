@@ -45,7 +45,7 @@ export const useMediaActions = (refetch: () => Promise<unknown>) => {
         .from('telegram_media')
         .select('*')
         .is('product_name', null)
-        .not('caption', 'is', null);
+        .not('caption', 'is', null) as { data: MediaItem[] | null; error: any };
 
       if (mediaError) throw mediaError;
 
@@ -72,7 +72,7 @@ export const useMediaActions = (refetch: () => Promise<unknown>) => {
               .select('analyzed_content, product_name')
               .eq('telegram_data->media_group_id', mediaGroupId)
               .not('product_name', 'is', null)
-              .limit(1);
+              .limit(1) as { data: MediaItem[] | null };
 
             if (groupItems && groupItems.length > 0) {
               continue;
