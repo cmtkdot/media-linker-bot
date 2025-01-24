@@ -1,53 +1,71 @@
 import { useEffect, useState } from "react";
 import { InventorySliderGrid } from "@/components/inventory/InventorySliderGrid";
-import { createClient } from "@/lib/supabase/client";
 import { MediaItem } from "@/types/media";
+import { useQuery } from "@tanstack/react-query";
+import { createClient } from "@/lib/supabase/client";
+
+const supabase = createClient();
 
 export default function Inventory() {
-  const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const supabase = createClient();
-
-  useEffect(() => {
-    async function fetchMediaItems() {
+  const { data: items = [], isLoading, error } = useQuery({
+    queryKey: ['telegram_media'],
+    queryFn: async () => {
       const { data, error } = await supabase
-        .from('media_items')
-        .select(`
-          *,
-          product:products(*)
-        `)
-        .order('created_at', { ascending: false });
+        .from("telegram_media")
+        .select("*")
+        .order("created_at", { ascending: false });
 
-      if (error) {
-        console.error('Error fetching media items:', error);
-        setError('Error loading media items. Please try again later.');
-        return;
-      }
+      if (error) throw error;
 
-      setMediaItems(data || []);
+      return data.map((item): MediaItem => ({
+        id: item.id,
+        file_id: item.file_id,
+        file_unique_id: item.file_unique_id,
+        file_type: item.file_type,
+        public_url: item.public_url,
+        thumbnail_url: item.thumbnail_url,
+        caption: item.caption,
+        media_group_id: item.media_group_id,
+        created_at: item.created_at,
+        updated_at: item.updated_at,
+        telegram_data: item.telegram_data || {},
+        message_media_data: item.message_media_data || {},
+        analyzed_content: item.analyzed_content || {},
+        storage_path: item.storage_path,
+        thumbnail_state: item.thumbnail_state || 'pending',
+        thumbnail_source: item.thumbnail_source || null,
+        thumbnail_error: item.thumbnail_error || null
+      }));
     }
-
-    fetchMediaItems();
-  }, []);
+  });
 
   if (error) {
     return (
-      <main className="container mx-auto p-4 md:p-6">
-        <h1 className="text-2xl font-bold mb-6">Inventory Gallery</h1>
-        <p className="text-red-500">{error}</p>
-      </main>
+      <div className="container mx-auto py-8">
+        <h1 className="text-4xl font-bold mb-8">Inventory</h1>
+        <div className="text-red-500">Error loading inventory: {(error as Error).message}</div>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto py-8">
+        <h1 className="text-4xl font-bold mb-8">Inventory</h1>
+        <div className="animate-pulse">Loading inventory...</div>
+      </div>
     );
   }
 
   return (
-    <main className="container mx-auto p-4 md:p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Inventory Gallery</h1>
-        <p className="text-sm text-muted-foreground">
-          {mediaItems.length} items
-        </p>
+    <div className="container mx-auto py-8">
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="text-4xl font-bold">Inventory</h1>
+        <div className="text-sm text-muted-foreground">
+          {items.length} items
+        </div>
       </div>
-      <InventorySliderGrid initialItems={mediaItems} />
-    </main>
+      <InventorySliderGrid initialItems={items} />
+    </div>
   );
 }
