@@ -45,6 +45,27 @@ const MediaGrid = () => {
     handleAnalyzeCaptions
   } = useMediaActions(refetch);
 
+  // Process media items to ensure proper thumbnail handling
+  const processedMediaItems = mediaItems?.map(item => {
+    if (item.file_type === 'video' && 
+        item.thumbnail_state === 'failed' && 
+        item.telegram_data?.media_group_id) {
+      // Find associated photo in the same media group
+      const mediaGroupPhoto = mediaItems.find(media => 
+        media.file_type === 'photo' && 
+        media.telegram_data?.media_group_id === item.telegram_data?.media_group_id
+      );
+      if (mediaGroupPhoto) {
+        return {
+          ...item,
+          thumbnail_url: mediaGroupPhoto.public_url,
+          thumbnail_source: 'media_group'
+        };
+      }
+    }
+    return item;
+  }) || [];
+
   return (
     <div className="space-y-4 px-4 py-4">
       <div className="flex justify-between items-center">
@@ -106,14 +127,14 @@ const MediaGrid = () => {
       
       {view === 'table' ? (
         <MediaTable
-          data={mediaItems || []}
+          data={processedMediaItems}
           onEdit={(item) => {
             console.log('Edit item:', item);
           }}
         />
       ) : (
         <MediaGridContent
-          items={mediaItems || []}
+          items={processedMediaItems}
           view={view}
           isLoading={isLoading}
           error={error as Error | null}

@@ -18,6 +18,22 @@ const MediaGridContent = ({ items = [], view, isLoading, error, onMediaUpdate }:
   const [viewerOpen, setViewerOpen] = useState(false);
 
   const handleView = (item: MediaItem) => {
+    // For videos with failed thumbnails, try to get media group photo
+    if (item.file_type === 'video' && 
+        item.thumbnail_state === 'failed' && 
+        item.telegram_data?.media_group_id) {
+      const mediaGroupPhoto = items.find(media => 
+        media.file_type === 'photo' && 
+        media.telegram_data?.media_group_id === item.telegram_data?.media_group_id
+      );
+      if (mediaGroupPhoto) {
+        item = {
+          ...item,
+          thumbnail_url: mediaGroupPhoto.public_url,
+          thumbnail_source: 'media_group'
+        };
+      }
+    }
     setSelectedMedia(item);
     setViewerOpen(true);
   };
