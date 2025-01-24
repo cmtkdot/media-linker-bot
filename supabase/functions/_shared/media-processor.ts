@@ -84,24 +84,42 @@ export async function processMediaFiles(
   if (message.animation) mediaFiles.push({ type: 'animation', file: message.animation });
 
   const messageUrl = getMessageUrl(message);
-  console.log('Processing media files:', { mediaFiles, messageUrl });
+  console.log('Processing media files:', { 
+    mediaFiles, 
+    messageUrl,
+    media_group_id: message.media_group_id 
+  });
 
   for (const { type, file } of mediaFiles) {
     try {
-      console.log(`Processing ${type} file:`, { file_id: file.file_id });
+      console.log(`Processing ${type} file:`, { 
+        file_id: file.file_id,
+        media_group_id: message.media_group_id
+      });
 
       const { data: existingMedia } = await withDatabaseRetry(
         async () => {
           return await supabase
             .from('telegram_media')
-            .select('id, public_url, telegram_data')
+            .select('id, public_url, telegram_data, media_group_id')
             .eq('file_unique_id', file.file_unique_id)
             .maybeSingle();
         }
       );
 
       if (existingMedia) {
-        console.log('Media already exists:', existingMedia);
+        console.log('Media already exists:', {
+          id: existingMedia.id,
+          media_group_id: existingMedia.media_group_id
+        });
+        
+        // Update media group ID if it exists
+        if (message.media_group_id && existingMedia.media_group_id !== message.media_group_id) {
+          await supabase
+            .from('telegram_media')
+            .update({ media_group_id: message.media_group_id })
+            .eq('id', existingMedia.id);
+        }
         continue;
       }
 
@@ -154,7 +172,7 @@ export async function processMediaFiles(
         .from('media')
         .getPublicUrl(fileName);
 
-      // Create media record with thumbnail
+      // Create media record with thumbnail and media group ID
       await withDatabaseRetry(
         async () => {
           const { error: insertError } = await supabase
@@ -168,6 +186,7 @@ export async function processMediaFiles(
               thumbnail_url: thumbnailUrl,
               caption: message.caption,
               message_url: messageUrl,
+              media_group_id: message.media_group_id, // Explicitly store media_group_id
               telegram_data: {
                 message_id: message.message_id,
                 chat_id: message.chat.id,
