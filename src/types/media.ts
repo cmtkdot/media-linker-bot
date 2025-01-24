@@ -86,21 +86,14 @@ export interface MediaItem {
   caption?: string;
   media_group_id?: string;
   storage_path?: string;
-  telegram_data: {
-    message_data: TelegramMessageData;
-    [key: string]: any;
-  };
+  telegram_data: Record<string, any>;
   glide_data: Record<string, any>;
   media_metadata: Record<string, any>;
   message_media_data: MessageMediaData;
   vendor_uid?: string;
   purchase_date?: string;
   notes?: string;
-  analyzed_content?: {
-    text: string;
-    labels: string[];
-    objects: string[];
-  };
+  analyzed_content?: Record<string, any>;
   message_url?: string;
   glide_app_url?: string;
   created_at: string;

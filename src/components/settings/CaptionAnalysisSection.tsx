@@ -19,7 +19,7 @@ export const CaptionAnalysisSection = () => {
         .from('telegram_media')
         .select('*')
         .is('analyzed_content', null)
-        .not('caption', 'is', null)
+        .not('telegram_data->message_data->caption', 'is', null)
         .limit(100);
 
       if (mediaError) throw mediaError;
@@ -32,7 +32,7 @@ export const CaptionAnalysisSection = () => {
         try {
           const { data: analyzedContent, error: analysisError } = await supabase.functions.invoke('analyze-caption', {
             body: { 
-              caption: media.caption,
+              caption: media.telegram_data?.message_data?.caption,
               messageId: media.id
             }
           });

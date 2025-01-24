@@ -1,8 +1,11 @@
+import { createSupabaseClient } from "@/lib/supabase/client";
+import { Database } from "@/integrations/supabase/types";
 import { useEffect, useState } from "react";
 import { InventorySliderGrid } from "@/components/inventory/InventorySliderGrid";
-import { MediaItem, TelegramMessageData, MessageMediaData } from "@/types/media";
+import { MediaItem, ThumbnailSource } from "@/types/media";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+
+const supabase = createSupabaseClient;
 
 const InventoryPage = () => {
   const [items, setItems] = useState<MediaItem[]>([]);
@@ -17,46 +20,18 @@ const InventoryPage = () => {
 
       if (error) throw error;
 
-      return data.map((item): MediaItem => {
-        const messageData = item.telegram_data?.message_data as TelegramMessageData;
-        const mediaMessageData: MessageMediaData = {
-          message: {
-            url: item.message_url || '',
-            media_group_id: messageData?.media_group_id || '',
-            caption: messageData?.caption || '',
-            message_id: messageData?.message_id || 0,
-            chat_id: messageData?.chat?.id || 0,
-            date: messageData?.date || 0
-          },
-          sender: {
-            sender_info: item.sender_info || {},
-            chat_info: messageData?.chat || {}
-          },
-          analysis: {
-            analyzed_content: item.analyzed_content || {}
-          },
-          meta: {
-            created_at: item.created_at,
-            updated_at: item.updated_at,
-            status: item.processing_error ? 'error' : item.processed ? 'processed' : 'pending',
-            error: item.processing_error
-          }
-        };
-
+      return data.map((item: any): MediaItem => {
+        const messageData = (item.telegram_data as Record<string, any>)?.message_data || {};
         return {
           ...item,
-          caption: messageData?.caption,
-          media_group_id: messageData?.media_group_id,
           file_type: item.file_type as MediaItem['file_type'],
-          telegram_data: {
-            message_data: messageData,
-            ...item.telegram_data
-          },
-          glide_data: item.glide_data || {},
-          media_metadata: item.media_metadata || {},
-          message_media_data: mediaMessageData,
+          telegram_data: item.telegram_data as Record<string, any>,
+          glide_data: item.glide_data as Record<string, any>,
+          media_metadata: item.media_metadata as Record<string, any>,
+          message_media_data: item.message_media_data as Record<string, any>,
+          analyzed_content: item.analyzed_content as Record<string, any>,
           thumbnail_state: (item.thumbnail_state || 'pending') as MediaItem['thumbnail_state'],
-          thumbnail_source: (item.thumbnail_source || 'default') as MediaItem['thumbnail_source'],
+          thumbnail_source: (item.thumbnail_source || 'default') as ThumbnailSource,
         };
       });
     }
