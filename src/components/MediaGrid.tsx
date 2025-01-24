@@ -7,6 +7,7 @@ import { RefreshCw, Loader2, Brain } from "lucide-react";
 import { useMediaFilters } from "@/hooks/useMediaFilters";
 import { useMediaData } from "@/hooks/useMediaData";
 import { useMediaActions } from "@/hooks/useMediaActions";
+import { MediaItem, ThumbnailSource } from "@/types/media";
 
 const MediaGrid = () => {
   const [view, setView] = useState<'grid' | 'table'>('grid');
@@ -59,7 +60,7 @@ const MediaGrid = () => {
         return {
           ...item,
           thumbnail_url: mediaGroupPhoto.public_url,
-          thumbnail_source: 'media_group'
+          thumbnail_source: 'media_group' as ThumbnailSource
         };
       }
     }

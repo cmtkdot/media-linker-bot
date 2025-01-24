@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { MediaItem } from "@/types/media";
+import { MediaItem, ThumbnailSource } from "@/types/media";
 import MediaCard from "./MediaCard";
 import MediaViewer from "./MediaViewer";
 import MediaEditDialog from "./MediaEditDialog";
@@ -30,7 +30,7 @@ const MediaGridContent = ({ items = [], view, isLoading, error, onMediaUpdate }:
         item = {
           ...item,
           thumbnail_url: mediaGroupPhoto.public_url,
-          thumbnail_source: 'media_group'
+          thumbnail_source: 'media_group' as ThumbnailSource
         };
       }
     }
