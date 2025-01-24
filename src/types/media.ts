@@ -2,6 +2,41 @@ export type MediaFileType = 'photo' | 'video' | 'document' | 'animation';
 export type ThumbnailState = 'pending' | 'downloaded' | 'generated' | 'failed' | 'default';
 export type ThumbnailSource = 'telegram' | 'app_generated' | 'media_group' | 'default';
 
+export interface TelegramPhotoSize {
+  width: number;
+  height: number;
+  file_id: string;
+  file_size: number;
+  file_unique_id: string;
+}
+
+export interface TelegramChat {
+  id: number;
+  type: string;
+  title: string;
+}
+
+export interface TelegramMessageData {
+  chat: TelegramChat;
+  date: number;
+  photo?: TelegramPhotoSize[];
+  video?: {
+    file_id: string;
+    file_unique_id: string;
+    width: number;
+    height: number;
+    duration: number;
+    thumb?: TelegramPhotoSize;
+    file_name?: string;
+    mime_type?: string;
+    file_size?: number;
+  };
+  message_id: number;
+  sender_chat?: TelegramChat;
+  media_group_id?: string;
+  caption?: string;
+}
+
 export interface MessageInfo {
   url?: string;
   media_group_id?: string;
@@ -49,12 +84,7 @@ export interface MediaItem {
   product_code?: string;
   quantity?: number;
   telegram_data: {
-    message_data?: {
-      caption?: string;
-      media_group_id?: string;
-      chat?: Record<string, any>;
-      message_id?: string;
-    };
+    message_data: TelegramMessageData;
     [key: string]: any;
   };
   glide_data: Record<string, any>;
