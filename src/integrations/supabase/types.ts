@@ -623,6 +623,10 @@ export type Database = {
           vendor_uid: string | null
         }
       }
+      populate_message_media_data: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       regenerate_all_video_thumbnails: {
         Args: Record<PropertyKey, never>
         Returns: {
