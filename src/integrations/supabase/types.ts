@@ -341,7 +341,6 @@ export type Database = {
       telegram_media: {
         Row: {
           analyzed_content: Json | null
-          caption: string | null
           created_at: string
           default_public_url: string | null
           file_id: string
@@ -352,7 +351,6 @@ export type Database = {
           glide_json: Json | null
           id: string
           last_synced_at: string | null
-          media_group_id: string | null
           media_metadata: Json
           message_data: Json | null
           message_id: string
@@ -380,7 +378,6 @@ export type Database = {
         }
         Insert: {
           analyzed_content?: Json | null
-          caption?: string | null
           created_at?: string
           default_public_url?: string | null
           file_id: string
@@ -391,7 +388,6 @@ export type Database = {
           glide_json?: Json | null
           id?: string
           last_synced_at?: string | null
-          media_group_id?: string | null
           media_metadata?: Json
           message_data?: Json | null
           message_id: string
@@ -419,7 +415,6 @@ export type Database = {
         }
         Update: {
           analyzed_content?: Json | null
-          caption?: string | null
           created_at?: string
           default_public_url?: string | null
           file_id?: string
@@ -430,7 +425,6 @@ export type Database = {
           glide_json?: Json | null
           id?: string
           last_synced_at?: string | null
-          media_group_id?: string | null
           media_metadata?: Json
           message_data?: Json | null
           message_id?: string

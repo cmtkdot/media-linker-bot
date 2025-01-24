@@ -1,9 +1,9 @@
 import { Button } from "@/components/ui/button";
-import { useNavigate, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useSupabaseClient } from "@supabase/auth-helpers-react";
 import { ThemeToggle } from "./ThemeToggle";
 import { ShootingStars } from "./ui/shooting-stars";
-import { AnimatedGridPattern } from "./ui/animated-grid-pattern";
 import { useTheme } from "@/hooks/use-theme";
 
 interface DashboardLayoutProps {

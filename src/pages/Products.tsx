@@ -1,5 +1,5 @@
 import { Card } from "@/components/ui/card";
-import { MediaItem, ThumbnailState, ThumbnailSource } from "@/types/media";
+import { MediaItem } from "@/types/media";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useState } from "react";
@@ -36,7 +36,7 @@ const Products = () => {
           analyzedContent.objects = Array.isArray(content.objects) ? content.objects : [];
         }
 
-        const messageMediaData: MessageMediaData = {
+        const messageMediaData = {
           message: {
             url: item.message_url || '',
             media_group_id: (item.telegram_data as Record<string, any>)?.media_group_id || '',
@@ -58,16 +58,18 @@ const Products = () => {
             status: item.processing_error ? 'error' : item.processed ? 'processed' : 'pending',
             error: item.processing_error
           }
-        };
+        } as const;
 
         return {
           ...item,
           file_type: item.file_type as MediaItem['file_type'],
           telegram_data: item.telegram_data as Record<string, any>,
+          glide_data: item.glide_data as Record<string, any>,
+          media_metadata: item.media_metadata as Record<string, any>,
           analyzed_content: analyzedContent,
           message_media_data: messageMediaData,
-          thumbnail_state: (item.thumbnail_state || 'pending') as ThumbnailState,
-          thumbnail_source: (item.thumbnail_source || 'default') as ThumbnailSource,
+          thumbnail_state: (item.thumbnail_state || 'pending') as MediaItem['thumbnail_state'],
+          thumbnail_source: (item.thumbnail_source || 'default') as MediaItem['thumbnail_source'],
           media_group_id: (item.telegram_data as Record<string, any>)?.media_group_id
         };
       });
