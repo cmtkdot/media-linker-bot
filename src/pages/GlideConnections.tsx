@@ -4,18 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-
-interface GlideConfig {
-  id: string;
-  app_id: string;
-  table_id: string;
-  table_name: string;
-  api_token: string;
-  created_at: string;
-  updated_at: string;
-  active: boolean;
-  supabase_table_name: string;
-}
+import { GlideConfig } from "@/types/glide";
 
 const GlideConnections = () => {
   const { data: configs, isLoading, refetch } = useQuery({

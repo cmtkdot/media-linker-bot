@@ -4,6 +4,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { GlideConfig } from "@/types/glide";
+import { Link } from "react-router-dom";
 
 interface GlideSyncHeaderProps {
   configs: GlideConfig[];
@@ -88,19 +89,24 @@ export function GlideSyncHeader({ configs, isLoading }: GlideSyncHeaderProps) {
           Sync Telegram media files and metadata between Supabase and Glide
         </p>
       </div>
-      <Button
-        onClick={handleSync}
-        disabled={isSyncing || isLoading || !configs.length}
-      >
-        {isSyncing ? (
-          <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Syncing...
-          </>
-        ) : (
-          'Sync Now'
-        )}
-      </Button>
+      <div className="flex items-center gap-4">
+        <Button
+          onClick={handleSync}
+          disabled={isSyncing || isLoading || !configs.length}
+        >
+          {isSyncing ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Syncing...
+            </>
+          ) : (
+            'Sync Now'
+          )}
+        </Button>
+        <Button variant="outline" asChild>
+          <Link to="/glide-connections">Configure Tables</Link>
+        </Button>
+      </div>
     </div>
   );
 }

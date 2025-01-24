@@ -47,24 +47,146 @@ export type Database = {
       }
       glide_products: {
         Row: {
-          created_at: string
-          glide_data: Json
-          id: string
-          updated_at: string
+          account_row_id: string | null
+          cart_note: string | null
+          cart_rename: boolean | null
+          category: string | null
+          cost: number | null
+          cost_update: number | null
+          created_at: string | null
+          fronted_terms: string | null
+          glide_product_row_id: string
+          is_fronted: boolean | null
+          is_miscellaneous: boolean | null
+          is_sample: boolean | null
+          last_edited_date: string | null
+          last_synced: string | null
+          leave_no: string | null
+          more_units_behind: boolean | null
+          po_date: string | null
+          po_uid: string | null
+          product_choice_row_id: string | null
+          product_data: Json
+          product_image_1: string | null
+          product_name: string | null
+          purchase_date: string | null
+          purchase_notes: string | null
+          purchase_order_row_id: string | null
+          rename_product: boolean | null
+          sheet21pics_row_id: string | null
+          submission_date: string | null
+          submitter_email: string | null
+          supabase_caption: string | null
+          supabase_google_url: string | null
+          supabase_media_id: string | null
+          supabase_video_link: string | null
+          table_config_id: string | null
+          total_qty_purchased: number | null
+          total_units_behind_sample: number | null
+          updated_at: string | null
+          uuid: string
+          uuif: string | null
+          vendor_product_name: string | null
+          vendor_uid: string | null
+          vpay_row_id: string | null
         }
         Insert: {
-          created_at?: string
-          glide_data?: Json
-          id?: string
-          updated_at?: string
+          account_row_id?: string | null
+          cart_note?: string | null
+          cart_rename?: boolean | null
+          category?: string | null
+          cost?: number | null
+          cost_update?: number | null
+          created_at?: string | null
+          fronted_terms?: string | null
+          glide_product_row_id: string
+          is_fronted?: boolean | null
+          is_miscellaneous?: boolean | null
+          is_sample?: boolean | null
+          last_edited_date?: string | null
+          last_synced?: string | null
+          leave_no?: string | null
+          more_units_behind?: boolean | null
+          po_date?: string | null
+          po_uid?: string | null
+          product_choice_row_id?: string | null
+          product_data?: Json
+          product_image_1?: string | null
+          product_name?: string | null
+          purchase_date?: string | null
+          purchase_notes?: string | null
+          purchase_order_row_id?: string | null
+          rename_product?: boolean | null
+          sheet21pics_row_id?: string | null
+          submission_date?: string | null
+          submitter_email?: string | null
+          supabase_caption?: string | null
+          supabase_google_url?: string | null
+          supabase_media_id?: string | null
+          supabase_video_link?: string | null
+          table_config_id?: string | null
+          total_qty_purchased?: number | null
+          total_units_behind_sample?: number | null
+          updated_at?: string | null
+          uuid?: string
+          uuif?: string | null
+          vendor_product_name?: string | null
+          vendor_uid?: string | null
+          vpay_row_id?: string | null
         }
         Update: {
-          created_at?: string
-          glide_data?: Json
-          id?: string
-          updated_at?: string
+          account_row_id?: string | null
+          cart_note?: string | null
+          cart_rename?: boolean | null
+          category?: string | null
+          cost?: number | null
+          cost_update?: number | null
+          created_at?: string | null
+          fronted_terms?: string | null
+          glide_product_row_id?: string
+          is_fronted?: boolean | null
+          is_miscellaneous?: boolean | null
+          is_sample?: boolean | null
+          last_edited_date?: string | null
+          last_synced?: string | null
+          leave_no?: string | null
+          more_units_behind?: boolean | null
+          po_date?: string | null
+          po_uid?: string | null
+          product_choice_row_id?: string | null
+          product_data?: Json
+          product_image_1?: string | null
+          product_name?: string | null
+          purchase_date?: string | null
+          purchase_notes?: string | null
+          purchase_order_row_id?: string | null
+          rename_product?: boolean | null
+          sheet21pics_row_id?: string | null
+          submission_date?: string | null
+          submitter_email?: string | null
+          supabase_caption?: string | null
+          supabase_google_url?: string | null
+          supabase_media_id?: string | null
+          supabase_video_link?: string | null
+          table_config_id?: string | null
+          total_qty_purchased?: number | null
+          total_units_behind_sample?: number | null
+          updated_at?: string | null
+          uuid?: string
+          uuif?: string | null
+          vendor_product_name?: string | null
+          vendor_uid?: string | null
+          vpay_row_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "glide_products_table_config_id_fkey"
+            columns: ["table_config_id"]
+            isOneToOne: false
+            referencedRelation: "glide_config"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       glide_sync_queue: {
         Row: {
