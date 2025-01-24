@@ -2,13 +2,6 @@ export type MediaFileType = 'photo' | 'video' | 'document' | 'animation';
 export type ThumbnailState = 'pending' | 'downloaded' | 'generated' | 'failed' | 'default';
 export type ThumbnailSource = 'telegram' | 'app_generated' | 'media_group' | 'default';
 
-export interface MessageMetadata {
-  created_at: string;
-  updated_at: string;
-  status: 'pending' | 'processed' | 'error';
-  error?: string | null;
-}
-
 export interface MessageInfo {
   url?: string;
   media_group_id?: string;
@@ -25,6 +18,13 @@ export interface SenderInfo {
 
 export interface AnalysisInfo {
   analyzed_content: Record<string, any>;
+}
+
+export interface MessageMetadata {
+  created_at: string;
+  updated_at: string;
+  status: 'pending' | 'processed' | 'error';
+  error?: string | null;
 }
 
 export interface MessageMediaData {
@@ -66,21 +66,4 @@ export interface MediaItem {
   created_at: string;
   updated_at: string;
   telegram_media_row_id?: string;
-}
-
-export interface MediaSearchBarProps {
-  search: string;
-  onSearchChange: (value: string) => void;
-  view: 'grid' | 'table';
-  onViewChange: (view: 'grid' | 'table') => void;
-  selectedChannel: string;
-  onChannelChange: (channel: string) => void;
-  selectedType: string;
-  onTypeChange: (type: string) => void;
-  selectedVendor: string;
-  onVendorChange: (vendor: string) => void;
-  selectedSort: string;
-  onSortChange: (sort: string) => void;
-  channels: string[];
-  vendors: string[];
 }
