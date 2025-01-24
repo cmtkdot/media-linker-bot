@@ -350,7 +350,6 @@ export type Database = {
           caption: string | null
           created_at: string
           default_public_url: string | null
-          extracted_media_group_id: string | null
           file_id: string
           file_type: string
           file_unique_id: string
@@ -382,7 +381,6 @@ export type Database = {
           caption?: string | null
           created_at?: string
           default_public_url?: string | null
-          extracted_media_group_id?: string | null
           file_id: string
           file_type: string
           file_unique_id: string
@@ -414,7 +412,6 @@ export type Database = {
           caption?: string | null
           created_at?: string
           default_public_url?: string | null
-          extracted_media_group_id?: string | null
           file_id?: string
           file_type?: string
           file_unique_id?: string
