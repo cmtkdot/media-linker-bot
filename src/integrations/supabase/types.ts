@@ -647,6 +647,48 @@ export type Database = {
           details: Json
         }[]
       }
+      search_telegram_media: {
+        Args: {
+          search_term: string
+        }
+        Returns: {
+          analyzed_content: Json | null
+          created_at: string
+          default_public_url: string | null
+          file_id: string
+          file_type: string
+          file_unique_id: string
+          glide_app_url: string | null
+          glide_data: Json
+          glide_json: Json | null
+          id: string
+          last_synced_at: string | null
+          media_metadata: Json
+          message_data: Json | null
+          message_id: string
+          message_media_data: Json | null
+          message_url: string | null
+          notes: string | null
+          processed: boolean | null
+          processing_error: string | null
+          product_code: string | null
+          product_name: string | null
+          public_url: string | null
+          purchase_date: string | null
+          purchase_order_uid: string | null
+          quantity: number | null
+          sender_info: Json | null
+          supabase_json: Json | null
+          telegram_data: Json
+          telegram_media_row_id: string | null
+          thumbnail_error: string | null
+          thumbnail_source: string | null
+          thumbnail_state: string | null
+          thumbnail_url: string | null
+          updated_at: string
+          vendor_uid: string | null
+        }[]
+      }
       sync_messages_to_telegram_media: {
         Args: Record<PropertyKey, never>
         Returns: {
