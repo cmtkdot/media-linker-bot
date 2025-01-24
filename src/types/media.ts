@@ -103,8 +103,7 @@ export interface MediaItem {
   created_at: string;
   updated_at: string;
   telegram_media_row_id?: string;
-  caption?: string;
-  media_group_id?: string;
+  storage_path?: string;
 }
 
 export interface MediaSearchBarProps {

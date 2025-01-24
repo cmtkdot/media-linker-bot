@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { MediaItem, TelegramMessageData } from "@/types/media";
-import { getMediaCaption, getMediaGroupId } from "@/utils/media-helpers";
 
 export const useMediaData = (
   search: string,
@@ -63,9 +62,7 @@ export const useMediaData = (
 
       return queryResult.map((item): MediaItem => {
         const messageData = item.telegram_data?.message_data as TelegramMessageData;
-        const caption = messageData?.caption;
-        const mediaGroupId = messageData?.media_group_id;
-
+        
         return {
           ...item,
           file_type: item.file_type as MediaItem['file_type'],
@@ -78,8 +75,8 @@ export const useMediaData = (
           message_media_data: {
             message: {
               url: item.message_url || '',
-              media_group_id: mediaGroupId || '',
-              caption: caption || '',
+              media_group_id: messageData?.media_group_id || '',
+              caption: messageData?.caption || '',
               message_id: messageData?.message_id || 0,
               chat_id: messageData?.chat?.id || 0,
               date: messageData?.date || 0
@@ -100,8 +97,6 @@ export const useMediaData = (
           },
           thumbnail_state: (item.thumbnail_state || 'pending') as MediaItem['thumbnail_state'],
           thumbnail_source: (item.thumbnail_source || 'default') as MediaItem['thumbnail_source'],
-          caption,
-          media_group_id: mediaGroupId
         };
       });
     }
