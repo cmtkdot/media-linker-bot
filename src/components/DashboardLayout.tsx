@@ -3,6 +3,8 @@ import { useNavigate, Link } from "react-router-dom";
 import { useSupabaseClient } from "@supabase/auth-helpers-react";
 import { ThemeToggle } from "./ThemeToggle";
 import { ShootingStars } from "./ui/shooting-stars";
+import { AnimatedGridPattern } from "./ui/animated-grid-pattern";
+import { useTheme } from "@/hooks/use-theme";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -11,6 +13,7 @@ interface DashboardLayoutProps {
 const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const navigate = useNavigate();
   const supabase = useSupabaseClient();
+  const { theme } = useTheme();
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -48,12 +51,22 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
         <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <div className="container flex h-16 items-center justify-between px-4">
             <div className="flex items-center gap-6">
-              <Link to="/" className="text-xl font-semibold"></Link>
+              <Link to="/" className="flex items-center gap-2">
+                <img
+                  src={theme === 'dark' ? '/lovable-uploads/3ec87b19-c041-4e80-8db8-953c89275ff4.png' : '/lovable-uploads/5b54e72a-75ea-42c5-97c5-d202e3e76a15.png'}
+                  alt="Media Manager Logo"
+                  className="h-8 w-auto"
+                />
+                <span className="text-xl font-semibold">Media Manager</span>
+              </Link>
               <Link to="/products" className="text-muted-foreground hover:text-foreground transition-colors">
                 Products
               </Link>
               <Link to="/glide-sync" className="text-muted-foreground hover:text-foreground transition-colors">
                 Glide Sync
+              </Link>
+              <Link to="/glide-connections" className="text-muted-foreground hover:text-foreground transition-colors">
+                Glide Config
               </Link>
               <Link to="/database-chat" className="text-muted-foreground hover:text-foreground transition-colors">
                 Database Chat
