@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
-import { useNavigate, Link } from "react-router-dom";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useSupabaseClient } from "@supabase/auth-helpers-react";
 import { ThemeToggle } from "./ThemeToggle";
 import { ShootingStars } from "./ui/shooting-stars";
@@ -11,13 +12,13 @@ interface DashboardLayoutProps {
 }
 
 const DashboardLayout = ({ children }: DashboardLayoutProps) => {
-  const navigate = useNavigate();
+  const router = useRouter();
   const supabase = useSupabaseClient();
   const { theme } = useTheme();
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
-    navigate("/auth");
+    router.push("/auth");
   };
 
   return (
@@ -51,7 +52,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
         <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <div className="container flex h-16 items-center justify-between px-4">
             <div className="flex items-center gap-6">
-              <Link to="/" className="flex items-center gap-2">
+              <Link href="/" className="flex items-center gap-2">
                 <img
                   src={theme === 'dark' ? '/lovable-uploads/3ec87b19-c041-4e80-8db8-953c89275ff4.png' : '/lovable-uploads/5b54e72a-75ea-42c5-97c5-d202e3e76a15.png'}
                   alt="Media Manager Logo"
@@ -59,16 +60,19 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                 />
                 <span className="text-xl font-semibold">Media Manager</span>
               </Link>
-              <Link to="/products" className="text-muted-foreground hover:text-foreground transition-colors">
+              <Link href="/products" className="text-muted-foreground hover:text-foreground transition-colors">
                 Products
               </Link>
-              <Link to="/glide-sync" className="text-muted-foreground hover:text-foreground transition-colors">
+              <Link href="/inventory" className="text-muted-foreground hover:text-foreground transition-colors">
+                Inventory
+              </Link>
+              <Link href="/glide-sync" className="text-muted-foreground hover:text-foreground transition-colors">
                 Glide Sync
               </Link>
-              <Link to="/glide-connections" className="text-muted-foreground hover:text-foreground transition-colors">
+              <Link href="/glide-connections" className="text-muted-foreground hover:text-foreground transition-colors">
                 Glide Config
               </Link>
-              <Link to="/database-chat" className="text-muted-foreground hover:text-foreground transition-colors">
+              <Link href="/database-chat" className="text-muted-foreground hover:text-foreground transition-colors">
                 Database Chat
               </Link>
             </div>
