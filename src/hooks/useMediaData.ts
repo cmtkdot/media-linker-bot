@@ -12,13 +12,7 @@ export const useMediaData = (
   return useQuery({
     queryKey: ['telegram-media', search, selectedChannel, selectedType, selectedVendor, selectedSort],
     queryFn: async () => {
-      let query = supabase
-        .from('telegram_media')
-        .select('*');
-
-      if (search) {
-        query = query.or(`telegram_data->message_data->caption.ilike.%${search}%,product_name.ilike.%${search}%,product_code.ilike.%${search}%,vendor_uid.ilike.%${search}%`);
-      }
+      let query = supabase.rpc('search_telegram_media', { search_term: search });
 
       if (selectedChannel !== "all") {
         query = query.eq('telegram_data->message_data->chat->title', selectedChannel);
@@ -42,9 +36,6 @@ export const useMediaData = (
           break;
         case 'name':
           query = query.order('product_name', { ascending: sortDirection === 'asc' });
-          break;
-        case 'caption':
-          query = query.order('telegram_data->message_data->caption', { ascending: sortDirection === 'asc' });
           break;
         case 'code':
           query = query.order('product_code', { ascending: sortDirection === 'asc' });

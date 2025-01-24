@@ -85,6 +85,7 @@ export interface MediaItem {
   quantity?: number;
   caption?: string;
   media_group_id?: string;
+  storage_path?: string;
   telegram_data: {
     message_data: TelegramMessageData;
     [key: string]: any;
@@ -105,7 +106,6 @@ export interface MediaItem {
   created_at: string;
   updated_at: string;
   telegram_media_row_id?: string;
-  storage_path?: string;
 }
 
 export interface MediaSearchBarProps {
@@ -125,6 +125,7 @@ export interface MediaSearchBarProps {
   vendors: string[];
 }
 
+// Helper functions to safely access media properties
 export const getMediaCaption = (item: MediaItem): string | undefined => {
   return item.caption || item.telegram_data?.message_data?.caption;
 };
