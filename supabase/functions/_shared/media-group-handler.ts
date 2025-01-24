@@ -1,5 +1,5 @@
 import { analyzeCaptionWithAI } from './caption-analyzer.ts';
-import { SupabaseClient } from '@supabase/supabase-js';
+import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 interface TelegramMessage {
   media_group_id?: string;
@@ -69,7 +69,16 @@ export async function handleMediaGroup(
     let analyzedContent: AnalyzedContent | null = null;
     if (message.caption) {
       try {
-        analyzedContent = await analyzeCaptionWithAI(message.caption, supabase);
+        console.log('Analyzing caption for media group:', {
+          media_group_id: message.media_group_id,
+          caption: message.caption
+        });
+        
+        analyzedContent = await analyzeCaptionWithAI(message.caption);
+        console.log('Analyzed content for media group:', {
+          media_group_id: message.media_group_id,
+          analyzed_content: analyzedContent
+        });
       } catch (error) {
         console.error('Error analyzing caption:', error);
       }
@@ -78,49 +87,43 @@ export async function handleMediaGroup(
     // Get message URL
     const messageUrl = getMessageUrl(message);
 
-    // Create or update media group record
-    const { data: mediaGroup, error: groupError } = await supabase
-      .from('media_groups')
-      .upsert({
-        media_group_id: message.media_group_id,
-        analyzed_content: analyzedContent,
-        product_name: analyzedContent?.product_name,
-        product_code: analyzedContent?.product_code,
-        quantity: analyzedContent?.quantity,
-        vendor_uid: analyzedContent?.vendor_uid,
-        purchase_date: analyzedContent?.purchase_date,
-        notes: analyzedContent?.notes,
-        sync_status: 'pending'
-      })
-      .select()
-      .single();
-
-    if (groupError) {
-      console.error('Error updating media group:', groupError);
-      throw groupError;
-    }
-
     // Update all media in the group with shared analyzed content
-    const { error: mediaUpdateError } = await supabase
-      .from('telegram_media')
-      .update({
-        product_name: analyzedContent?.product_name,
-        product_code: analyzedContent?.product_code,
-        quantity: analyzedContent?.quantity,
-        vendor_uid: analyzedContent?.vendor_uid,
-        purchase_date: analyzedContent?.purchase_date,
-        notes: analyzedContent?.notes,
-        analyzed_content: analyzedContent,
-        message_url: messageUrl
-      })
-      .eq('telegram_data->>media_group_id', message.media_group_id);
+    if (analyzedContent || message.caption) {
+      console.log('Updating media group with analyzed content:', {
+        media_group_id: message.media_group_id,
+        has_analyzed_content: !!analyzedContent,
+        has_caption: !!message.caption
+      });
 
-    if (mediaUpdateError) {
-      console.error('Error updating media records:', mediaUpdateError);
-      throw mediaUpdateError;
+      const { error: mediaUpdateError } = await supabase
+        .from('telegram_media')
+        .update({
+          caption: message.caption,
+          product_name: analyzedContent?.product_name,
+          product_code: analyzedContent?.product_code,
+          quantity: analyzedContent?.quantity,
+          vendor_uid: analyzedContent?.vendor_uid,
+          purchase_date: analyzedContent?.purchase_date,
+          notes: analyzedContent?.notes,
+          analyzed_content: analyzedContent,
+          message_url: messageUrl,
+          media_group_id: message.media_group_id // Ensure media_group_id is set
+        })
+        .eq('media_group_id', message.media_group_id);
+
+      if (mediaUpdateError) {
+        console.error('Error updating media records:', mediaUpdateError);
+        throw mediaUpdateError;
+      }
+
+      console.log('Successfully updated media group:', {
+        media_group_id: message.media_group_id,
+        messageUrl,
+        caption: message.caption?.substring(0, 50) + '...'
+      });
     }
 
-    return mediaGroup;
+    return { success: true, media_group_id: message.media_group_id };
   } catch (error) {
     console.error('Error in handleMediaGroup:', error);
     throw error;

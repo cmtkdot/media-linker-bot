@@ -15,13 +15,15 @@ export async function downloadAndStoreThumbnail(
     );
 
     const fileName = `${thumbData.file_unique_id}.jpg`;
+    console.log('Storing thumbnail:', fileName);
 
     // Upload to storage
     const { error: uploadError } = await supabase.storage
       .from('media')
       .upload(fileName, buffer, {
         contentType: 'image/jpeg',
-        upsert: true
+        upsert: true,
+        cacheControl: '3600'
       });
 
     if (uploadError) {

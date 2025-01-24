@@ -4,9 +4,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { MediaItem } from "@/types/media";
 import MediaGridFilters from "./MediaGridFilters";
 import MediaGridContent from "./MediaGridContent";
+import MediaTable from "./MediaTable";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
-import { RefreshCw, Loader2 } from "lucide-react";
+import { RefreshCw, Loader2, Brain } from "lucide-react";
 
 const MediaGrid = () => {
   const [view, setView] = useState<'grid' | 'table'>('grid');
@@ -16,6 +17,7 @@ const MediaGrid = () => {
   const [selectedVendor, setSelectedVendor] = useState("all");
   const [selectedSort, setSelectedSort] = useState("created_desc");
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const { toast } = useToast();
 
   const { data: filterOptions } = useQuery({
@@ -135,6 +137,86 @@ const MediaGrid = () => {
     }
   };
 
+  const handleAnalyzeCaptions = async () => {
+    setIsAnalyzing(true);
+    try {
+      // Get unanalyzed media (those without product_name)
+      const { data: unanalyzedMedia, error: mediaError } = await supabase
+        .from('telegram_media')
+        .select('*')
+        .is('product_name', null)
+        .not('caption', 'is', null);
+
+      if (mediaError) throw mediaError;
+
+      if (!unanalyzedMedia?.length) {
+        toast({
+          title: "No Unanalyzed Captions",
+          description: "All media items with captions have been analyzed and have product names extracted.",
+        });
+        return;
+      }
+
+      toast({
+        title: "Starting Caption Analysis",
+        description: `Found ${unanalyzedMedia.length} items that need analysis.`,
+      });
+
+      // Process each media item
+      for (const item of unanalyzedMedia) {
+        // First check if any items in the same media group have analyzed content
+        if (item.telegram_data && typeof item.telegram_data === 'object' && 'media_group_id' in item.telegram_data) {
+          const mediaGroupId = item.telegram_data.media_group_id;
+          
+          if (mediaGroupId) {
+            const { data: groupItems } = await supabase
+              .from('telegram_media')
+              .select('analyzed_content, product_name')
+              .eq('telegram_data->media_group_id', mediaGroupId)
+              .not('product_name', 'is', null)
+              .limit(1);
+
+            // If we found an analyzed item in the same group, skip analysis
+            if (groupItems && groupItems.length > 0) {
+              continue;
+            }
+          }
+        }
+
+        // If no analyzed content found in media group, proceed with analysis
+        const { data: result, error: analysisError } = await supabase.functions.invoke('analyze-caption', {
+          body: { 
+            caption: item.caption,
+            messageId: item.id
+          }
+        });
+
+        if (analysisError) {
+          console.error('Error analyzing caption:', analysisError);
+          continue;
+        }
+
+        console.log('Analysis result for item:', item.id, result);
+      }
+
+      await refetch();
+
+      toast({
+        title: "Caption Analysis Complete",
+        description: `Analyzed ${unanalyzedMedia.length} captions. Check the table view to see the results.`,
+      });
+    } catch (error: any) {
+      console.error('Error analyzing captions:', error);
+      toast({
+        title: "Analysis Failed",
+        description: error.message || "Failed to analyze captions",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
   return (
     <div className="space-y-4 px-4 py-4">
       <div className="flex justify-between items-center">
@@ -154,34 +236,63 @@ const MediaGrid = () => {
           channels={filterOptions?.channels || []}
           vendors={filterOptions?.vendors || []}
         />
-        <Button 
-          onClick={handleSync}
-          disabled={isSyncing}
-          variant="outline"
-          size="sm"
-          className="ml-2"
-        >
-          {isSyncing ? (
-            <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Syncing...
-            </>
-          ) : (
-            <>
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Sync Media Groups
-            </>
-          )}
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            onClick={handleAnalyzeCaptions}
+            disabled={isAnalyzing}
+            variant="outline"
+            size="sm"
+          >
+            {isAnalyzing ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Analyzing...
+              </>
+            ) : (
+              <>
+                <Brain className="w-4 h-4 mr-2" />
+                Analyze Captions
+              </>
+            )}
+          </Button>
+          <Button 
+            onClick={handleSync}
+            disabled={isSyncing}
+            variant="outline"
+            size="sm"
+          >
+            {isSyncing ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Syncing...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Sync Media Groups
+              </>
+            )}
+          </Button>
+        </div>
       </div>
       
-      <MediaGridContent
-        items={mediaItems || []}
-        view={view}
-        isLoading={isLoading}
-        error={error as Error | null}
-        onMediaUpdate={refetch}
-      />
+      {view === 'table' ? (
+        <MediaTable
+          data={mediaItems || []}
+          onEdit={(item) => {
+            // Handle edit action
+            console.log('Edit item:', item);
+          }}
+        />
+      ) : (
+        <MediaGridContent
+          items={mediaItems || []}
+          view={view}
+          isLoading={isLoading}
+          error={error as Error | null}
+          onMediaUpdate={refetch}
+        />
+      )}
     </div>
   );
 };
