@@ -56,6 +56,7 @@ export type Database = {
           created_at: string | null
           fronted_terms: string | null
           glide_product_row_id: string
+          glide_product_row_id2: string | null
           is_fronted: boolean | null
           is_miscellaneous: boolean | null
           is_sample: boolean | null
@@ -100,6 +101,7 @@ export type Database = {
           created_at?: string | null
           fronted_terms?: string | null
           glide_product_row_id: string
+          glide_product_row_id2?: string | null
           is_fronted?: boolean | null
           is_miscellaneous?: boolean | null
           is_sample?: boolean | null
@@ -144,6 +146,7 @@ export type Database = {
           created_at?: string | null
           fronted_terms?: string | null
           glide_product_row_id?: string
+          glide_product_row_id2?: string | null
           is_fronted?: boolean | null
           is_miscellaneous?: boolean | null
           is_sample?: boolean | null
@@ -262,7 +265,6 @@ export type Database = {
           analyzed_content: Json | null
           caption: string | null
           chat_id: number
-          correlation_id: string | null
           created_at: string
           id: string
           last_retry_at: string | null
@@ -277,12 +279,10 @@ export type Database = {
           product_code: string | null
           product_name: string | null
           purchase_date: string | null
-          purchase_order_uid: string | null
           quantity: number | null
           retry_count: number | null
           sender_info: Json
           status: string | null
-          thumbnail_url: string | null
           updated_at: string
           vendor_uid: string | null
         }
@@ -290,7 +290,6 @@ export type Database = {
           analyzed_content?: Json | null
           caption?: string | null
           chat_id: number
-          correlation_id?: string | null
           created_at?: string
           id?: string
           last_retry_at?: string | null
@@ -305,12 +304,10 @@ export type Database = {
           product_code?: string | null
           product_name?: string | null
           purchase_date?: string | null
-          purchase_order_uid?: string | null
           quantity?: number | null
           retry_count?: number | null
           sender_info?: Json
           status?: string | null
-          thumbnail_url?: string | null
           updated_at?: string
           vendor_uid?: string | null
         }
@@ -318,7 +315,6 @@ export type Database = {
           analyzed_content?: Json | null
           caption?: string | null
           chat_id?: number
-          correlation_id?: string | null
           created_at?: string
           id?: string
           last_retry_at?: string | null
@@ -333,12 +329,10 @@ export type Database = {
           product_code?: string | null
           product_name?: string | null
           purchase_date?: string | null
-          purchase_order_uid?: string | null
           quantity?: number | null
           retry_count?: number | null
           sender_info?: Json
           status?: string | null
-          thumbnail_url?: string | null
           updated_at?: string
           vendor_uid?: string | null
         }
@@ -355,10 +349,12 @@ export type Database = {
           file_unique_id: string
           glide_app_url: string | null
           glide_data: Json
+          glide_json: Json | null
           id: string
           last_synced_at: string | null
           media_group_id: string | null
           media_metadata: Json
+          message_data: Json | null
           message_id: string
           message_url: string | null
           notes: string | null
@@ -370,6 +366,8 @@ export type Database = {
           purchase_date: string | null
           purchase_order_uid: string | null
           quantity: number | null
+          sender_info: Json | null
+          supabase_json: Json | null
           telegram_data: Json
           telegram_media_row_id: string | null
           thumbnail_error: string | null
@@ -389,10 +387,12 @@ export type Database = {
           file_unique_id: string
           glide_app_url?: string | null
           glide_data?: Json
+          glide_json?: Json | null
           id?: string
           last_synced_at?: string | null
           media_group_id?: string | null
           media_metadata?: Json
+          message_data?: Json | null
           message_id: string
           message_url?: string | null
           notes?: string | null
@@ -404,6 +404,8 @@ export type Database = {
           purchase_date?: string | null
           purchase_order_uid?: string | null
           quantity?: number | null
+          sender_info?: Json | null
+          supabase_json?: Json | null
           telegram_data?: Json
           telegram_media_row_id?: string | null
           thumbnail_error?: string | null
@@ -423,10 +425,12 @@ export type Database = {
           file_unique_id?: string
           glide_app_url?: string | null
           glide_data?: Json
+          glide_json?: Json | null
           id?: string
           last_synced_at?: string | null
           media_group_id?: string | null
           media_metadata?: Json
+          message_data?: Json | null
           message_id?: string
           message_url?: string | null
           notes?: string | null
@@ -438,6 +442,8 @@ export type Database = {
           purchase_date?: string | null
           purchase_order_uid?: string | null
           quantity?: number | null
+          sender_info?: Json | null
+          supabase_json?: Json | null
           telegram_data?: Json
           telegram_media_row_id?: string | null
           thumbnail_error?: string | null
@@ -592,7 +598,6 @@ export type Database = {
           analyzed_content: Json | null
           caption: string | null
           chat_id: number
-          correlation_id: string | null
           created_at: string
           id: string
           last_retry_at: string | null
@@ -607,12 +612,10 @@ export type Database = {
           product_code: string | null
           product_name: string | null
           purchase_date: string | null
-          purchase_order_uid: string | null
           quantity: number | null
           retry_count: number | null
           sender_info: Json
           status: string | null
-          thumbnail_url: string | null
           updated_at: string
           vendor_uid: string | null
         }
