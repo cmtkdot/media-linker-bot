@@ -1,40 +1,52 @@
+import { createSupabaseClient } from "@/lib/supabase/client";
+import { Database } from "@/integrations/supabase/types";
+import { useEffect, useState } from "react";
 import { InventorySliderGrid } from "@/components/inventory/InventorySliderGrid";
-import { createClient } from "@/lib/supabase/client";
+import { MediaItem } from "@/types/media";
+import { useQuery } from "@tanstack/react-query";
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+const supabase = createSupabaseClient;
 
-export default async function InventoryPage() {
-  const supabase = createClient();
+const InventoryPage = () => {
+  const [items, setItems] = useState<MediaItem[]>([]);
 
-  // Fetch media items with their related data
-  const { data: mediaItems, error } = await supabase
-    .from('media_items')
-    .select(`
-      *,
-      product:products(*)
-    `)
-    .order('created_at', { ascending: false });
+  const { data, refetch } = useQuery({
+    queryKey: ['inventory'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("telegram_media")
+        .select("*")
+        .order("created_at", { ascending: false });
 
-  if (error) {
-    console.error('Error fetching media items:', error);
-    return (
-      <main className="container mx-auto p-4 md:p-6">
-        <h1 className="text-2xl font-bold mb-6">Inventory Gallery</h1>
-        <p className="text-red-500">Error loading media items. Please try again later.</p>
-      </main>
-    );
-  }
+      if (error) throw error;
+
+      return data.map((item): MediaItem => ({
+        ...item,
+        file_type: item.file_type as MediaItem['file_type'],
+        telegram_data: item.telegram_data as Record<string, any>,
+        glide_data: item.glide_data as Record<string, any>,
+        media_metadata: item.media_metadata as Record<string, any>,
+        analyzed_content: item.analyzed_content as Record<string, any>,
+        message_media_data: item.message_media_data as Record<string, any>,
+        thumbnail_state: (item.thumbnail_state || 'pending') as MediaItem['thumbnail_state'],
+        thumbnail_source: (item.thumbnail_source || 'default') as MediaItem['thumbnail_source'],
+      }));
+    },
+    onSuccess: (data) => {
+      setItems(data);
+    },
+  });
+
+  useEffect(() => {
+    refetch();
+  }, [refetch]);
 
   return (
-    <main className="container mx-auto p-4 md:p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Inventory Gallery</h1>
-        <p className="text-sm text-muted-foreground">
-          {mediaItems.length} items
-        </p>
-      </div>
-      <InventorySliderGrid initialItems={mediaItems} />
-    </main>
+    <div className="container mx-auto py-8">
+      <h1 className="text-4xl font-bold mb-8">Inventory</h1>
+      <InventorySliderGrid initialItems={items} />
+    </div>
   );
-}
+};
+
+export default InventoryPage;

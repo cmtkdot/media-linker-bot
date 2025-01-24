@@ -58,7 +58,7 @@ const Products = () => {
             status: item.processing_error ? 'error' : item.processed ? 'processed' : 'pending',
             error: item.processing_error
           }
-        };
+        } as const;
 
         return {
           ...item,
