@@ -356,6 +356,7 @@ export type Database = {
           media_metadata: Json
           message_data: Json | null
           message_id: string
+          message_media_data: Json | null
           message_url: string | null
           notes: string | null
           processed: boolean | null
@@ -394,6 +395,7 @@ export type Database = {
           media_metadata?: Json
           message_data?: Json | null
           message_id: string
+          message_media_data?: Json | null
           message_url?: string | null
           notes?: string | null
           processed?: boolean | null
@@ -432,6 +434,7 @@ export type Database = {
           media_metadata?: Json
           message_data?: Json | null
           message_id?: string
+          message_media_data?: Json | null
           message_url?: string | null
           notes?: string | null
           processed?: boolean | null
