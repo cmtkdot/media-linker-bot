@@ -140,10 +140,11 @@ const MediaGrid = () => {
   const handleAnalyzeCaptions = async () => {
     setIsAnalyzing(true);
     try {
+      // Get unanalyzed media (those without product_name)
       const { data: unanalyzedMedia, error: mediaError } = await supabase
         .from('telegram_media')
         .select('*')
-        .is('analyzed_content', null)
+        .is('product_name', null)
         .not('caption', 'is', null);
 
       if (mediaError) throw mediaError;
@@ -151,29 +152,58 @@ const MediaGrid = () => {
       if (!unanalyzedMedia?.length) {
         toast({
           title: "No Unanalyzed Captions",
-          description: "All media items with captions have been analyzed.",
+          description: "All media items with captions have been analyzed and have product names extracted.",
         });
         return;
       }
 
-      const { data: result, error: analysisError } = await supabase.functions.invoke('analyze-caption', {
-        body: { 
-          batchAnalysis: true,
-          items: unanalyzedMedia.map(item => ({
-            id: item.id,
-            caption: item.caption,
-            mediaGroupId: item.telegram_data?.media_group_id
-          }))
-        }
+      toast({
+        title: "Starting Caption Analysis",
+        description: `Found ${unanalyzedMedia.length} items that need analysis.`,
       });
 
-      if (analysisError) throw analysisError;
+      // Process each media item
+      for (const item of unanalyzedMedia) {
+        // First check if any items in the same media group have analyzed content
+        if (item.telegram_data && typeof item.telegram_data === 'object' && 'media_group_id' in item.telegram_data) {
+          const mediaGroupId = item.telegram_data.media_group_id;
+          
+          if (mediaGroupId) {
+            const { data: groupItems } = await supabase
+              .from('telegram_media')
+              .select('analyzed_content, product_name')
+              .eq('telegram_data->media_group_id', mediaGroupId)
+              .not('product_name', 'is', null)
+              .limit(1);
+
+            // If we found an analyzed item in the same group, skip analysis
+            if (groupItems && groupItems.length > 0) {
+              continue;
+            }
+          }
+        }
+
+        // If no analyzed content found in media group, proceed with analysis
+        const { data: result, error: analysisError } = await supabase.functions.invoke('analyze-caption', {
+          body: { 
+            caption: item.caption,
+            messageId: item.id
+          }
+        });
+
+        if (analysisError) {
+          console.error('Error analyzing caption:', analysisError);
+          continue;
+        }
+
+        console.log('Analysis result for item:', item.id, result);
+      }
 
       await refetch();
 
       toast({
         title: "Caption Analysis Complete",
-        description: `Analyzed ${result.analyzed_count} captions and synced ${result.synced_groups} media groups`,
+        description: `Analyzed ${unanalyzedMedia.length} captions. Check the table view to see the results.`,
       });
     } catch (error: any) {
       console.error('Error analyzing captions:', error);
