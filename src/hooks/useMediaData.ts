@@ -2,6 +2,82 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { MediaItem, TelegramMessageData, MessageMediaData, ThumbnailSource } from "@/types/media";
 
+type MediaQueryResult = {
+  id: string;
+  file_id: string;
+  file_unique_id: string;
+  file_type: string;
+  public_url: string | null;
+  telegram_data: Record<string, any>;
+  glide_data: Record<string, any>;
+  media_metadata: Record<string, any>;
+  analyzed_content: Record<string, any>;
+  message_media_data: Record<string, any>;
+  thumbnail_state: string;
+  thumbnail_source: string;
+  [key: string]: any;
+};
+
+const mapToMediaItem = (item: MediaQueryResult): MediaItem => {
+  const telegramData = item.telegram_data as TelegramMessageData;
+  const messageData = telegramData?.message_data || {};
+  
+  const mediaMessageData: MessageMediaData = {
+    message: {
+      url: item.message_url || '',
+      media_group_id: messageData?.media_group_id || '',
+      caption: messageData?.caption || '',
+      message_id: messageData?.message_id || 0,
+      chat_id: messageData?.chat?.id || 0,
+      date: messageData?.date || 0
+    },
+    sender: {
+      sender_info: item.sender_info || {},
+      chat_info: messageData?.chat || {}
+    },
+    analysis: {
+      analyzed_content: item.analyzed_content || {}
+    },
+    meta: {
+      created_at: item.created_at,
+      updated_at: item.updated_at,
+      status: item.processing_error ? 'error' : item.processed ? 'processed' : 'pending',
+      error: item.processing_error
+    }
+  };
+
+  return {
+    id: item.id,
+    file_id: item.file_id,
+    file_unique_id: item.file_unique_id,
+    file_type: item.file_type as MediaItem['file_type'],
+    public_url: item.public_url,
+    default_public_url: item.default_public_url,
+    thumbnail_url: item.thumbnail_url,
+    thumbnail_state: (item.thumbnail_state || 'pending') as MediaItem['thumbnail_state'],
+    thumbnail_source: (item.thumbnail_source || 'default') as ThumbnailSource,
+    thumbnail_error: item.thumbnail_error,
+    caption: messageData?.caption,
+    media_group_id: messageData?.media_group_id,
+    telegram_data: telegramData,
+    glide_data: item.glide_data || {},
+    media_metadata: item.media_metadata || {},
+    message_media_data: mediaMessageData,
+    vendor_uid: item.vendor_uid,
+    purchase_date: item.purchase_date,
+    notes: item.notes,
+    analyzed_content: item.analyzed_content,
+    message_url: item.message_url,
+    glide_app_url: item.glide_app_url,
+    created_at: item.created_at,
+    updated_at: item.updated_at,
+    telegram_media_row_id: item.telegram_media_row_id,
+    product_name: item.product_name,
+    product_code: item.product_code,
+    quantity: item.quantity
+  };
+};
+
 export const useMediaData = (
   search: string,
   selectedChannel: string,
@@ -18,7 +94,7 @@ export const useMediaData = (
         
         if (searchError) throw searchError;
         
-        return searchResults.map((item: any) => mapToMediaItem(item));
+        return searchResults.map((item: MediaQueryResult) => mapToMediaItem(item));
       }
 
       let query = supabase.from('telegram_media').select('*');
@@ -60,67 +136,7 @@ export const useMediaData = (
       
       if (queryError) throw queryError;
 
-      return (queryResult || []).map((item: any) => mapToMediaItem(item));
+      return (queryResult || []).map((item: MediaQueryResult) => mapToMediaItem(item));
     }
   });
-};
-
-const mapToMediaItem = (item: any): MediaItem => {
-  const telegramData = item.telegram_data as TelegramMessageData;
-  const messageData = telegramData?.message_data || {};
-  
-  const mediaMessageData: MessageMediaData = {
-    message: {
-      url: item.message_url || '',
-      media_group_id: messageData?.media_group_id || '',
-      caption: messageData?.caption || '',
-      message_id: messageData?.message_id || 0,
-      chat_id: messageData?.chat?.id || 0,
-      date: messageData?.date || 0
-    },
-    sender: {
-      sender_info: item.sender_info || {},
-      chat_info: messageData?.chat || {}
-    },
-    analysis: {
-      analyzed_content: item.analyzed_content || {}
-    },
-    meta: {
-      created_at: item.created_at,
-      updated_at: item.updated_at,
-      status: item.processing_error ? 'error' : item.processed ? 'processed' : 'pending',
-      error: item.processing_error
-    }
-  };
-
-  return {
-    id: item.id,
-    file_id: item.file_id,
-    file_unique_id: item.file_unique_id,
-    file_type: item.file_type,
-    public_url: item.public_url,
-    default_public_url: item.default_public_url,
-    thumbnail_url: item.thumbnail_url,
-    thumbnail_state: (item.thumbnail_state || 'pending') as MediaItem['thumbnail_state'],
-    thumbnail_source: (item.thumbnail_source || 'default') as ThumbnailSource,
-    thumbnail_error: item.thumbnail_error,
-    caption: messageData?.caption,
-    media_group_id: messageData?.media_group_id,
-    telegram_data: telegramData,
-    glide_data: item.glide_data || {},
-    media_metadata: item.media_metadata || {},
-    message_media_data: mediaMessageData,
-    vendor_uid: item.vendor_uid,
-    purchase_date: item.purchase_date,
-    notes: item.notes,
-    analyzed_content: item.analyzed_content,
-    message_url: item.message_url,
-    glide_app_url: item.glide_app_url,
-    created_at: item.created_at,
-    updated_at: item.updated_at,
-    telegram_media_row_id: item.telegram_media_row_id,
-    product_name: item.product_name,
-    product_code: item.product_code,
-    quantity: item.quantity
-  };
 };
