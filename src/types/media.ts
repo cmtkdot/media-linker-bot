@@ -2,71 +2,18 @@ import { Json } from "@/integrations/supabase/types";
 
 export type ThumbnailSource = 'telegram' | 'app_generated' | 'media_group' | 'default';
 
-export interface TelegramPhotoSize {
-  width: number;
-  height: number;
-  file_id: string;
-  file_size: number;
-  file_unique_id: string;
-}
-
-export interface TelegramChat {
-  id: number;
-  type: string;
-  title: string;
-}
-
 export interface TelegramMessageData {
-  chat: TelegramChat;
-  date: number;
-  photo?: TelegramPhotoSize[];
-  video?: {
-    file_id: string;
-    file_unique_id: string;
-    width: number;
-    height: number;
-    duration: number;
-    thumb?: TelegramPhotoSize;
-    file_name?: string;
-    mime_type?: string;
-    file_size?: number;
+  message_data?: {
+    caption?: string;
+    chat?: {
+      id: number;
+      title: string;
+      type: string;
+    };
+    media_group_id?: string;
+    [key: string]: any;
   };
-  message_id: number;
-  sender_chat?: TelegramChat;
-  media_group_id?: string;
-  caption?: string;
-}
-
-export interface MessageInfo {
-  url?: string;
-  media_group_id?: string;
-  caption?: string;
-  message_id: number;
-  chat_id: number;
-  date: number;
-}
-
-export interface SenderInfo {
-  sender_info: Record<string, any>;
-  chat_info: Record<string, any>;
-}
-
-export interface AnalysisInfo {
-  analyzed_content: Record<string, any>;
-}
-
-export interface MessageMetadata {
-  created_at: string;
-  updated_at: string;
-  status: 'pending' | 'processed' | 'error';
-  error?: string | null;
-}
-
-export interface MessageMediaData {
-  message: MessageInfo;
-  sender: SenderInfo;
-  analysis: AnalysisInfo;
-  meta: MessageMetadata;
+  [key: string]: any;
 }
 
 export interface MediaItem {
@@ -80,13 +27,9 @@ export interface MediaItem {
   thumbnail_state?: 'pending' | 'downloaded' | 'generated' | 'failed' | 'default';
   thumbnail_source?: ThumbnailSource;
   thumbnail_error?: string;
-  product_name?: string;
-  product_code?: string;
-  quantity?: number;
   caption?: string;
   media_group_id?: string;
-  storage_path?: string;
-  telegram_data: Record<string, any>;
+  telegram_data: TelegramMessageData;
   glide_data: Record<string, any>;
   media_metadata: Record<string, any>;
   message_media_data: MessageMediaData;
@@ -99,21 +42,4 @@ export interface MediaItem {
   created_at: string;
   updated_at: string;
   telegram_media_row_id?: string;
-}
-
-export interface MediaSearchBarProps {
-  search: string;
-  onSearchChange: (value: string) => void;
-  view: 'grid' | 'table';
-  onViewChange: (view: 'grid' | 'table') => void;
-  selectedChannel: string;
-  onChannelChange: (channel: string) => void;
-  selectedType: string;
-  onTypeChange: (type: string) => void;
-  selectedVendor: string;
-  onVendorChange: (vendor: string) => void;
-  selectedSort: string;
-  onSortChange: (sort: string) => void;
-  channels: string[];
-  vendors: string[];
 }

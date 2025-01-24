@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { MediaItem, TelegramMessageData, MessageMediaData } from "@/types/media";
+import { MediaItem, TelegramMessageData, MessageMediaData, ThumbnailSource } from "@/types/media";
 
 export const useMediaData = (
   search: string,
@@ -19,7 +19,9 @@ export const useMediaData = (
         if (searchError) throw searchError;
         
         return searchResults.map((item: any): MediaItem => {
-          const messageData = (item.telegram_data as any)?.message_data as TelegramMessageData;
+          const telegramData = item.telegram_data as TelegramMessageData;
+          const messageData = telegramData?.message_data || {};
+          
           const mediaMessageData: MessageMediaData = {
             message: {
               url: item.message_url || '',
@@ -49,10 +51,7 @@ export const useMediaData = (
             caption: messageData?.caption,
             media_group_id: messageData?.media_group_id,
             file_type: item.file_type as MediaItem['file_type'],
-            telegram_data: {
-              message_data: messageData,
-              ...item.telegram_data as Record<string, any>
-            },
+            telegram_data: telegramData,
             glide_data: item.glide_data || {},
             media_metadata: item.media_metadata || {},
             message_media_data: mediaMessageData,
@@ -102,7 +101,9 @@ export const useMediaData = (
       if (queryError) throw queryError;
 
       return (queryResult || []).map((item: any): MediaItem => {
-        const messageData = (item.telegram_data as any)?.message_data as TelegramMessageData;
+        const telegramData = item.telegram_data as TelegramMessageData;
+        const messageData = telegramData?.message_data || {};
+
         const mediaMessageData: MessageMediaData = {
           message: {
             url: item.message_url || '',
@@ -132,10 +133,7 @@ export const useMediaData = (
           caption: messageData?.caption,
           media_group_id: messageData?.media_group_id,
           file_type: item.file_type as MediaItem['file_type'],
-          telegram_data: {
-            message_data: messageData,
-            ...item.telegram_data as Record<string, any>
-          },
+          telegram_data: telegramData,
           glide_data: item.glide_data || {},
           media_metadata: item.media_metadata || {},
           message_media_data: mediaMessageData,

@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, RefreshCw } from "lucide-react";
+import { TelegramMessageData } from "@/types/media";
 
 export const CaptionAnalysisSection = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -30,9 +31,12 @@ export const CaptionAnalysisSection = () => {
       // Process each media item
       for (const media of (unanalyzedMedia || [])) {
         try {
+          const telegramData = media.telegram_data as TelegramMessageData;
+          const caption = telegramData?.message_data?.caption;
+
           const { data: analyzedContent, error: analysisError } = await supabase.functions.invoke('analyze-caption', {
             body: { 
-              caption: media.telegram_data?.message_data?.caption,
+              caption,
               messageId: media.id
             }
           });
