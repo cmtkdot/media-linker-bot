@@ -1,4 +1,6 @@
 export type MediaFileType = 'photo' | 'video' | 'document' | 'animation';
+export type ThumbnailState = 'pending' | 'downloaded' | 'generated' | 'failed' | 'default';
+export type ThumbnailSource = 'telegram' | 'app_generated' | 'media_group' | 'default';
 
 export interface MediaItem {
   id: string;
@@ -8,6 +10,9 @@ export interface MediaItem {
   public_url?: string;
   default_public_url?: string;
   thumbnail_url?: string;
+  thumbnail_state?: ThumbnailState;
+  thumbnail_source?: ThumbnailSource;
+  thumbnail_error?: string;
   product_name?: string;
   product_code?: string;
   quantity?: number;

@@ -350,7 +350,6 @@ export type Database = {
           caption: string | null
           created_at: string
           default_public_url: string | null
-          extracted_media_group_id: string | null
           file_id: string
           file_type: string
           file_unique_id: string
@@ -373,6 +372,9 @@ export type Database = {
           quantity: number | null
           telegram_data: Json
           telegram_media_row_id: string | null
+          thumbnail_error: string | null
+          thumbnail_source: string | null
+          thumbnail_state: string | null
           thumbnail_url: string | null
           updated_at: string
           vendor_uid: string | null
@@ -382,7 +384,6 @@ export type Database = {
           caption?: string | null
           created_at?: string
           default_public_url?: string | null
-          extracted_media_group_id?: string | null
           file_id: string
           file_type: string
           file_unique_id: string
@@ -405,6 +406,9 @@ export type Database = {
           quantity?: number | null
           telegram_data?: Json
           telegram_media_row_id?: string | null
+          thumbnail_error?: string | null
+          thumbnail_source?: string | null
+          thumbnail_state?: string | null
           thumbnail_url?: string | null
           updated_at?: string
           vendor_uid?: string | null
@@ -414,7 +418,6 @@ export type Database = {
           caption?: string | null
           created_at?: string
           default_public_url?: string | null
-          extracted_media_group_id?: string | null
           file_id?: string
           file_type?: string
           file_unique_id?: string
@@ -437,6 +440,9 @@ export type Database = {
           quantity?: number | null
           telegram_data?: Json
           telegram_media_row_id?: string | null
+          thumbnail_error?: string | null
+          thumbnail_source?: string | null
+          thumbnail_state?: string | null
           thumbnail_url?: string | null
           updated_at?: string
           vendor_uid?: string | null

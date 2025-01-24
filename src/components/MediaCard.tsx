@@ -13,10 +13,22 @@ const MediaCard = ({ item, onPreview, onEdit }: MediaCardProps) => {
   // Fallback image from Unsplash for when media URLs are missing
   const fallbackImage = "https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d";
 
-  // Helper to get the most appropriate URL
+  // Helper to get the most appropriate URL with improved quality for videos
   const getDisplayUrl = () => {
     if (item.file_type === 'video') {
-      return item.thumbnail_url || item.default_public_url || item.public_url || fallbackImage;
+      // First try to get the high-quality thumbnail based on state
+      if (item.thumbnail_state === 'downloaded' || item.thumbnail_state === 'generated') {
+        return item.thumbnail_url;
+      }
+      
+      // If thumbnail failed and we have a media group photo, try to use that
+      if (item.thumbnail_state === 'failed' && item.thumbnail_source === 'media_group') {
+        const mediaGroupPhoto = item.telegram_data?.media_group_photo_url;
+        if (mediaGroupPhoto) return mediaGroupPhoto;
+      }
+
+      // Finally fall back to default URLs
+      return item.default_public_url || item.public_url || fallbackImage;
     }
     return item.public_url || item.default_public_url || fallbackImage;
   };
@@ -28,7 +40,10 @@ const MediaCard = ({ item, onPreview, onEdit }: MediaCardProps) => {
       file_type: item.file_type,
       public_url: item.public_url,
       default_public_url: item.default_public_url,
-      thumbnail_url: item.thumbnail_url
+      thumbnail_url: item.thumbnail_url,
+      thumbnail_state: item.thumbnail_state,
+      thumbnail_source: item.thumbnail_source,
+      thumbnail_error: item.thumbnail_error
     });
   }
 

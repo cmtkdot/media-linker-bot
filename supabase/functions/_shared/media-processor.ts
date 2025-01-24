@@ -3,7 +3,6 @@ import { getAndDownloadTelegramFile } from './telegram-service.ts';
 import { getMimeType } from './media-validators.ts';
 import { downloadAndStoreThumbnail } from './thumbnail-handler.ts';
 import { withDatabaseRetry } from './database-retry.ts';
-import { SyncErrorType } from './sync-logger.ts';
 import { handleMediaGroup } from './media-group-handler.ts';
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -47,24 +46,6 @@ interface MessageRecord {
   processed_at?: string;
 }
 
-interface MediaFile {
-  type: 'photo' | 'video' | 'document' | 'animation';
-  file: {
-    file_id: string;
-    file_unique_id: string;
-    thumb?: {
-      file_id: string;
-    };
-  };
-}
-
-function getMessageUrl(message: TelegramMessage): string | null {
-  if (!message.chat?.username || message.chat.type !== 'channel') {
-    return null;
-  }
-  return `https://t.me/${message.chat.username}/${message.message_id}`;
-}
-
 export async function processMediaFiles(
   message: TelegramMessage,
   messageRecord: MessageRecord,
@@ -72,7 +53,7 @@ export async function processMediaFiles(
   botToken: string,
   correlationId = crypto.randomUUID()
 ) {
-  const mediaFiles: MediaFile[] = [];
+  const mediaFiles = [];
   if (message.photo) {
     mediaFiles.push({
       type: 'photo',
@@ -83,10 +64,8 @@ export async function processMediaFiles(
   if (message.document) mediaFiles.push({ type: 'document', file: message.document });
   if (message.animation) mediaFiles.push({ type: 'animation', file: message.animation });
 
-  const messageUrl = getMessageUrl(message);
   console.log('Processing media files:', { 
     mediaFiles, 
-    messageUrl,
     media_group_id: message.media_group_id 
   });
 
@@ -101,7 +80,7 @@ export async function processMediaFiles(
         async () => {
           return await supabase
             .from('telegram_media')
-            .select('id, public_url, telegram_data, media_group_id')
+            .select('id, public_url, telegram_data')
             .eq('file_unique_id', file.file_unique_id)
             .maybeSingle();
         }
@@ -109,17 +88,8 @@ export async function processMediaFiles(
 
       if (existingMedia) {
         console.log('Media already exists:', {
-          id: existingMedia.id,
-          media_group_id: existingMedia.media_group_id
+          id: existingMedia.id
         });
-        
-        // Update media group ID if it exists
-        if (message.media_group_id && existingMedia.media_group_id !== message.media_group_id) {
-          await supabase
-            .from('telegram_media')
-            .update({ media_group_id: message.media_group_id })
-            .eq('id', existingMedia.id);
-        }
         continue;
       }
 
@@ -131,22 +101,17 @@ export async function processMediaFiles(
       let thumbnailUrl: string | null = null;
       if (type === 'video' && message.video?.thumb) {
         console.log('Processing video thumbnail:', {
-          thumb_file_id: message.video.thumb.file_id,
-          thumb_file_unique_id: message.video.thumb.file_unique_id
+          thumb_file_id: message.video.thumb.file_id
         });
         
         try {
-          const thumbData = await downloadAndStoreThumbnail(
-            {
-              file_id: message.video.thumb.file_id,
-              file_unique_id: message.video.thumb.file_unique_id
-            },
+          thumbnailUrl = await downloadAndStoreThumbnail(
+            message.video.thumb,
             botToken,
             supabase
           );
           
-          if (thumbData) {
-            thumbnailUrl = `https://kzfamethztziwqiocbwz.supabase.co/storage/v1/object/public/media/${message.video.thumb.file_unique_id}.jpg`;
+          if (thumbnailUrl) {
             console.log('Successfully processed video thumbnail:', thumbnailUrl);
           }
         } catch (thumbError) {
@@ -172,7 +137,7 @@ export async function processMediaFiles(
         .from('media')
         .getPublicUrl(fileName);
 
-      // Create media record with thumbnail and media group ID
+      // Create media record with telegram_data containing media_group_id
       await withDatabaseRetry(
         async () => {
           const { error: insertError } = await supabase
@@ -185,15 +150,10 @@ export async function processMediaFiles(
               public_url: publicUrl,
               thumbnail_url: thumbnailUrl,
               caption: message.caption,
-              message_url: messageUrl,
-              media_group_id: message.media_group_id, // Explicitly store media_group_id
               telegram_data: {
                 message_id: message.message_id,
                 chat_id: message.chat.id,
-                chat: {
-                  username: message.chat.username,
-                  type: message.chat.type
-                },
+                chat: message.chat,
                 media_group_id: message.media_group_id,
                 date: message.date,
                 storage_path: fileName
