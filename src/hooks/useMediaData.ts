@@ -77,18 +77,18 @@ export const useMediaData = (
         const messageMediaData: MessageMediaData = {
           message: {
             url: item.message_url || '',
-            media_group_id: item.telegram_data?.media_group_id || '',
+            media_group_id: (item.telegram_data as Record<string, any>)?.media_group_id || '',
             caption: item.caption || '',
-            message_id: item.telegram_data?.message_id || 0,
-            chat_id: item.telegram_data?.chat_id || 0,
-            date: item.telegram_data?.date || 0
+            message_id: (item.telegram_data as Record<string, any>)?.message_id || 0,
+            chat_id: (item.telegram_data as Record<string, any>)?.chat_id || 0,
+            date: (item.telegram_data as Record<string, any>)?.date || 0
           },
           sender: {
-            sender_info: item.sender_info || {},
-            chat_info: item.telegram_data?.chat || {}
+            sender_info: item.sender_info as Record<string, any> || {},
+            chat_info: (item.telegram_data as Record<string, any>)?.chat || {}
           },
           analysis: {
-            analyzed_content: item.analyzed_content || {}
+            analyzed_content: item.analyzed_content as Record<string, any> || {}
           },
           meta: {
             created_at: item.created_at,
@@ -107,7 +107,8 @@ export const useMediaData = (
           analyzed_content: analyzedContent,
           message_media_data: messageMediaData,
           thumbnail_state: (item.thumbnail_state || 'pending') as ThumbnailState,
-          thumbnail_source: (item.thumbnail_source || 'default') as ThumbnailSource
+          thumbnail_source: (item.thumbnail_source || 'default') as ThumbnailSource,
+          media_group_id: (item.telegram_data as Record<string, any>)?.media_group_id
         };
       });
     }
