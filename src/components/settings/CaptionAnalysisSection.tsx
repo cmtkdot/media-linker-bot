@@ -1,64 +1,52 @@
 import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Loader2, Brain } from "lucide-react";
+import { MediaItem } from "@/types/media";
 
-export const CaptionAnalysisSection = () => {
+export function CaptionAnalysisSection() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const { toast } = useToast();
-  const queryClient = useQueryClient();
 
   const handleAnalyze = async () => {
-    setIsAnalyzing(true);
     try {
-      const { data: unanalyzedMedia, error: mediaError } = await supabase
+      setIsAnalyzing(true);
+      const { data: mediaItems, error: fetchError } = await supabase
         .from('telegram_media')
         .select('*')
-        .is('analyzed_content', null)
-        .not('message_media_data->message->caption', 'is', null)
-        .limit(100);
+        .is('analyzed_content', null);
 
-      if (mediaError) throw mediaError;
+      if (fetchError) throw fetchError;
 
-      let analyzedCount = 0;
-      let errorCount = 0;
+      const items = mediaItems as MediaItem[];
+      const itemsWithCaptions = items.filter(item => 
+        item.message_media_data?.message?.caption
+      );
 
-      for (const media of (unanalyzedMedia || [])) {
-        try {
-          const caption = media.message_media_data?.message?.caption;
-          
-          const { data: analyzedContent, error: analysisError } = await supabase.functions.invoke('analyze-caption', {
-            body: { 
-              caption,
-              messageId: media.id
-            }
-          });
-
-          if (analysisError) throw analysisError;
-
-          if (analyzedContent) {
-            analyzedCount++;
-          }
-        } catch (error) {
-          console.error('Error analyzing caption:', error);
-          errorCount++;
-        }
+      if (itemsWithCaptions.length === 0) {
+        toast({
+          title: "No captions to analyze",
+          description: "All media items with captions have already been analyzed.",
+        });
+        return;
       }
 
-      await queryClient.invalidateQueries({ queryKey: ['telegram-media'] });
+      const { error } = await supabase.functions.invoke('analyze-caption', {
+        body: { items: itemsWithCaptions }
+      });
+
+      if (error) throw error;
 
       toast({
-        title: "Caption Analysis Complete",
-        description: `Analyzed ${analyzedCount} captions with ${errorCount} errors.`,
+        title: "Captions analyzed",
+        description: `Successfully analyzed ${itemsWithCaptions.length} captions.`,
       });
-    } catch (error: any) {
-      console.error('Error in caption analysis:', error);
+    } catch (error) {
+      console.error('Error analyzing captions:', error);
       toast({
-        title: "Analysis Failed",
-        description: error.message || "Failed to analyze captions",
+        title: "Analysis failed",
+        description: "Failed to analyze captions. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -67,33 +55,32 @@ export const CaptionAnalysisSection = () => {
   };
 
   return (
-    <Card className="border-2">
-      <CardHeader>
-        <CardTitle>Caption Analysis</CardTitle>
-        <CardDescription>
-          Analyze unprocessed media captions to extract product information
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <div>
+          <h3 className="text-lg font-medium">Caption Analysis</h3>
+          <p className="text-sm text-muted-foreground">
+            Analyze unprocessed media captions using AI
+          </p>
+        </div>
         <Button 
           onClick={handleAnalyze}
           disabled={isAnalyzing}
-          className="w-full"
-          size="lg"
+          variant="outline"
         >
           {isAnalyzing ? (
             <>
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Analyzing Captions...
+              Analyzing...
             </>
           ) : (
             <>
-              <RefreshCw className="w-4 h-4 mr-2" />
+              <Brain className="w-4 h-4 mr-2" />
               Analyze Captions
             </>
           )}
         </Button>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
-};
+}

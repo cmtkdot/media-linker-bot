@@ -9,8 +9,7 @@ export const getMediaItem = async (id: string): Promise<MediaItem> => {
     .single();
 
   if (error) throw error;
-
-  return data as unknown as MediaItem;
+  return data as MediaItem;
 };
 
 export const getMediaItems = async (): Promise<MediaItem[]> => {
@@ -20,11 +19,10 @@ export const getMediaItems = async (): Promise<MediaItem[]> => {
     .order('created_at', { ascending: false });
 
   if (error) throw error;
-
-  return data as unknown as MediaItem[];
+  return data as MediaItem[];
 };
 
-export const updateMediaItem = async (id: string, updates: MediaItemUpdate): Promise<MediaItem> => {
+export const updateMediaItem = async (id: string, updates: Partial<MediaItem>): Promise<MediaItem> => {
   const { data, error } = await supabase
     .from('telegram_media')
     .update(updates)
@@ -33,8 +31,7 @@ export const updateMediaItem = async (id: string, updates: MediaItemUpdate): Pro
     .single();
 
   if (error) throw error;
-
-  return data as unknown as MediaItem;
+  return data as MediaItem;
 };
 
 export const deleteMediaItem = async (id: string): Promise<void> => {

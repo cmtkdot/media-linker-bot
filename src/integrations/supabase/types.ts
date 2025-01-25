@@ -480,7 +480,7 @@ export type Database = {
           id?: string
           max_retries?: number | null
           message_id?: number | null
-          priority: number | null
+          priority?: number | null
           processed_at?: string | null
           queue_type: string
           retry_count?: number | null
@@ -556,18 +556,6 @@ export type Database = {
           vendor_uid: string | null
         }[]
       }
-      get_all_tables: {
-        Args: Record<string, never>;
-        Returns: { table_name: string }[];
-      };
-      create_glide_sync_table: {
-        Args: { table_name: string };
-        Returns: void;
-      };
-      sync_messages_to_telegram_media: {
-        Args: Record<string, never>;
-        Returns: { synced_count: number; error_count: number }[];
-      };
     }
     Enums: {
       [_ in never]: never
@@ -587,7 +575,7 @@ export type Tables<
   TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
     ? keyof (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
         Database[PublicTableNameOrOptions["schema"]]["Views"])
-    : never,
+    : never = never,
 > = PublicTableNameOrOptions extends { schema: keyof Database }
   ? (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
       Database[PublicTableNameOrOptions["schema"]]["Views"])[TableName] extends {
@@ -599,10 +587,10 @@ export type Tables<
         PublicSchema["Views"])
     ? (PublicSchema["Tables"] &
         PublicSchema["Views"])[PublicTableNameOrOptions] extends {
-      Row: infer R
-    }
-    ? R
-    : never
+        Row: infer R
+      }
+      ? R
+      : never
     : never
 
 export type TablesInsert<
@@ -620,10 +608,10 @@ export type TablesInsert<
     : never
   : PublicTableNameOrOptions extends keyof PublicSchema["Tables"]
     ? PublicSchema["Tables"][PublicTableNameOrOptions] extends {
-      Insert: infer I
-    }
-    ? I
-    : never
+        Insert: infer I
+      }
+      ? I
+      : never
     : never
 
 export type TablesUpdate<
@@ -641,10 +629,10 @@ export type TablesUpdate<
     : never
   : PublicTableNameOrOptions extends keyof PublicSchema["Tables"]
     ? PublicSchema["Tables"][PublicTableNameOrOptions] extends {
-      Update: infer U
-    }
-    ? U
-    : never
+        Update: infer U
+      }
+      ? U
+      : never
     : never
 
 export type Enums<

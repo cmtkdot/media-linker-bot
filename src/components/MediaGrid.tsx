@@ -33,7 +33,7 @@ const MediaGrid = () => {
   const { 
     data: mediaItems, 
     isLoading, 
-    error, 
+    error,
     refetch 
   } = useMediaData();
 
@@ -42,7 +42,9 @@ const MediaGrid = () => {
     isAnalyzing,
     handleSync,
     handleAnalyzeCaptions
-  } = useMediaActions(refetch);
+  } = useMediaActions(async () => {
+    await refetch();
+  });
 
   const handlePreview = useCallback((item: MediaItem) => {
     setSelectedItem(item);
@@ -52,9 +54,9 @@ const MediaGrid = () => {
     setEditItem(item);
   }, []);
 
-  const handleEditComplete = useCallback((updatedItem: MediaItem) => {
+  const handleEditComplete = useCallback(async (updatedItem: MediaItem) => {
     setEditItem(null);
-    refetch();
+    await refetch();
   }, [refetch]);
 
   return (
