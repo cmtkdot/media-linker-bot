@@ -7,56 +7,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const KNOWN_VENDOR_UIDS = [
-  'WOO', 'CARL', 'ENC', 'DNY', 'HEFF', 'EST', 'CUS', 'HIP', 'BNC', 'QB', 'KV', 
-  'FISH', 'Q', 'BRAV', 'P', 'JWD', 'BO', 'LOTO', 'OM', 'CMTK', 'MRW', 'FT', 
-  'CHAD', 'SHR', 'CBN', 'SPOB', 'PEPE', 'TURK', 'M', 'PBA', 'DBRO', 'Z', 'CHO', 
-  'RB', 'KPEE', 'DINO', 'KC', 'PRM', 'ANT', 'KNG', 'TOM', 'FAKE', 'FAKEVEN', 
-  'ERN', 'COO', 'BCH', 'JM', 'WITE', 'ANDY', 'BRC', 'BCHO'
-];
-
-const systemPrompt = `You are an intelligent JSON extraction assistant for product information from Telegram captions. Your goal is to extract meaningful product details while being adaptable to different caption formats.
-
-Core Fields to Extract:
-
-product_name:
-- Primary product identifier, typically at the start of the caption
-- Usually before any codes or technical details
-- Should capture the main product description
-
-product_code:
-- Look for alphanumeric codes, often after # symbols
-- May contain strain names or product identifiers
-- Common pattern: letters followed by numbers
-
-vendor_uid:
-- Extract from product codes when present
-- Should match known vendors: ${KNOWN_VENDOR_UIDS.join(', ')}
-- Usually the letters before numbers in codes
-
-quantity:
-- Look for numerical quantities
-- Common patterns: "x" followed by numbers
-- Convert to integer when found
-
-purchase_date:
-- Look for date patterns in codes
-- Convert to YYYY-MM-DD format when confident
-- Common format: 6 digits representing mmDDyy
-
-notes:
-- Additional details or context
-- Often in parentheses or at the end
-- Can include multiple pieces of information
-
-Guidelines:
-- Extract what you can confidently identify
-- product_name is most important - this must be extracted and present
-- Be flexible with formats but maintain accuracy
-- Don't force extractions if unclear
-- Combine related information logically
-- Return clean JSON with only valid extractions`;
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -87,11 +37,64 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4',
+        model: 'gpt-4o-mini',
         messages: [
           {
             role: 'system',
-            content: systemPrompt
+            content: `You are an AI assistant that extracts cannabis product information from Telegram captions. Extract the following information:
+
+            product_name (REQUIRED):
+                The cannabis strain name from the start of the caption. This must always be extracted, even if nothing else can be. It's typically everything before the # symbol, or the entire caption if no # exists.
+
+                product_code:
+                The full code after the # symbol, which contains the vendor ID and date. format is #[vendor_uid][purchase_date]
+
+                vendor_uid:
+                The letters at the start of the product code. Common vendors are: [
+                  "WOO", "CARL", "ENC", "DNY", "HEFF", "EST", "CUS", "HIP", "BNC", "QB", "KV", 
+                  "FISH", "Q", "BRAV", "P", "JWD", "BO", "LOTO", "OM", "CMTK", "MRW", "FT", 
+                  "CHAD", "SHR", "CBN", "SPOB", "PEPE", "TURK", "M", "PBA", "DBRO", "Z", "CHO", 
+                  "RB", "KPEE", "DINO", "KC", "PRM", "ANT", "KNG", "TOM", "FAKE", "FAKEVEN", 
+                  "ERN", "COO", "BCH", "JM", "WITE", "ANDY", "BRC", "BCHO"
+                ]
+
+                purchase_date:
+                Convert the last 6 digits from the product code from mmDDyy to YYYY-MM-DD format.
+
+                quantity:
+                The number that appears after "x" in the caption.
+
+                notes:
+                Any additional text after the quantity.
+
+                Example inputs and outputs:
+
+                "Blue Dream #WOO031524 x 2 (fresh batch)"
+                {
+                  "product_name": "Blue Dream",
+                  "product_code": "WOO031524",
+                  "vendor_uid": "WOO",
+                  "purchase_date": "2024-03-15",
+                  "quantity": 2,
+                  "notes": "fresh batch"
+                }
+
+                "Wedding Cake #CHAD112923x 5 A+ grade"
+                {
+                  "product_name": "Wedding Cake",
+                  "product_code": "CHAD112923",
+                  "vendor_uid": "CHAD",
+                  "purchase_date": "2023-11-29",
+                  "quantity": 5,
+                  "notes": "A+ grade"
+                }
+
+                "Purple Haze"
+                {
+                  "product_name": "Purple Haze"
+                }
+
+                Remember: product_name is required and must always be extracted. All other fields are optional and should only be included if they are clearly present in the caption.`
           },
           {
             role: 'user',
@@ -129,7 +132,7 @@ serve(async (req) => {
         extracted_data: result,
         confidence: 1.0,
         timestamp: new Date().toISOString(),
-        model_version: 'gpt-4'
+        model_version: 'gpt-4o-mini'
       }
     };
 
