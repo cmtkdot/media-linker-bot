@@ -37,28 +37,33 @@ const mapToMediaItem = (item: TelegramMedia): MediaItem => {
     typeof item.message_media_data === 'object' && 
     item.message_media_data !== null
   ) {
-    const data = item.message_media_data as Record<string, unknown>;
+    const data = item.message_media_data as Record<string, any>;
+    const message = data.message as Record<string, any> || {};
+    const sender = data.sender as Record<string, any> || {};
+    const analysis = data.analysis as Record<string, any> || {};
+    const meta = data.meta as Record<string, any> || {};
+
     messageMediaData = {
       message: {
-        url: typeof data.message?.url === 'string' ? data.message.url : defaultMessageMediaData.message.url,
-        media_group_id: typeof data.message?.media_group_id === 'string' ? data.message.media_group_id : defaultMessageMediaData.message.media_group_id,
-        caption: typeof data.message?.caption === 'string' ? data.message.caption : defaultMessageMediaData.message.caption,
-        message_id: typeof data.message?.message_id === 'number' ? data.message.message_id : defaultMessageMediaData.message.message_id,
-        chat_id: typeof data.message?.chat_id === 'number' ? data.message.chat_id : defaultMessageMediaData.message.chat_id,
-        date: typeof data.message?.date === 'number' ? data.message.date : defaultMessageMediaData.message.date
+        url: typeof message.url === 'string' ? message.url : defaultMessageMediaData.message.url,
+        media_group_id: typeof message.media_group_id === 'string' ? message.media_group_id : defaultMessageMediaData.message.media_group_id,
+        caption: typeof message.caption === 'string' ? message.caption : defaultMessageMediaData.message.caption,
+        message_id: typeof message.message_id === 'number' ? message.message_id : defaultMessageMediaData.message.message_id,
+        chat_id: typeof message.chat_id === 'number' ? message.chat_id : defaultMessageMediaData.message.chat_id,
+        date: typeof message.date === 'number' ? message.date : defaultMessageMediaData.message.date
       },
       sender: {
-        sender_info: typeof data.sender?.sender_info === 'object' ? data.sender.sender_info as Record<string, unknown> : {},
-        chat_info: typeof data.sender?.chat_info === 'object' ? data.sender.chat_info as Record<string, unknown> : {}
+        sender_info: typeof sender.sender_info === 'object' ? sender.sender_info : {},
+        chat_info: typeof sender.chat_info === 'object' ? sender.chat_info : {}
       },
       analysis: {
-        analyzed_content: typeof data.analysis?.analyzed_content === 'object' ? data.analysis.analyzed_content as Record<string, unknown> : {}
+        analyzed_content: typeof analysis.analyzed_content === 'object' ? analysis.analyzed_content : {}
       },
       meta: {
-        created_at: typeof data.meta?.created_at === 'string' ? data.meta.created_at : defaultMessageMediaData.meta.created_at,
-        updated_at: typeof data.meta?.updated_at === 'string' ? data.meta.updated_at : defaultMessageMediaData.meta.updated_at,
-        status: typeof data.meta?.status === 'string' ? data.meta.status as MessageMediaData['meta']['status'] : defaultMessageMediaData.meta.status,
-        error: typeof data.meta?.error === 'string' ? data.meta.error : defaultMessageMediaData.meta.error
+        created_at: typeof meta.created_at === 'string' ? meta.created_at : defaultMessageMediaData.meta.created_at,
+        updated_at: typeof meta.updated_at === 'string' ? meta.updated_at : defaultMessageMediaData.meta.updated_at,
+        status: typeof meta.status === 'string' ? meta.status as MessageMediaData['meta']['status'] : defaultMessageMediaData.meta.status,
+        error: typeof meta.error === 'string' ? meta.error : defaultMessageMediaData.meta.error
       }
     };
   } else {
