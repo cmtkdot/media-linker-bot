@@ -33,7 +33,7 @@ export interface TelegramMedia {
   file_unique_id: string;
   file_type: string;
   public_url?: string;
-  default_public_url?: string;
+  caption?: string;
   product_name?: string;
   product_code?: string;
   quantity?: number;
@@ -45,26 +45,8 @@ export interface TelegramMedia {
   processing_error?: string;
   last_synced_at?: string;
   message_id?: string;
-  caption?: string;
   vendor_uid?: string;
   purchase_date?: string;
   notes?: string;
   analyzed_content?: Record<string, any>;
-  purchase_order_uid?: string;
-  message_url?: string;
-  chat_url?: string;
-  glide_app_url?: string;
-}
-
-export interface GlideSyncQueueItem {
-  id: string;
-  table_name: string;
-  record_id: string;
-  operation: string;
-  old_data?: Record<string, any>;
-  new_data?: Record<string, any>;
-  created_at?: string;
-  processed_at?: string;
-  error?: string;
-  retry_count?: number;
 }

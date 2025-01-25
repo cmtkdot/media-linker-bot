@@ -14,8 +14,7 @@ export const MessageMediaSyncSection = () => {
   const handleSync = async () => {
     setIsSyncing(true);
     try {
-      const { data: syncResults, error: syncError } = await supabase
-        .rpc('sync_messages_to_telegram_media');
+      const { data: syncResults, error: syncError } = await supabase.rpc('sync_messages_to_telegram_media');
       
       if (syncError) {
         console.error('Error in sync_messages_to_telegram_media:', syncError);

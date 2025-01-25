@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { TableResult } from "@/types/media";
 
 export function useTableOperations() {
   const [isLoading, setIsLoading] = useState(false);
@@ -18,7 +19,7 @@ export function useTableOperations() {
       const linkedTables = new Set(tablesData.map(d => d.supabase_table_name));
 
       const { data: allTables, error: allTablesError } = await supabase
-        .rpc('get_all_tables');
+        .rpc<TableResult>('get_all_tables');
 
       if (allTablesError) throw allTablesError;
 

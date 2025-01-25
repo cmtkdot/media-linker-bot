@@ -65,6 +65,10 @@ export interface MediaItem {
   
   telegram_media_row_id?: string;
   glide_app_url?: string;
+  glide_json?: Json;
+  last_synced_at?: string;
+  message_data?: Json;
+  purchase_order_uid?: string;
 }
 
 export interface MediaItemUpdate extends Partial<MediaItem> {
@@ -78,27 +82,4 @@ export interface SyncResult {
 
 export interface TableResult {
   table_name: string;
-}
-
-export interface Database {
-  public: {
-    Functions: {
-      get_all_tables: {
-        Args: Record<string, never>;
-        Returns: TableResult[];
-      };
-      create_glide_sync_table: {
-        Args: { table_name: string };
-        Returns: undefined;
-      };
-      sync_messages_to_telegram_media: {
-        Args: Record<string, never>;
-        Returns: SyncResult[];
-      };
-      search_telegram_media: {
-        Args: { search_term: string };
-        Returns: MediaItem[];
-      };
-    };
-  };
 }
