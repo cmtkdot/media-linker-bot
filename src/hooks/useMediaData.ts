@@ -18,7 +18,7 @@ export function useMediaData() {
         message_id: item.message_id,
         file_id: item.file_id,
         file_unique_id: item.file_unique_id,
-        file_type: item.file_type,
+        file_type: item.file_type as MediaItem['file_type'],
         public_url: item.public_url,
         caption: item.caption,
         product_name: item.product_name,
@@ -27,19 +27,19 @@ export function useMediaData() {
         vendor_uid: item.vendor_uid,
         purchase_date: item.purchase_date,
         notes: item.notes,
-        analyzed_content: item.analyzed_content,
         message_url: item.message_url,
         telegram_media_row_id: item.telegram_media_row_id,
         glide_app_url: item.glide_app_url,
         created_at: item.created_at,
         updated_at: item.updated_at,
-        telegram_data: item.telegram_data,
-        glide_data: item.glide_data,
-        media_metadata: item.media_metadata,
-        message_media_data: item.message_media_data,
+        telegram_data: item.telegram_data as TelegramMessage,
+        glide_data: item.glide_data as Record<string, any>,
+        media_metadata: item.media_metadata as Record<string, any>,
+        message_media_data: item.message_media_data as MessageMediaData,
         processed: item.processed,
         processing_error: item.processing_error,
-        storage_path: item.storage_path
+        storage_path: item.storage_path,
+        analyzed_content: item.analyzed_content as Record<string, any>
       }));
     }
   });

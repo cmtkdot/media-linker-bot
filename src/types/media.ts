@@ -23,18 +23,12 @@ export interface MessageMediaData {
     status: 'pending' | 'processed' | 'error';
     error: string | null;
   };
-  media?: {
+  media: {
     file_id: string;
     file_unique_id: string;
     file_type: string;
     public_url: string;
     storage_path?: string;
-  };
-  glide?: {
-    row_id?: string;
-    app_url?: string;
-    sync_status?: string;
-    last_sync?: string;
   };
 }
 
