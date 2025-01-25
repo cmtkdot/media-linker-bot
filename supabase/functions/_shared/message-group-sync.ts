@@ -1,3 +1,4 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { analyzeCaptionWithAI } from './caption-analyzer.ts';
 
 export async function findExistingGroupAnalysis(
@@ -29,7 +30,7 @@ export async function syncMediaGroupContent(
   const { error: updateError } = await supabase
     .from('messages')
     .update({
-      analyzed_content: analyzedContent || {},
+      analyzed_content: analyzedContent,
       product_name: productInfo?.product_name,
       product_code: productInfo?.product_code,
       quantity: productInfo?.quantity,
@@ -67,23 +68,34 @@ export async function processMessageContent(
   const mediaGroupId = message.media_group_id;
   let analyzedContent = null;
   let productInfo = null;
-  let caption = null;
 
   console.log('Processing message content:', {
     messageId: message.message_id,
     mediaGroupId,
+    hasCaption: !!message.caption,
     correlationId
   });
 
-  // Step 1: Extract caption from telegram data
-  if (message.telegram_data) {
-    caption = message.telegram_data.caption || message.caption;
+  // First check if this is part of a media group with existing analysis
+  if (mediaGroupId) {
+    const existingAnalysis = await findExistingGroupAnalysis(supabase, mediaGroupId);
+    if (existingAnalysis?.analyzed_content) {
+      analyzedContent = existingAnalysis.analyzed_content;
+      productInfo = {
+        product_name: existingAnalysis.product_name,
+        product_code: existingAnalysis.product_code,
+        quantity: existingAnalysis.quantity,
+        vendor_uid: existingAnalysis.vendor_uid,
+        purchase_date: existingAnalysis.purchase_date,
+        notes: existingAnalysis.notes
+      };
+    }
   }
 
-  // Step 2: Analyze caption if present
-  if (caption) {
+  // If no existing analysis and message has caption, analyze it
+  if (!analyzedContent && message.caption) {
     try {
-      analyzedContent = await analyzeCaptionWithAI(caption);
+      analyzedContent = await analyzeCaptionWithAI(message.caption);
       console.log('Caption analyzed:', {
         messageId: message.message_id,
         correlationId,
@@ -99,39 +111,14 @@ export async function processMessageContent(
           purchase_date: analyzedContent.purchase_date,
           notes: analyzedContent.notes
         };
+
+        // If this is part of a media group, sync the analysis to other messages
+        if (mediaGroupId) {
+          await syncMediaGroupContent(supabase, mediaGroupId, analyzedContent, productInfo);
+        }
       }
     } catch (error) {
       console.error('Error analyzing caption:', error);
-      // Even if analysis fails, set an empty object to trigger queue processing
-      analyzedContent = {};
-    }
-  } else {
-    // No caption, but still set analyzed_content to empty object
-    analyzedContent = {};
-  }
-
-  // Step 3: If part of a media group, sync analyzed content
-  if (mediaGroupId) {
-    if (analyzedContent) {
-      // If we have analyzed content, sync it to the group
-      await syncMediaGroupContent(supabase, mediaGroupId, analyzedContent, productInfo);
-    } else {
-      // If no analyzed content, check if group has existing analysis
-      const existingAnalysis = await findExistingGroupAnalysis(supabase, mediaGroupId);
-      if (existingAnalysis?.analyzed_content) {
-        analyzedContent = existingAnalysis.analyzed_content;
-        productInfo = {
-          product_name: existingAnalysis.product_name,
-          product_code: existingAnalysis.product_code,
-          quantity: existingAnalysis.quantity,
-          vendor_uid: existingAnalysis.vendor_uid,
-          purchase_date: existingAnalysis.purchase_date,
-          notes: existingAnalysis.notes
-        };
-      } else {
-        // If no existing analysis found, set empty object
-        analyzedContent = {};
-      }
     }
   }
 
