@@ -203,7 +203,7 @@ export function InventoryViewer({
                 <img
                   key={mediaUrl}
                   src={mediaUrl}
-                  alt={currentItem.caption || "Media preview"}
+                  alt={getMediaCaption(currentItem) || "Media preview"}
                   className="max-h-[80vh] w-auto object-contain"
                   onLoad={() => setIsLoading(false)}
                 />
@@ -212,7 +212,7 @@ export function InventoryViewer({
 
             {/* Navigation buttons */}
             {allMedia.length > 1 && (
-              <div className="absolute inset-y-0 left-0 right-0 flex items-center justify-between pointer-events-none px-4">
+              <div className="absolute inset-y-0 left-0 right-0 flex items-center justify-between pointer-events-none">
                 <Button
                   onClick={handlePrevious}
                   className="pointer-events-auto"
@@ -239,7 +239,7 @@ export function InventoryViewer({
             showInfo ? "translate-x-0" : "translate-x-full"
           )}>
             <div className="space-y-4">
-              {currentItem.caption && (
+              {getMediaCaption(currentItem) && (
                 <div>
                   <h3 className="font-medium">Caption</h3>
                   <p className="text-sm text-muted-foreground">{getMediaCaption(currentItem)}</p>

@@ -248,6 +248,13 @@ export type Database = {
             foreignKeyName: "glide_sync_queue_record_id_fkey"
             columns: ["record_id"]
             isOneToOne: false
+            referencedRelation: "message_media_view"
+            referencedColumns: ["telegram_media_id"]
+          },
+          {
+            foreignKeyName: "glide_sync_queue_record_id_fkey"
+            columns: ["record_id"]
+            isOneToOne: false
             referencedRelation: "telegram_media"
             referencedColumns: ["id"]
           },
@@ -455,6 +462,13 @@ export type Database = {
             foreignKeyName: "telegram_media_message_id_fkey"
             columns: ["message_id"]
             isOneToOne: true
+            referencedRelation: "message_media_view"
+            referencedColumns: ["message_id"]
+          },
+          {
+            foreignKeyName: "telegram_media_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: true
             referencedRelation: "messages"
             referencedColumns: ["id"]
           },
@@ -510,6 +524,17 @@ export type Database = {
       }
     }
     Views: {
+      message_media_view: {
+        Row: {
+          analyzed_content: Json | null
+          message_content: string | null
+          message_id: string | null
+          telegram_data: Json | null
+          telegram_media_id: string | null
+          telegram_media_url: string | null
+        }
+        Relationships: []
+      }
       video_thumbnail_status: {
         Row: {
           file_unique_id: string | null
