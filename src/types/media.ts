@@ -43,6 +43,7 @@ export interface MediaItem {
   message_id: string;
   message_url?: string;
   caption?: string;
+  media_group_id?: string;
   
   product_name?: string;
   product_code?: string;
@@ -60,7 +61,6 @@ export interface MediaItem {
   
   telegram_media_row_id?: string;
   glide_app_url?: string;
-  media_group_id?: string;
 }
 
 export interface MediaItemUpdate extends Partial<MediaItem> {

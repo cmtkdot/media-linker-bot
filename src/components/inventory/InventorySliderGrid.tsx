@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { MediaItem } from "@/types/media";
 import { InventoryViewer } from "./InventoryViewer";
-import { EditMediaDialog } from "./EditMediaDialog";
-import { InventoryCard } from "./InventoryCard";
+import EditMediaDialog from "./EditMediaDialog";
+import InventoryCard from "./InventoryCard";
 
 interface InventorySliderGridProps {
   initialItems: MediaItem[];

@@ -1,27 +1,31 @@
 import { useState } from "react";
-import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { MediaItem } from "@/types/media";
 
-export const useMediaActions = (refetch: () => Promise<unknown>) => {
+export const useMediaActions = (onRefetch?: () => Promise<void>) => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const handleSync = async () => {
     setIsSyncing(true);
     try {
-      const { data, error } = await supabase.functions.invoke<{ updated_groups: number; synced_media: number }>('sync-media-groups');
-
+      const { data, error } = await supabase.functions.invoke('sync-media-groups');
+      
       if (error) throw error;
 
-      await refetch();
-
       toast({
-        title: "Media Groups Sync Complete",
-        description: `Updated ${data.updated_groups} groups and synced ${data.synced_media} media items`,
+        title: "Media Groups Synced",
+        description: `Successfully synced ${data?.synced_count || 0} media groups.`,
       });
+
+      if (onRefetch) await onRefetch();
+      await queryClient.invalidateQueries({ queryKey: ['telegram-media'] });
     } catch (error: any) {
-      console.error('Error in media groups sync:', error);
+      console.error('Error syncing media groups:', error);
       toast({
         title: "Sync Failed",
         description: error.message || "Failed to sync media groups",
@@ -39,13 +43,12 @@ export const useMediaActions = (refetch: () => Promise<unknown>) => {
         .from('telegram_media')
         .select('*')
         .is('analyzed_content', null)
-        .not('message_media_data->message->caption', 'is', null)
-        .limit(100);
+        .not('message_media_data', 'is', null);
 
       if (!unanalyzedMedia?.length) {
         toast({
-          title: "No Unanalyzed Captions",
-          description: "All media items with captions have been analyzed.",
+          title: "No media to analyze",
+          description: "All media items have already been analyzed.",
         });
         return;
       }
@@ -54,37 +57,36 @@ export const useMediaActions = (refetch: () => Promise<unknown>) => {
       let errorCount = 0;
 
       for (const media of unanalyzedMedia) {
+        const caption = media.message_media_data?.message?.caption;
+        if (!caption) continue;
+
         try {
-          const caption = media.message_media_data?.message?.caption;
-          
-          const { error: analysisError } = await supabase.functions.invoke('analyze-caption', {
+          const { data: analyzedContent, error: analysisError } = await supabase.functions.invoke('analyze-caption', {
             body: { 
               caption,
               messageId: media.id
             }
           });
 
-          if (analysisError) {
-            console.error('Error analyzing caption:', analysisError);
-            errorCount++;
-            continue;
-          }
+          if (analysisError) throw analysisError;
 
-          analyzedCount++;
+          if (analyzedContent) {
+            analyzedCount++;
+          }
         } catch (error) {
           console.error('Error analyzing caption:', error);
           errorCount++;
         }
       }
 
-      await refetch();
+      await queryClient.invalidateQueries({ queryKey: ['telegram-media'] });
 
       toast({
         title: "Caption Analysis Complete",
         description: `Analyzed ${analyzedCount} captions with ${errorCount} errors.`,
       });
     } catch (error: any) {
-      console.error('Error analyzing captions:', error);
+      console.error('Error in caption analysis:', error);
       toast({
         title: "Analysis Failed",
         description: error.message || "Failed to analyze captions",
