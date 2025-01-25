@@ -1,5 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getAndDownloadTelegramFile } from "../_shared/telegram-service.ts";
+
+const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN') || '';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -41,7 +44,9 @@ serve(async (req) => {
     const standaloneItems = [];
 
     for (const item of queueItems || []) {
-      const mediaGroupId = item.data?.telegram_data?.media_group_id;
+      if (item.queue_type !== 'media') continue;
+      
+      const mediaGroupId = item.data?.message?.media_group_id;
       if (mediaGroupId) {
         if (!mediaGroups.has(mediaGroupId)) {
           mediaGroups.set(mediaGroupId, []);
@@ -52,29 +57,141 @@ serve(async (req) => {
       }
     }
 
-    // Process standalone items
-    for (const item of standaloneItems) {
-      try {
-        await processQueueItem(supabase, item);
-        results.processed++;
-      } catch (error) {
-        console.error(`Error processing standalone item ${item.id}:`, error);
-        results.errors++;
-        await updateQueueItemStatus(supabase, item.id, 'error', error.message);
-      }
-    }
-
-    // Process media groups
+    // Process media groups first
     for (const [groupId, items] of mediaGroups.entries()) {
       try {
-        await processMediaGroup(supabase, groupId, items);
-        results.processed += items.length;
+        // Find the caption holder (item with analyzed content)
+        const captionHolder = items.find(item => 
+          item.data?.analysis?.analyzed_content || 
+          item.data?.message?.caption
+        );
+
+        if (!captionHolder) {
+          console.log(`No caption holder found for group ${groupId}`);
+          continue;
+        }
+
+        // Get the shared analyzed content and message data
+        const sharedAnalyzedContent = captionHolder.data.analysis.analyzed_content;
+        const sharedMessageData = captionHolder.data.message;
+
+        // Update all items in the group with shared data
+        for (const item of items) {
+          try {
+            // Update queue item data with shared content
+            const updatedData = {
+              ...item.data,
+              message: {
+                ...item.data.message,
+                caption: sharedMessageData.caption,
+                media_group_id: groupId
+              },
+              analysis: {
+                analyzed_content: sharedAnalyzedContent
+              }
+            };
+
+            // Update queue item
+            await supabase
+              .from('unified_processing_queue')
+              .update({ 
+                data: updatedData,
+                status: 'processing'
+              })
+              .eq('id', item.id);
+
+            // Process media file
+            const mediaFile = item.data.telegram_data?.photo?.[0] || 
+                            item.data.telegram_data?.video || 
+                            item.data.telegram_data?.document;
+
+            if (!mediaFile) {
+              throw new Error('No media file found');
+            }
+
+            // Download and upload to storage
+            const { buffer, filePath } = await getAndDownloadTelegramFile(
+              mediaFile.file_id, 
+              TELEGRAM_BOT_TOKEN
+            );
+
+            const fileExt = filePath.split('.').pop() || '';
+            const fileName = `${mediaFile.file_unique_id}.${fileExt}`;
+
+            // Upload to storage
+            const { error: uploadError } = await supabase.storage
+              .from('media')
+              .upload(fileName, buffer, {
+                contentType: item.data.file_type === 'photo' ? 'image/jpeg' : 'video/mp4',
+                upsert: true
+              });
+
+            if (uploadError) throw uploadError;
+
+            // Get public URL
+            const { data: { publicUrl } } = await supabase.storage
+              .from('media')
+              .getPublicUrl(fileName);
+
+            // Insert into telegram_media
+            const { error: insertError } = await supabase
+              .from('telegram_media')
+              .insert([{
+                file_id: mediaFile.file_id,
+                file_unique_id: mediaFile.file_unique_id,
+                file_type: item.data.file_type,
+                public_url: publicUrl,
+                message_id: item.message_id,
+                analyzed_content: sharedAnalyzedContent,
+                telegram_data: item.data.telegram_data,
+                message_media_data: updatedData,
+                caption: sharedMessageData.caption,
+                product_name: sharedAnalyzedContent?.product_name,
+                product_code: sharedAnalyzedContent?.product_code,
+                quantity: sharedAnalyzedContent?.quantity,
+                vendor_uid: sharedAnalyzedContent?.vendor_uid,
+                purchase_date: sharedAnalyzedContent?.purchase_date,
+                notes: sharedAnalyzedContent?.notes
+              }]);
+
+            if (insertError) throw insertError;
+
+            // Mark queue item as completed
+            await supabase
+              .from('unified_processing_queue')
+              .update({ 
+                status: 'completed',
+                processed_at: new Date().toISOString()
+              })
+              .eq('id', item.id);
+
+            results.processed++;
+
+          } catch (error) {
+            console.error(`Error processing group item ${item.id}:`, error);
+            results.errors++;
+            await updateQueueItemStatus(supabase, item.id, 'error', error.message);
+          }
+        }
+
       } catch (error) {
         console.error(`Error processing media group ${groupId}:`, error);
         results.errors += items.length;
         for (const item of items) {
           await updateQueueItemStatus(supabase, item.id, 'error', error.message);
         }
+      }
+    }
+
+    // Process standalone items
+    for (const item of standaloneItems) {
+      try {
+        await processStandaloneItem(supabase, item);
+        results.processed++;
+      } catch (error) {
+        console.error(`Error processing standalone item ${item.id}:`, error);
+        results.errors++;
+        await updateQueueItemStatus(supabase, item.id, 'error', error.message);
       }
     }
 
@@ -95,91 +212,56 @@ serve(async (req) => {
   }
 });
 
-async function processMediaGroup(supabase: any, groupId: string, items: any[]) {
-  console.log(`Processing media group ${groupId} with ${items.length} items`);
+async function processStandaloneItem(supabase: any, item: any) {
+  // Update status to processing
+  await supabase
+    .from('unified_processing_queue')
+    .update({ status: 'processing' })
+    .eq('id', item.id);
 
-  // Find the caption holder (item with analyzed content)
-  const captionHolder = items.find(item => 
-    item.data?.analysis?.analyzed_content || 
-    item.data?.telegram_data?.caption
+  const mediaFile = item.data.telegram_data?.photo?.[0] || 
+                   item.data.telegram_data?.video || 
+                   item.data.telegram_data?.document;
+
+  if (!mediaFile) {
+    throw new Error('No media file found');
+  }
+
+  // Download and upload to storage
+  const { buffer, filePath } = await getAndDownloadTelegramFile(
+    mediaFile.file_id, 
+    TELEGRAM_BOT_TOKEN
   );
 
-  if (!captionHolder) {
-    console.log(`No caption holder found for group ${groupId}`);
-  }
+  const fileExt = filePath.split('.').pop() || '';
+  const fileName = `${mediaFile.file_unique_id}.${fileExt}`;
 
-  // Merge and prepare final data for the group
-  const groupAnalyzedContent = captionHolder?.data?.analysis?.analyzed_content || {};
-  const groupCaption = captionHolder?.data?.telegram_data?.caption;
+  // Upload to storage
+  const { error: uploadError } = await supabase.storage
+    .from('media')
+    .upload(fileName, buffer, {
+      contentType: item.data.file_type === 'photo' ? 'image/jpeg' : 'video/mp4',
+      upsert: true
+    });
 
-  // Process each item in the group with shared data
-  for (const item of items) {
-    try {
-      const finalData = {
-        ...item.data,
-        analysis: {
-          analyzed_content: groupAnalyzedContent
-        },
-        message: {
-          ...item.data.message,
-          caption: groupCaption
-        }
-      };
+  if (uploadError) throw uploadError;
 
-      // Update queue item with final merged data
-      await supabase
-        .from('unified_processing_queue')
-        .update({ 
-          data: finalData,
-          status: 'processing'
-        })
-        .eq('id', item.id);
+  // Get public URL
+  const { data: { publicUrl } } = await supabase.storage
+    .from('media')
+    .getPublicUrl(fileName);
 
-      // Process the item with merged data
-      await processQueueItem(supabase, { ...item, data: finalData });
-
-      // Mark as completed
-      await updateQueueItemStatus(supabase, item.id, 'completed');
-
-    } catch (error) {
-      console.error(`Error processing group item ${item.id}:`, error);
-      await updateQueueItemStatus(supabase, item.id, 'error', error.message);
-      throw error;
-    }
-  }
-}
-
-async function processQueueItem(supabase: any, item: any) {
-  console.log('Processing queue item:', item.id);
-
-  try {
-    const mediaData = item.data?.telegram_data;
-    if (!mediaData) {
-      throw new Error('No media data found');
-    }
-
-    // Extract media file information
-    const mediaFile = mediaData.photo?.[mediaData.photo.length - 1] || 
-                     mediaData.video || 
-                     mediaData.document;
-
-    if (!mediaFile) {
-      throw new Error('No media file found');
-    }
-
-    const fileId = mediaFile.file_id;
-    const fileUniqueId = mediaFile.file_unique_id;
-    const fileType = mediaData.photo ? 'photo' : 
-                    mediaData.video ? 'video' : 'document';
-
-    // Prepare final data for telegram_media
-    const telegramMediaData = {
-      file_id: fileId,
-      file_unique_id: fileUniqueId,
-      file_type: fileType,
+  // Insert into telegram_media
+  const { error: insertError } = await supabase
+    .from('telegram_media')
+    .insert([{
+      file_id: mediaFile.file_id,
+      file_unique_id: mediaFile.file_unique_id,
+      file_type: item.data.file_type,
+      public_url: publicUrl,
       message_id: item.message_id,
-      analyzed_content: item.data.analysis?.analyzed_content || {},
-      telegram_data: mediaData,
+      analyzed_content: item.data.analysis?.analyzed_content,
+      telegram_data: item.data.telegram_data,
       message_media_data: item.data,
       caption: item.data.message?.caption,
       product_name: item.data.analysis?.analyzed_content?.product_name,
@@ -188,23 +270,18 @@ async function processQueueItem(supabase: any, item: any) {
       vendor_uid: item.data.analysis?.analyzed_content?.vendor_uid,
       purchase_date: item.data.analysis?.analyzed_content?.purchase_date,
       notes: item.data.analysis?.analyzed_content?.notes
-    };
+    }]);
 
-    // Insert into telegram_media
-    const { error: insertError } = await supabase
-      .from('telegram_media')
-      .insert([telegramMediaData]);
+  if (insertError) throw insertError;
 
-    if (insertError) throw insertError;
-
-    // Update queue item status
-    await updateQueueItemStatus(supabase, item.id, 'completed');
-
-  } catch (error) {
-    console.error(`Error processing item ${item.id}:`, error);
-    await updateQueueItemStatus(supabase, item.id, 'error', error.message);
-    throw error;
-  }
+  // Mark as completed
+  await supabase
+    .from('unified_processing_queue')
+    .update({ 
+      status: 'completed',
+      processed_at: new Date().toISOString()
+    })
+    .eq('id', item.id);
 }
 
 async function updateQueueItemStatus(
