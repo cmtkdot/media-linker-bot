@@ -1,3 +1,5 @@
+import { Json } from "@/integrations/supabase/types";
+
 export interface MessageMediaData {
   message: {
     url: string;
@@ -55,7 +57,7 @@ export interface MediaItem {
   processed?: boolean;
   processing_error?: string;
   
-  analyzed_content?: Record<string, any>;
+  analyzed_content: Record<string, any>;
   telegram_data: Record<string, any>;
   message_media_data: MessageMediaData;
   glide_data: Record<string, any>;
