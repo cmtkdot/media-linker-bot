@@ -518,6 +518,12 @@ export type Database = {
       }
     }
     Functions: {
+      is_media_group_synced: {
+        Args: {
+          group_id: string
+        }
+        Returns: boolean
+      }
       search_telegram_media: {
         Args: {
           search_term: string
