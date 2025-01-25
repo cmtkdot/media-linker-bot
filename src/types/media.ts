@@ -39,55 +39,47 @@ export interface MessageMediaData {
 }
 
 export interface MediaItem {
+  // Database fields
   id: string;
+  created_at: string;
+  updated_at: string;
+  
+  // File information
   file_id: string;
   file_unique_id: string;
   file_type: string;
   public_url: string;
-<<<<<<< Updated upstream
-  default_public_url?: string;
-=======
-  message_id?: number;
->>>>>>> Stashed changes
+  storage_path?: string;
+  
+  // Message reference
+  message_id: number;
+  message_url?: string;
   caption?: string;
+  
+  // Product information
   product_name?: string;
   product_code?: string;
   quantity?: number;
   vendor_uid?: string;
   purchase_date?: string;
   notes?: string;
-<<<<<<< Updated upstream
-  analyzed_content?: {
-    product_name?: string;
-    product_code?: string;
-    quantity?: number;
-    vendor_uid?: string;
-    purchase_date?: string;
-    notes?: string;
-  };
-  message_url?: string;
-  telegram_media_row_id?: string;
-  glide_app_url?: string;
-  media_group_id?: string;
-  created_at?: string;
-  updated_at?: string;
-  telegram_data?: Record<string, any>;
-  glide_data?: Record<string, any>;
-  media_metadata?: Record<string, any>;
-  message_media_data?: MessageMediaData;
-=======
+  
+  // Processing status
+  processed?: boolean;
+  processing_error?: string;
+  
+  // Rich data objects
   analyzed_content?: Record<string, any>;
   telegram_data: TelegramMessage;
   message_media_data: MessageMediaData;
+  
+  // Additional metadata
   glide_data?: Record<string, any>;
   media_metadata?: Record<string, any>;
-  created_at: string;
-  updated_at: string;
-  processed?: boolean;
-  processing_error?: string;
+  
+  // Glide integration
   telegram_media_row_id?: string;
   glide_app_url?: string;
->>>>>>> Stashed changes
 }
 
 export interface MediaItemUpdate extends Partial<MediaItem> {
