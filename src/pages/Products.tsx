@@ -24,7 +24,7 @@ const Products = () => {
       if (error) throw error;
 
       return data.map((item: any): MediaItem => {
-        const messageData = (item.telegram_data as Record<string, any>)?.message_data || {};
+        const messageData = item.telegram_data || {};
         return {
           ...item,
           file_type: item.file_type as MediaItem['file_type'],

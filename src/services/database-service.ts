@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { MediaItem, MessageMediaData } from "@/types/media";
+import { TelegramMessage } from "@/types/telegram-types";
 import { withDatabaseRetry } from "@/utils/database-retry";
 
 export class DatabaseService {
@@ -35,11 +36,25 @@ export class DatabaseService {
           updated_at: item.updated_at,
           status: item.processing_error ? 'error' : item.processed ? 'processed' : 'pending',
           error: item.processing_error
+        },
+        media: {
+          file_id: item.file_id,
+          file_unique_id: item.file_unique_id,
+          file_type: item.file_type,
+          public_url: item.public_url,
+          storage_path: item.storage_path
+        },
+        glide: {
+          row_id: item.telegram_media_row_id,
+          app_url: item.glide_app_url,
+          sync_status: item.glide_sync_status,
+          last_sync: item.glide_last_sync
         }
       };
 
       return {
         ...item,
+        telegram_data: item.telegram_data as TelegramMessage,
         message_media_data: messageMediaData
       } as MediaItem;
     });
@@ -76,11 +91,25 @@ export class DatabaseService {
             updated_at: item.updated_at,
             status: item.processing_error ? 'error' : item.processed ? 'processed' : 'pending',
             error: item.processing_error
+          },
+          media: {
+            file_id: item.file_id,
+            file_unique_id: item.file_unique_id,
+            file_type: item.file_type,
+            public_url: item.public_url,
+            storage_path: item.storage_path
+          },
+          glide: {
+            row_id: item.telegram_media_row_id,
+            app_url: item.glide_app_url,
+            sync_status: item.glide_sync_status,
+            last_sync: item.glide_last_sync
           }
         };
 
         return {
           ...item,
+          telegram_data: item.telegram_data as TelegramMessage,
           message_media_data: messageMediaData
         } as MediaItem;
       });

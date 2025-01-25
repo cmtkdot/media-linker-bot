@@ -1,18 +1,5 @@
 import { Json } from "@/integrations/supabase/types";
-
-export type TelegramMessageData = {
-  message_data?: {
-    caption?: string;
-    chat?: {
-      id: number;
-      title: string;
-      type: string;
-    };
-    media_group_id?: string;
-    [key: string]: any;
-  };
-  [key: string]: any;
-};
+import { TelegramMessage } from './telegram-types';
 
 export interface MessageMediaData {
   message: {
@@ -29,40 +16,39 @@ export interface MessageMediaData {
   };
   analysis: {
     analyzed_content: Record<string, any>;
-    product_name?: string | null;
-    product_code?: string | null;
-    quantity?: number | null;
-    vendor_uid?: string | null;
-    purchase_date?: string | null;
-    notes?: string | null;
-    purchase_order_uid?: string | null;
   };
   meta: {
     created_at: string;
     updated_at: string;
     status: 'pending' | 'processed' | 'error';
-    error?: string | null;
+    error: string | null;
   };
-  media: {
-    public_url: string | null;
-    default_public_url: string | null;
-    file_type: string | null;
+  media?: {
+    file_id: string;
+    file_unique_id: string;
+    file_type: string;
+    public_url: string;
+    storage_path?: string;
   };
-  glide: {
-    row_id: string | null;
-    app_url: string | null;
-    last_synced_at: string | null;
+  glide?: {
+    row_id?: string;
+    app_url?: string;
+    sync_status?: string;
+    last_sync?: string;
   };
 }
 
 export interface MediaItem {
   id: string;
-  message_id: string;
   file_id: string;
   file_unique_id: string;
-  file_type: 'photo' | 'video' | 'document';
+  file_type: string;
   public_url: string;
+<<<<<<< Updated upstream
   default_public_url?: string;
+=======
+  message_id?: number;
+>>>>>>> Stashed changes
   caption?: string;
   product_name?: string;
   product_code?: string;
@@ -70,6 +56,7 @@ export interface MediaItem {
   vendor_uid?: string;
   purchase_date?: string;
   notes?: string;
+<<<<<<< Updated upstream
   analyzed_content?: {
     product_name?: string;
     product_code?: string;
@@ -88,6 +75,19 @@ export interface MediaItem {
   glide_data?: Record<string, any>;
   media_metadata?: Record<string, any>;
   message_media_data?: MessageMediaData;
+=======
+  analyzed_content?: Record<string, any>;
+  telegram_data: TelegramMessage;
+  message_media_data: MessageMediaData;
+  glide_data?: Record<string, any>;
+  media_metadata?: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+  processed?: boolean;
+  processing_error?: string;
+  telegram_media_row_id?: string;
+  glide_app_url?: string;
+>>>>>>> Stashed changes
 }
 
 export interface MediaItemUpdate extends Partial<MediaItem> {

@@ -262,79 +262,70 @@ export type Database = {
       }
       messages: {
         Row: {
-          analyzed_content: Json | null
-          caption: string | null
-          chat_id: number
-          created_at: string
           id: string
-          last_retry_at: string | null
-          media_group_id: string | null
-          message_data: Json
           message_id: number
-          message_type: string
-          message_url: string | null
-          notes: string | null
-          processed_at: string | null
-          processing_error: string | null
-          product_code: string | null
-          product_name: string | null
-          purchase_date: string | null
-          quantity: number | null
-          retry_count: number | null
+          chat_id: number
           sender_info: Json
-          status: string | null
-          updated_at: string
+          message_type: string
+          telegram_data: Json
+          caption: string | null
+          media_group_id: string | null
+          message_url: string | null
+          analyzed_content: Json | null
+          product_name: string | null
+          product_code: string | null
+          quantity: number | null
           vendor_uid: string | null
+          purchase_date: string | null
+          notes: string | null
+          status: string
+          retry_count: number
+          created_at: string
+          updated_at: string | null
         }
         Insert: {
-          analyzed_content?: Json | null
-          caption?: string | null
-          chat_id: number
-          created_at?: string
           id?: string
-          last_retry_at?: string | null
-          media_group_id?: string | null
-          message_data?: Json
-          message_id: number
-          message_type: string
-          message_url?: string | null
-          notes?: string | null
-          processed_at?: string | null
-          processing_error?: string | null
-          product_code?: string | null
-          product_name?: string | null
-          purchase_date?: string | null
-          quantity?: number | null
-          retry_count?: number | null
+          message_id?: number
+          chat_id?: number
           sender_info?: Json
-          status?: string | null
-          updated_at?: string
+          message_type?: string
+          telegram_data?: Json
+          caption?: string | null
+          media_group_id?: string | null
+          message_url?: string | null
+          analyzed_content?: Json | null
+          product_name?: string | null
+          product_code?: string | null
+          quantity?: number | null
           vendor_uid?: string | null
+          purchase_date?: string | null
+          notes?: string | null
+          status?: string
+          retry_count?: number
+          created_at?: string
+          updated_at?: string | null
         }
         Update: {
-          analyzed_content?: Json | null
-          caption?: string | null
-          chat_id?: number
-          created_at?: string
           id?: string
-          last_retry_at?: string | null
-          media_group_id?: string | null
-          message_data?: Json
           message_id?: number
-          message_type?: string
-          message_url?: string | null
-          notes?: string | null
-          processed_at?: string | null
-          processing_error?: string | null
-          product_code?: string | null
-          product_name?: string | null
-          purchase_date?: string | null
-          quantity?: number | null
-          retry_count?: number | null
+          chat_id?: number
           sender_info?: Json
-          status?: string | null
-          updated_at?: string
+          message_type?: string
+          telegram_data?: Json
+          caption?: string | null
+          media_group_id?: string | null
+          message_url?: string | null
+          analyzed_content?: Json | null
+          product_name?: string | null
+          product_code?: string | null
+          quantity?: number | null
           vendor_uid?: string | null
+          purchase_date?: string | null
+          notes?: string | null
+          status?: string
+          retry_count?: number
+          created_at?: string
+          updated_at?: string | null
         }
         Relationships: []
       }

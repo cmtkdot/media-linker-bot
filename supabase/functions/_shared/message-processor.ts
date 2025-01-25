@@ -37,8 +37,8 @@ export async function processMessageBatch(messages: any[], supabase: any, botTok
         message_id: message.message_id,
         chat_id: message.chat.id,
         sender_info: message.from || message.sender_chat || {},
-        message_type: getMessageType(message),
-        message_data: message,
+        message_type: determineMessageType(message),
+        telegram_data: message,
         caption: message.caption,
         media_group_id: message.media_group_id,
         message_url: messageUrl,
@@ -90,7 +90,7 @@ export async function processMessageBatch(messages: any[], supabase: any, botTok
       if (hasMedia && messageRecord) {
         console.log('Initiating media processing for message:', {
           message_id: messageRecord.id,
-          media_type: getMessageType(message)
+          media_type: determineMessageType(message)
         });
 
         try {
@@ -117,7 +117,7 @@ export async function processMessageBatch(messages: any[], supabase: any, botTok
   }
 }
 
-function getMessageType(message: any): string {
+function determineMessageType(message: any): string {
   if (message.photo) return 'photo';
   if (message.video) return 'video';
   if (message.document) return 'document';
