@@ -14,18 +14,8 @@ export const MessageMediaSyncSection = () => {
   const handleSync = async () => {
     setIsSyncing(true);
     try {
-      const { data: syncResults, error: syncError } = await supabase
-        .rpc('sync_messages_to_telegram_media');
-      
-      if (syncError) {
-        console.error('Error in sync_messages_to_telegram_media:', syncError);
-        throw syncError;
-      }
-
-      const syncResult = syncResults?.[0] || { synced_count: 0, error_count: 0 };
-
-      const { data, error } = await supabase.functions.invoke('sync-message-media', {
-        body: { operation: 'syncAll' }
+      const { data, error } = await supabase.functions.invoke('process-media-queue', {
+        body: { operation: 'processAll' }
       });
 
       if (error) throw error;
@@ -34,7 +24,7 @@ export const MessageMediaSyncSection = () => {
 
       toast({
         title: "Message Media Sync Complete",
-        description: `Processed ${data?.processed_count || 0} messages and synced ${data?.synced_media || 0} media items. ${syncResult.synced_count || 0} records synced from messages.`,
+        description: `Processed ${data?.processed_count || 0} messages and synced ${data?.synced_media || 0} media items.`,
       });
     } catch (error: any) {
       console.error('Error in message media sync:', error);
@@ -64,7 +54,7 @@ export const MessageMediaSyncSection = () => {
       <CardHeader>
         <CardTitle>Message Media Sync</CardTitle>
         <CardDescription>
-          Sync media from messages to telegram media table and process files
+          Process pending media items from the unified queue
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -77,12 +67,12 @@ export const MessageMediaSyncSection = () => {
           {isSyncing ? (
             <>
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Syncing Message Media...
+              Processing Media Queue...
             </>
           ) : (
             <>
               <RefreshCw className="w-4 h-4 mr-2" />
-              Sync Message Media
+              Process Media Queue
             </>
           )}
         </Button>
