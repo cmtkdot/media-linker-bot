@@ -44,12 +44,41 @@ serve(async (req) => {
     const chatId = message.chat.id.toString();
     const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
 
+    // Log incoming media group message
+    if (message.media_group_id) {
+      console.log('Processing media group message:', {
+        media_group_id: message.media_group_id,
+        message_id: message.message_id,
+        has_caption: !!message.caption,
+        photo_count: message.photo?.length || 0,
+        correlation_id: correlationId
+      });
+    }
+
     // Process message content and get analyzed content immediately
     const { analyzedContent, messageStatus, productInfo } = await processMessageContent(
       supabaseClient,
       message,
       correlationId
     );
+
+    // Check for existing media group messages
+    let existingGroupMessages = [];
+    if (message.media_group_id) {
+      const { data: groupMessages } = await supabaseClient
+        .from('messages')
+        .select('*')
+        .eq('media_group_id', message.media_group_id)
+        .order('created_at', { ascending: true });
+      
+      existingGroupMessages = groupMessages || [];
+      
+      console.log('Found existing group messages:', {
+        media_group_id: message.media_group_id,
+        existing_count: existingGroupMessages.length,
+        correlation_id: correlationId
+      });
+    }
 
     // Prepare message data
     const messageData = {
@@ -74,7 +103,43 @@ serve(async (req) => {
       .single();
 
     if (messageError) {
+      console.error('Error creating/updating message:', {
+        error: messageError,
+        media_group_id: message.media_group_id,
+        message_id: message.message_id,
+        correlation_id: correlationId
+      });
       throw messageError;
+    }
+
+    // If this is a media group message, ensure all messages in group are properly linked
+    if (message.media_group_id && messageRecord) {
+      console.log('Syncing media group messages:', {
+        media_group_id: message.media_group_id,
+        current_message_id: messageRecord.id,
+        existing_count: existingGroupMessages.length,
+        correlation_id: correlationId
+      });
+
+      // Update all messages in the group with shared analyzed content
+      if (analyzedContent) {
+        const { error: groupUpdateError } = await supabaseClient
+          .from('messages')
+          .update({
+            analyzed_content: analyzedContent,
+            status: 'processed',
+            ...productInfo
+          })
+          .eq('media_group_id', message.media_group_id);
+
+        if (groupUpdateError) {
+          console.error('Error updating media group:', {
+            error: groupUpdateError,
+            media_group_id: message.media_group_id,
+            correlation_id: correlationId
+          });
+        }
+      }
     }
 
     console.log('Message record created/updated:', {
@@ -91,7 +156,9 @@ serve(async (req) => {
         message: 'Message processed successfully',
         messageId: messageRecord?.id,
         correlationId,
-        status: messageRecord?.status
+        status: messageRecord?.status,
+        mediaGroupId: message.media_group_id,
+        groupSize: existingGroupMessages.length + 1
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
