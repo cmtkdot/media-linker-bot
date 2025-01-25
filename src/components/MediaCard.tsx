@@ -57,6 +57,10 @@ const MediaCard = ({ item, onPreview, onEdit, relatedMedia = [] }: MediaCardProp
     setCurrentIndex((prev) => (prev - 1 + allMedia.length) % allMedia.length);
   };
 
+  const getCaption = (mediaItem: MediaItem) => {
+    return mediaItem.message_media_data?.message?.caption || 'Untitled';
+  };
+
   return (
     <Card 
       className="group relative overflow-hidden"
@@ -88,7 +92,7 @@ const MediaCard = ({ item, onPreview, onEdit, relatedMedia = [] }: MediaCardProp
                   <>
                     <img
                       src={getDisplayUrl(currentItem)}
-                      alt={currentItem.caption || 'Video thumbnail'}
+                      alt={getCaption(currentItem)}
                       className="w-full h-full object-cover"
                       onError={(e) => {
                         const img = e.target as HTMLImageElement;
@@ -106,7 +110,7 @@ const MediaCard = ({ item, onPreview, onEdit, relatedMedia = [] }: MediaCardProp
             ) : (
               <img
                 src={getDisplayUrl(currentItem)}
-                alt={currentItem.caption || 'Media item'}
+                alt={getCaption(currentItem)}
                 className="w-full h-full object-cover"
                 onError={(e) => {
                   const img = e.target as HTMLImageElement;
@@ -185,7 +189,7 @@ const MediaCard = ({ item, onPreview, onEdit, relatedMedia = [] }: MediaCardProp
         {/* Media info */}
         <div className="p-3">
           <p className="text-sm font-medium truncate">
-            {currentItem.caption || 'Untitled'}
+            {getCaption(currentItem)}
           </p>
           <p className="text-xs text-muted-foreground">
             {currentItem.file_type.charAt(0).toUpperCase() + currentItem.file_type.slice(1)}

@@ -78,7 +78,7 @@ const MediaEditDialog = ({ editItem, onClose, onSave, onItemChange, formatDate }
         await updateTelegramMessage(
           editItem.telegram_data.message_id,
           editItem.telegram_data.chat.id,
-          { caption: editItem.caption }
+          { caption: editItem.message_media_data?.message?.caption }
         );
       }
 
