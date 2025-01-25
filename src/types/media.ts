@@ -1,8 +1,6 @@
 import { Json } from "@/integrations/supabase/types";
 
-export type ThumbnailSource = 'telegram' | 'app_generated' | 'media_group' | 'default';
-
-export interface TelegramMessageData {
+export type TelegramMessageData = {
   message_data?: {
     caption?: string;
     chat?: {
@@ -14,7 +12,7 @@ export interface TelegramMessageData {
     [key: string]: any;
   };
   [key: string]: any;
-}
+};
 
 export interface MessageMediaData {
   message: {
@@ -31,12 +29,29 @@ export interface MessageMediaData {
   };
   analysis: {
     analyzed_content: Record<string, any>;
+    product_name?: string | null;
+    product_code?: string | null;
+    quantity?: number | null;
+    vendor_uid?: string | null;
+    purchase_date?: string | null;
+    notes?: string | null;
+    purchase_order_uid?: string | null;
   };
   meta: {
     created_at: string;
     updated_at: string;
     status: 'pending' | 'processed' | 'error';
-    error?: string;
+    error?: string | null;
+  };
+  media: {
+    public_url: string | null;
+    default_public_url: string | null;
+    file_type: string | null;
+  };
+  glide: {
+    row_id: string | null;
+    app_url: string | null;
+    last_synced_at: string | null;
   };
 }
 
@@ -47,10 +62,6 @@ export interface MediaItem {
   file_type: 'photo' | 'video' | 'document' | 'animation';
   public_url?: string;
   default_public_url?: string;
-  thumbnail_url?: string;
-  thumbnail_state?: 'pending' | 'downloaded' | 'generated' | 'failed' | 'default';
-  thumbnail_source?: ThumbnailSource;
-  thumbnail_error?: string;
   media_group_id?: string;
   telegram_data: TelegramMessageData;
   glide_data: Record<string, any>;

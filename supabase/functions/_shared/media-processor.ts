@@ -1,7 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getAndDownloadTelegramFile } from './telegram-service.ts';
 import { getMimeType } from './media-validators.ts';
-import { downloadAndStoreThumbnail } from './thumbnail-handler.ts';
 import { withDatabaseRetry } from './database-retry.ts';
 import { handleMediaGroup } from './media-group-handler.ts';
 
@@ -81,37 +80,6 @@ export async function processMediaFiles(
       const fileExt = filePath.split('.').pop() || '';
       const fileName = `${file.file_unique_id}.${fileExt}`;
 
-      // Handle video thumbnail
-      let thumbnailState = 'pending';
-      let thumbnailSource = null;
-      let thumbnailUrl: string | null = null;
-      let thumbnailError: string | null = null;
-
-      if (type === 'video' && message.video?.thumb) {
-        console.log('Processing video thumbnail:', {
-          thumb_file_id: message.video.thumb.file_id,
-          correlation_id: correlationId
-        });
-        
-        try {
-          thumbnailUrl = await downloadAndStoreThumbnail(
-            message.video.thumb,
-            botToken,
-            supabase
-          );
-          
-          if (thumbnailUrl) {
-            thumbnailState = 'downloaded';
-            thumbnailSource = 'telegram';
-            console.log('Successfully processed thumbnail:', thumbnailUrl);
-          }
-        } catch (thumbError) {
-          console.error('Error processing thumbnail:', thumbError);
-          thumbnailState = 'failed';
-          thumbnailError = thumbError.message;
-        }
-      }
-
       await withDatabaseRetry(
         async () => {
           const { error: uploadError } = await supabase.storage
@@ -140,10 +108,6 @@ export async function processMediaFiles(
               file_type: type,
               message_id: messageRecord.id,
               public_url: publicUrl,
-              thumbnail_url: thumbnailUrl,
-              thumbnail_state: thumbnailState,
-              thumbnail_source: thumbnailSource,
-              thumbnail_error: thumbnailError,
               telegram_data: {
                 message_id: message.message_id,
                 chat_id: message.chat.id,
