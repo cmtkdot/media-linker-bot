@@ -5,7 +5,6 @@ export const extractVideoMetadata = (message: any) => {
     duration: message.video.duration,
     width: message.video.width,
     height: message.video.height,
-    thumb: message.video.thumb
   };
 };
 
