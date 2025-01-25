@@ -4,6 +4,8 @@ import { MediaItem, SyncResult, TableResult } from "./media";
 // Extend the generated Database type with our custom RPC functions
 export interface Database extends GeneratedDatabase {
   public: {
+    Tables: GeneratedDatabase['public']['Tables'];
+    Views: GeneratedDatabase['public']['Views'];
     Functions: {
       get_all_tables: {
         Args: Record<string, never>;
@@ -22,5 +24,7 @@ export interface Database extends GeneratedDatabase {
         Returns: MediaItem[];
       };
     };
+    Enums: GeneratedDatabase['public']['Enums'];
+    CompositeTypes: GeneratedDatabase['public']['CompositeTypes'];
   };
 }

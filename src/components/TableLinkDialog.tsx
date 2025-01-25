@@ -1,11 +1,9 @@
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { TableSelector } from "./table/TableSelector";
+import { ExistingTableTab } from "./table/ExistingTableTab";
 import { NewTableForm } from "./table/NewTableForm";
 import { Database } from "@/types/database";
 
@@ -51,9 +49,9 @@ export function TableLinkDialog({ config, onClose, onSuccess }: TableLinkDialogP
 
       const linkedTables = new Set(tablesData.map(d => d.supabase_table_name));
 
-      const supabaseClient = supabase as unknown as Database;
-      const { data: allTables, error: allTablesError } = await supabaseClient
-        .rpc('get_all_tables');
+      const { data: allTables, error: allTablesError } = await supabase
+        .from('get_all_tables')
+        .select();
 
       if (allTablesError) throw allTablesError;
 
@@ -81,11 +79,11 @@ export function TableLinkDialog({ config, onClose, onSuccess }: TableLinkDialogP
 
     setIsCreating(true);
     try {
-      const supabaseClient = supabase as unknown as Database;
-      const { error: functionError } = await supabaseClient
-        .rpc('create_glide_sync_table', { 
-          table_name: newTableName 
-        });
+      const { error: functionError } = await supabase
+        .from('create_glide_sync_table')
+        .select()
+        .eq('table_name', newTableName)
+        .single();
 
       if (functionError) throw functionError;
 
@@ -163,31 +161,15 @@ export function TableLinkDialog({ config, onClose, onSuccess }: TableLinkDialogP
             <TabsTrigger value="new">Create New Table</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="existing" className="space-y-4">
-            <TableSelector
+          <TabsContent value="existing">
+            <ExistingTableTab
               availableTables={availableTables}
-              selectedTable={selectedTable}
+              isCreating={isCreating}
               onTableSelect={setSelectedTable}
+              onLinkTable={handleLinkTable}
+              onClose={onClose}
+              selectedTable={selectedTable}
             />
-
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={onClose}>
-                Cancel
-              </Button>
-              <Button
-                onClick={handleLinkTable}
-                disabled={!selectedTable || isCreating}
-              >
-                {isCreating ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Linking...
-                  </>
-                ) : (
-                  'Link Table'
-                )}
-              </Button>
-            </div>
           </TabsContent>
 
           <TabsContent value="new">
