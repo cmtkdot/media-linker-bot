@@ -1,150 +1,163 @@
 # Telegram Media Collection & Product Management System
 
-A web application that automatically collects, processes, and manages media from Telegram channels while linking them to product data in Glide.
+## Core Processing Flow
 
-## System Architecture
+### 1. Webhook Reception & Initial Processing
+- **Entry Point**: `telegram-webhook/index.ts` (Edge Function)
+  - Endpoint: `https://kzfamethztziwqiocbwz.supabase.co/functions/v1/telegram-webhook`
+  - Validates incoming Telegram updates
+  - Uses webhook-handler.ts for message creation
+  - Immediately triggers caption analysis
 
-### Core Processing Flow
+### 2. Message Processing & Queue Management
+- **Message Creation**:
+  - Creates record in `messages` table with:
+    ```typescript
+    {
+      message_id: number
+      chat_id: number
+      sender_info: Json
+      telegram_data: Json
+      caption: string | null
+      media_group_id: string | null
+      analyzed_content: Json
+    }
+    ```
 
-1. **Webhook Reception** (`telegram-webhook/index.ts`)
-   - Validates incoming Telegram updates
-   - Uses: `webhook-handler.ts`, `cors.ts`
-   - Flow:
-     1. Validates webhook secret
-     2. Extracts message data
-     3. Initiates message processing
+- **Queue Integration** (via `queue_webhook_message` trigger):
+  - Automatically queues processed messages in `unified_processing_queue`
+  - Only queues messages after:
+    - Caption analysis is complete
+    - No processing errors exist
+    - Status is 'pending'
+  - Queue entry structure:
+    ```typescript
+    {
+      queue_type: 'media' | 'webhook'
+      data: {
+        message: {
+          url: string
+          media_group_id?: string
+          caption?: string
+          message_id: number
+          chat_id: number
+          date: number
+        }
+        sender: {
+          sender_info: Record<string, any>
+          chat_info: Record<string, any>
+        }
+        analysis: {
+          analyzed_content: Record<string, any>
+          processed_at: string
+          processing_error: string | null
+        }
+        meta: {
+          created_at: string
+          updated_at: string
+          status: string
+          retry_count: number
+          last_retry_at: string | null
+        }
+      }
+      status: 'pending' | 'processed' | 'error'
+      priority: number
+      correlation_id: string
+    }
+    ```
 
-2. **Message Processing** (`_shared/message-processor.ts`, `_shared/message-manager.ts`)
-   - Handles incoming messages
-   - Uses: `database-service.ts`, `caption-analyzer.ts`
-   - Flow:
-     1. Creates message record
-     2. Analyzes caption for product info
-     3. Triggers media processing if media present
-     4. Updates related records
+### 3. Media Processing System
+- **Process Media Queue** (Edge Function):
+  - Endpoint: `https://kzfamethztziwqiocbwz.supabase.co/functions/v1/process-media-queue`
+  - Processes pending items from unified_processing_queue
+  - Handles both individual media and media groups
+  - Runs every minute via cron job
 
-3. **Media Processing** (`_shared/media-processor.ts`)
-   - Core media file handling
-   - Uses: `media-validators.ts`, `telegram-service.ts`, `storage-manager.ts`
-   - Flow:
-     1. Downloads files from Telegram
-     2. Validates MIME types and file integrity
-     3. Uploads to Supabase storage
-     4. Extracts video thumbnails from Telegram message data
-     5. Creates/updates telegram_media records
-     6. Handles media group relationships
+- **Media Group Processing**:
+  - Groups items by media_group_id
+  - Ensures all group items are synced before processing
+  - Shares analyzed content across group members
+  - Updates all related records simultaneously
 
-4. **Media Group Handling** (`_shared/media-group-handler.ts`)
-   - Manages related media items
-   - Uses: `media-handler.ts`, `database-service.ts`, `caption-sync.ts`
-   - Flow:
-     1. Groups related media items
-     2. Creates/updates media_groups record
-     3. Syncs captions and metadata across group
-     4. Updates product information
+- **Media Storage Flow**:
+  1. Downloads media from Telegram
+  2. Validates file integrity
+  3. Uploads to Supabase storage
+  4. Creates/updates telegram_media records
+  5. Updates queue status
 
-5. **Caption Analysis & Sync** (`analyze-caption/index.ts`, `_shared/caption-analyzer.ts`)
-   - AI-powered caption analysis and group sync
-   - Uses: `OpenAI API`, `database-service.ts`
-   - Flow:
-     1. Analyzes captions using AI
-     2. Extracts product information
-     3. Updates media_groups table
-     4. Propagates updates to related records
-     5. Tracks sync status and errors
+### 4. Data Structure & Storage
+- **telegram_media Table Structure**:
+  ```typescript
+  {
+    id: string
+    file_id: string
+    file_unique_id: string
+    file_type: string
+    public_url: string | null
+    message_id: string
+    message_media_data: {
+      message: {
+        url: string
+        media_group_id?: string
+        caption?: string
+        message_id: number
+        chat_id: number
+        date: number
+      }
+      sender: {
+        sender_info: Record<string, any>
+        chat_info: Record<string, any>
+      }
+      analysis: {
+        analyzed_content: Record<string, any>
+      }
+      meta: {
+        created_at: string
+        updated_at: string
+        status: string
+        error: string | null
+      }
+      media: {
+        file_id: string
+        file_unique_id: string
+        file_type: string
+        public_url: string
+      }
+    }
+  }
+  ```
 
-6. **Glide Synchronization** (`sync-glide-media-table/index.ts`)
-   - Bidirectional sync with Glide
-   - Uses: `database-service.ts`, `error-handler.ts`
-   - Flow:
-     1. Processes sync queue
-     2. Maps data between systems
-     3. Handles conflicts
-     4. Records sync status
+### 5. Caption Analysis System
+- **Analysis Trigger**: `analyze-caption` Edge Function
+  - Endpoint: `https://kzfamethztziwqiocbwz.supabase.co/functions/v1/analyze-caption`
+  - Uses GPT-4 for intelligent caption parsing
+  - Extracts structured product information:
+    ```typescript
+    {
+      product_name: string
+      product_code?: string
+      quantity?: number
+      vendor_uid?: string
+      purchase_date?: string
+      notes?: string
+      analyzed_content: {
+        raw_text: string
+        extracted_data: Record<string, any>
+        confidence: number
+        timestamp: string
+        model_version: string
+      }
+    }
+    ```
 
-### Shared Functions Overview
+### 6. Error Handling & Retry Logic
+- Implements retry mechanism for failed operations
+- Tracks retry counts and timestamps
+- Maximum retry attempts configurable per queue type
+- Detailed error logging in processing_error fields
 
-1. **Data Management**
-   - `database-service.ts`: Core database operations
-   - `database-retry.ts`: Retry logic for database operations
-   - `media-database.ts`: Media-specific database operations
-   - `storage-manager.ts`: File storage operations
-
-2. **Message Processing**
-   - `message-processor.ts`: Main message handling
-   - `message-manager.ts`: Message state management
-   - `caption-analyzer.ts`: AI-powered caption analysis
-   - `caption-sync.ts`: Syncs captions across media groups
-
-3. **Media Handling**
-   - `media-processor.ts`: Core media processing
-   - `media-handler.ts`: Media state management
-   - `media-validators.ts`: File validation
-   - `media-group-handler.ts`: Media group operations
-   - `metadata-extractor.ts`: Extracts media metadata
-
-4. **Error Handling & Utilities**
-   - `error-handler.ts`: Centralized error handling
-   - `retry-utils.ts`: Retry mechanism utilities
-   - `cleanup-manager.ts`: Resource cleanup
-   - `sync-logger.ts`: Sync operation logging
-   - `constants.ts`: Shared constants
-
-5. **Integration Services**
-   - `telegram-service.ts`: Telegram API integration
-   - `telegram-types.ts`: Telegram type definitions
-
-### Database Structure
-
-1. **messages**
-   - Primary message storage
-   - Key fields:
-     - message_id: Telegram message ID
-     - chat_id: Telegram chat ID
-     - caption: Message text
-     - analyzed_content: Extracted product info
-
-2. **media_groups**
-   - Group-level metadata storage
-   - Key fields:
-     - media_group_id: Telegram group identifier
-     - caption: Shared caption
-     - analyzed_content: AI analysis results
-     - sync_status: Processing status
-     - product_info: Extracted metadata
-
-3. **telegram_media**
-   - Media file records
-   - Key fields:
-     - file_id: Telegram file identifier
-     - public_url: Supabase storage URL
-     - thumbnail_url: Video preview URL
-     - telegram_media_row_id: Glide reference
-
-4. **glide_sync_queue**
-   - Sync operation tracking
-   - Key fields:
-     - record_id: Related media ID
-     - operation: Sync operation type
-     - processed_at: Completion timestamp
-
-### Current Issues & Optimization Points
-
-1. **Media Processing Flow**
-   - Issue: Media not being added to telegram_media
-   - Potential causes:
-     - Webhook handler not properly utilizing media-processor.ts
-     - Database timeout issues in database-service.ts
-     - Error handling in media-handler.ts not properly managing retries
-
-2. **Recommended Fixes**
-   - Implement proper error propagation in webhook-handler.ts
-   - Add additional logging in media-processor.ts
-   - Review database-retry.ts implementation
-   - Ensure proper utilization of cleanup-manager.ts
-
-### Environment Variables Required
-
+## Required Environment Variables
 ```
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_WEBHOOK_SECRET=
@@ -154,24 +167,23 @@ OPENAI_API_KEY=
 GLIDE_API_TOKEN=
 ```
 
-### Development Guidelines
+## Development Guidelines
+1. **Queue Management**:
+   - Use unified_processing_queue for all async operations
+   - Implement proper error handling and retries
+   - Monitor queue performance and bottlenecks
 
-1. **Error Handling**
-   - Use error-handler.ts for consistent error management
-   - Implement retry logic using retry-utils.ts
-   - Log errors using sync-logger.ts
+2. **Media Processing**:
+   - Validate files before storage
+   - Maintain group relationships
+   - Handle caption syncing efficiently
 
-2. **Media Processing**
-   - Validate files using media-validators.ts
-   - Process groups using media-group-handler.ts
-   - Extract metadata using metadata-extractor.ts
+3. **Database Operations**:
+   - Use provided service functions
+   - Implement proper error handling
+   - Follow existing naming conventions
 
-3. **Database Operations**
-   - Use database-service.ts for core operations
-   - Implement retry logic using database-retry.ts
-   - Clean up using cleanup-manager.ts
-
-4. **Monitoring**
-   - Use sync-logger.ts for operation logging
-   - Monitor sync_health_checks table
-   - Review sync_performance_metrics
+4. **Monitoring**:
+   - Check Edge Function logs regularly
+   - Monitor queue performance
+   - Track processing errors
