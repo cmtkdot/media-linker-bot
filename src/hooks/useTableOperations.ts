@@ -22,7 +22,8 @@ export function useTableOperations() {
       const linkedTables = new Set(tablesData?.map(d => d.supabase_table_name) || []);
 
       const { data: allTables, error: allTablesError } = await supabase
-        .rpc('get_all_tables') as { data: TableResult[] | null, error: any };
+        .from('get_all_tables')
+        .select('table_name');
 
       if (allTablesError) throw allTablesError;
 
@@ -48,7 +49,10 @@ export function useTableOperations() {
     setIsLoading(true);
     try {
       const { error: functionError } = await supabase
-        .rpc('create_glide_sync_table', { p_table_name: tableName });
+        .from('create_glide_sync_table')
+        .select()
+        .eq('p_table_name', tableName)
+        .single();
 
       if (functionError) throw functionError;
 
