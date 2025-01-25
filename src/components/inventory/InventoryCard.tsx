@@ -275,4 +275,5 @@ export function InventoryCard({ item, onPreview, onEdit, relatedMedia = [] }: In
         </div>
       </CardContent>
     </Card>
+  );
 }
