@@ -37,7 +37,7 @@ export async function handleWebhookUpdate(
           caption: message.caption,
           correlation_id: correlationId
         });
-        analyzedContent = await analyzeCaptionWithAI(message.caption);
+        analyzedContent = await analyzeCaptionWithAI(message.caption, supabase);
         console.log('Caption analysis result:', {
           result: analyzedContent,
           correlation_id: correlationId
@@ -126,7 +126,7 @@ export async function handleWebhookUpdate(
         if (insertError) throw insertError;
         return data;
       }
-    }, 0, `create_message_${message.message_id}_${correlationId}`);
+    });
 
     // Process media files if present
     const hasMedia = message.photo || message.video || message.document || message.animation;
