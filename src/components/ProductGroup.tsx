@@ -88,7 +88,7 @@ const ProductGroup = ({ group, onMediaClick, onEdit }: ProductGroupProps) => {
         <CardTitle className="text-2xl font-bold">
           {mainProduct.product_name || "Untitled Product"}
         </CardTitle>
-        {mainProduct.caption && (
+        {getMediaCaption(mainProduct) && (
           <p className="text-lg text-muted-foreground mt-4">
             {getMediaCaption(mainProduct)}
           </p>
