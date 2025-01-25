@@ -1,7 +1,6 @@
 import { Database as GeneratedDatabase } from "@/integrations/supabase/types";
 import { MediaItem, SyncResult, TableResult } from "./media";
 
-// Extend the generated Database type with our custom RPC functions
 export interface Database extends GeneratedDatabase {
   public: {
     Tables: GeneratedDatabase['public']['Tables'];

@@ -23,12 +23,12 @@ export function useTableOperations() {
       if (allTablesError) throw allTablesError;
 
       return (allTables || [])
-        .map(t => t.table_name)
         .filter(table => 
-          !linkedTables.has(table) && 
-          !table.startsWith('_') && 
-          !['schema_migrations', 'spatial_ref_sys'].includes(table)
-        );
+          !linkedTables.has(table.table_name) && 
+          !table.table_name.startsWith('_') && 
+          !['schema_migrations', 'spatial_ref_sys'].includes(table.table_name)
+        )
+        .map(t => t.table_name);
     } catch (error) {
       console.error('Error fetching tables:', error);
       toast({
