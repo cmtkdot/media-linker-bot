@@ -47,10 +47,6 @@ export interface MediaItem {
   file_type: 'photo' | 'video' | 'document' | 'animation';
   public_url?: string;
   default_public_url?: string;
-  thumbnail_url?: string;
-  thumbnail_state?: 'pending' | 'downloaded' | 'generated' | 'failed' | 'default';
-  thumbnail_source?: ThumbnailSource;
-  thumbnail_error?: string;
   media_group_id?: string;
   telegram_data: TelegramMessageData;
   glide_data: Record<string, any>;

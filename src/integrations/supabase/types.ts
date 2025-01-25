@@ -258,13 +258,6 @@ export type Database = {
             referencedRelation: "telegram_media"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "glide_sync_queue_record_id_fkey"
-            columns: ["record_id"]
-            isOneToOne: false
-            referencedRelation: "video_thumbnail_status"
-            referencedColumns: ["id"]
-          },
         ]
       }
       messages: {
@@ -376,10 +369,6 @@ export type Database = {
           supabase_json: Json | null
           telegram_data: Json
           telegram_media_row_id: string | null
-          thumbnail_error: string | null
-          thumbnail_source: string | null
-          thumbnail_state: string | null
-          thumbnail_url: string | null
           updated_at: string
           vendor_uid: string | null
         }
@@ -413,10 +402,6 @@ export type Database = {
           supabase_json?: Json | null
           telegram_data?: Json
           telegram_media_row_id?: string | null
-          thumbnail_error?: string | null
-          thumbnail_source?: string | null
-          thumbnail_state?: string | null
-          thumbnail_url?: string | null
           updated_at?: string
           vendor_uid?: string | null
         }
@@ -450,10 +435,6 @@ export type Database = {
           supabase_json?: Json | null
           telegram_data?: Json
           telegram_media_row_id?: string | null
-          thumbnail_error?: string | null
-          thumbnail_source?: string | null
-          thumbnail_state?: string | null
-          thumbnail_url?: string | null
           updated_at?: string
           vendor_uid?: string | null
         }
@@ -535,30 +516,6 @@ export type Database = {
         }
         Relationships: []
       }
-      video_thumbnail_status: {
-        Row: {
-          file_unique_id: string | null
-          id: string | null
-          telegram_thumb_id: string | null
-          thumbnail_status: string | null
-          thumbnail_url: string | null
-        }
-        Insert: {
-          file_unique_id?: string | null
-          id?: string | null
-          telegram_thumb_id?: never
-          thumbnail_status?: never
-          thumbnail_url?: string | null
-        }
-        Update: {
-          file_unique_id?: string | null
-          id?: string | null
-          telegram_thumb_id?: never
-          thumbnail_status?: never
-          thumbnail_url?: string | null
-        }
-        Relationships: []
-      }
     }
     Functions: {
       check_message_sync_status: {
@@ -583,27 +540,11 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
-      count_missing_thumbnails: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          total_videos: number
-          missing_thumbnails: number
-        }[]
-      }
       create_glide_sync_table: {
         Args: {
           table_name: string
         }
         Returns: undefined
-      }
-      generate_video_thumbnails_from_metadata: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          video_id: string
-          old_thumbnail: string
-          new_thumbnail: string
-          source: string
-        }[]
       }
       get_all_tables: {
         Args: Record<PropertyKey, never>
@@ -655,15 +596,6 @@ export type Database = {
           source: string
         }[]
       }
-      regenerate_video_thumbnails: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          video_id: string
-          old_thumbnail: string
-          new_thumbnail: string
-          has_telegram_thumb: boolean
-        }[]
-      }
       safe_sync_messages_to_telegram_media: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -706,10 +638,6 @@ export type Database = {
           supabase_json: Json | null
           telegram_data: Json
           telegram_media_row_id: string | null
-          thumbnail_error: string | null
-          thumbnail_source: string | null
-          thumbnail_state: string | null
-          thumbnail_url: string | null
           updated_at: string
           vendor_uid: string | null
         }[]
@@ -719,24 +647,6 @@ export type Database = {
         Returns: {
           synced_count: number
           error_count: number
-        }[]
-      }
-      sync_missing_video_metadata: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          video_id: string
-          product_name: string
-          updated_thumbnail: string
-          source: string
-        }[]
-      }
-      update_all_video_thumbnails: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          video_id: string
-          old_thumbnail: string
-          new_thumbnail: string
-          status: string
         }[]
       }
       validate_storage_consistency: {
