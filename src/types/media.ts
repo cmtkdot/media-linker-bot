@@ -1,5 +1,4 @@
 import { Json } from "@/integrations/supabase/types";
-import { TelegramMessage } from './telegram-types';
 
 export interface MessageMediaData {
   message: {
@@ -58,11 +57,8 @@ export interface MediaItem {
   processing_error?: string;
   
   analyzed_content?: Record<string, any>;
-  telegram_data: TelegramMessage;
+  telegram_data: Record<string, any>;
   message_media_data: MessageMediaData;
-  
-  glide_data?: Record<string, any>;
-  media_metadata?: Record<string, any>;
   
   telegram_media_row_id?: string;
   glide_app_url?: string;
@@ -70,9 +66,4 @@ export interface MediaItem {
 
 export interface MediaItemUpdate extends Partial<MediaItem> {
   id: string;
-}
-
-export interface MediaSearchBarProps {
-  search: string;
-  onSearchChange: (value: string) => void;
 }
