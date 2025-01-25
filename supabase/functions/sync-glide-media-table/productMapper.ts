@@ -1,4 +1,4 @@
-import { GlideTableSchema } from './types';
+import { GlideTableSchema } from './types.ts';
 
 export function mapRecordToGlide(record: any) {
   return {
@@ -16,6 +16,10 @@ export function mapRecordToGlide(record: any) {
     [GlideTableSchema.message_url.name]: record.message_url,
     [GlideTableSchema.media_group_id.name]: record.media_group_id,
     [GlideTableSchema.created_at.name]: record.created_at,
-    [GlideTableSchema.updated_at.name]: record.updated_at
+    [GlideTableSchema.updated_at.name]: record.updated_at,
+    [GlideTableSchema.analyzed_content.name]: JSON.stringify(record.analyzed_content),
+    [GlideTableSchema.telegram_data.name]: JSON.stringify(record.telegram_data),
+    [GlideTableSchema.glide_data.name]: JSON.stringify(record.glide_data),
+    [GlideTableSchema.media_metadata.name]: JSON.stringify(record.media_metadata)
   };
 }
