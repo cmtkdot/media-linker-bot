@@ -55,7 +55,7 @@ export function TableLinkDialog({ config, onClose, onSuccess }: TableLinkDialogP
 
       // Get all tables in the database using rpc with explicit type
       const { data: allTables, error: allTablesError } = await supabase
-        .rpc<TableResult>('get_all_tables');
+        .rpc<TableResult, Record<string, unknown>>('get_all_tables');
 
       if (allTablesError) throw allTablesError;
 
@@ -85,7 +85,7 @@ export function TableLinkDialog({ config, onClose, onSuccess }: TableLinkDialogP
     setIsCreating(true);
     try {
       // First create the table using the RPC function
-      const { error: functionError } = await supabase.rpc(
+      const { error: functionError } = await supabase.rpc<void, { table_name: string }>(
         'create_glide_sync_table',
         { table_name: newTableName }
       );
