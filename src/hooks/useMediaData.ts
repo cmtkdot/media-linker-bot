@@ -31,9 +31,14 @@ const mapToMediaItem = (item: TelegramMedia): MediaItem => {
     }
   };
 
-  // Merge with actual message_media_data if it exists
-  const messageMediaData = item.message_media_data 
-    ? { ...defaultMessageMediaData, ...item.message_media_data as MessageMediaData }
+  // Safely merge with actual message_media_data if it exists
+  const messageMediaData: MessageMediaData = item.message_media_data 
+    ? {
+        ...defaultMessageMediaData,
+        ...(typeof item.message_media_data === 'object' && item.message_media_data !== null 
+          ? item.message_media_data as unknown as MessageMediaData 
+          : {})
+      }
     : defaultMessageMediaData;
 
   return {
