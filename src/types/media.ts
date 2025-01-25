@@ -27,7 +27,6 @@ export interface MessageMediaData {
     file_unique_id: string;
     file_type: string;
     public_url: string;
-    storage_path?: string;
   };
 }
 
@@ -40,7 +39,6 @@ export interface MediaItem {
   file_unique_id: string;
   file_type: string;
   public_url: string;
-  storage_path?: string;
   
   message_id: string;
   message_url?: string;
