@@ -48,7 +48,7 @@ export function useTableOperations() {
     setIsLoading(true);
     try {
       const { error: functionError } = await supabase
-        .rpc('create_glide_sync_table', { table_name: tableName });
+        .rpc('create_glide_sync_table', { p_table_name: tableName });
 
       if (functionError) throw functionError;
 

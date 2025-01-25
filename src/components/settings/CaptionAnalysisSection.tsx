@@ -3,8 +3,6 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, Brain } from "lucide-react";
-import { MediaItem } from "@/types/media";
-import { convertToMediaItem } from "@/services/database-service";
 
 export function CaptionAnalysisSection() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -13,35 +11,14 @@ export function CaptionAnalysisSection() {
   const handleAnalyze = async () => {
     try {
       setIsAnalyzing(true);
-      const { data: mediaItems, error: fetchError } = await supabase
-        .from('telegram_media')
-        .select('*')
-        .is('analyzed_content', null);
-
-      if (fetchError) throw fetchError;
-
-      const items = (mediaItems || []).map(convertToMediaItem);
-      const itemsWithCaptions = items.filter(item => 
-        item.message_media_data?.message?.caption
-      );
-
-      if (itemsWithCaptions.length === 0) {
-        toast({
-          title: "No captions to analyze",
-          description: "All media items with captions have already been analyzed.",
-        });
-        return;
-      }
-
-      const { error } = await supabase.functions.invoke('analyze-caption', {
-        body: { items: itemsWithCaptions }
-      });
+      
+      const { error } = await supabase.functions.invoke('analyze-media-group-caption');
 
       if (error) throw error;
 
       toast({
         title: "Captions analyzed",
-        description: `Successfully analyzed ${itemsWithCaptions.length} captions.`,
+        description: "Successfully analyzed media group captions.",
       });
     } catch (error) {
       console.error('Error analyzing captions:', error);
@@ -61,7 +38,7 @@ export function CaptionAnalysisSection() {
         <div>
           <h3 className="text-lg font-medium">Caption Analysis</h3>
           <p className="text-sm text-muted-foreground">
-            Analyze unprocessed media captions using AI
+            Analyze unprocessed media group captions using AI
           </p>
         </div>
         <Button 
