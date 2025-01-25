@@ -1,7 +1,7 @@
 import { Database as GeneratedDatabase } from "@/integrations/supabase/types";
-import { MediaItem, SyncResult, TableResult } from "./media";
+import { SyncResult, TableResult } from "./media";
 
-export interface Database extends GeneratedDatabase {
+export interface Database extends Omit<GeneratedDatabase, 'public'> {
   public: {
     Tables: GeneratedDatabase['public']['Tables'];
     Views: GeneratedDatabase['public']['Views'];
@@ -20,7 +20,7 @@ export interface Database extends GeneratedDatabase {
       };
       search_telegram_media: {
         Args: { search_term: string };
-        Returns: MediaItem[];
+        Returns: GeneratedDatabase['public']['Tables']['telegram_media']['Row'][];
       };
     };
     Enums: GeneratedDatabase['public']['Enums'];
