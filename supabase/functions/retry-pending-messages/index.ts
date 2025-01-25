@@ -42,13 +42,17 @@ serve(async (req) => {
       try {
         console.log(`Processing message ${message.id}, retry count: ${message.retry_count}`);
 
+        // Generate a new correlation ID for this retry attempt
+        const correlationId = crypto.randomUUID();
+
         // Update retry metadata
         const { error: updateError } = await supabase
           .from('messages')
           .update({
             retry_count: (message.retry_count || 0) + 1,
             last_retry_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
+            correlation_id: correlationId // Set the new correlation ID
           })
           .eq('id', message.id);
 
@@ -86,7 +90,7 @@ serve(async (req) => {
             priority: message.media_group_id ? 2 : 1,
             chat_id: message.chat_id,
             message_id: message.message_id,
-            correlation_id: message.correlation_id
+            correlation_id: correlationId // Use the same correlation ID
           });
 
         if (queueError) throw queueError;
