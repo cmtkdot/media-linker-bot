@@ -74,7 +74,7 @@ serve(async (req) => {
             .update({
               status: 'error',
               error_message: error.message,
-              retry_count: supabase.sql`retry_count + 1`
+              retry_count: (item.retry_count || 0) + 1
             })
             .eq('id', item.id);
         }
@@ -99,7 +99,7 @@ serve(async (req) => {
           .update({
             status: 'error',
             error_message: error.message,
-            retry_count: supabase.sql`retry_count + 1`
+            retry_count: (item.retry_count || 0) + 1
           })
           .eq('id', item.id);
       }
