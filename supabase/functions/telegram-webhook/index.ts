@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { handleWebhookUpdate } from "../_shared/webhook-handler.ts";
 import { corsHeaders } from "../_shared/cors.ts";
+import { analyzeCaptionWithAI } from "../_shared/caption-analyzer.ts";
 
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN') || '';
 const TELEGRAM_WEBHOOK_SECRET = Deno.env.get('TELEGRAM_WEBHOOK_SECRET') || '';
@@ -37,83 +38,134 @@ serve(async (req) => {
       update_id: update.update_id,
       has_message: !!update.message,
       has_channel_post: !!update.channel_post,
-      media_group_id: update.message?.media_group_id || update.channel_post?.media_group_id,
       correlation_id: correlationId
     });
 
-    try {
-      const result = await handleWebhookUpdate(update, supabaseClient, TELEGRAM_BOT_TOKEN, correlationId);
-      console.log('Successfully processed webhook:', {
-        ...result,
-        correlation_id: correlationId
-      });
-
+    const message = update.message || update.channel_post;
+    if (!message) {
+      console.log('No message in update');
       return new Response(
-        JSON.stringify(result),
-        { 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 200 
-        }
-      );
-    } catch (error) {
-      console.error('Error in webhook handler:', {
-        error: error.message,
-        stack: error.stack,
-        update_id: update.update_id,
-        correlation_id: correlationId,
-        media_group_id: update.message?.media_group_id || update.channel_post?.media_group_id
-      });
-
-      // Store failed webhook update for retry
-      try {
-        await supabaseClient
-          .from('unified_processing_queue')
-          .insert({
-            queue_type: 'webhook',
-            data: update,
-            error_message: error.message,
-            chat_id: update.message?.chat?.id || update.channel_post?.chat?.id,
-            message_id: update.message?.message_id || update.channel_post?.message_id,
-            correlation_id: correlationId,
-            status: 'error'
-          });
-      } catch (dbError) {
-        console.error('Failed to store failed webhook update:', {
-          error: dbError,
-          correlation_id: correlationId
-        });
-      }
-
-      return new Response(
-        JSON.stringify({ 
-          error: 'Error processing webhook update',
-          details: error.message,
-          correlation_id: correlationId
-        }),
-        { 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 500 
-        }
+        JSON.stringify({ message: 'No message in update' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-  } catch (error) {
-    const correlationId = crypto.randomUUID();
-    console.error('Critical error in webhook endpoint:', {
-      error: error.message,
-      stack: error.stack,
-      correlation_id: correlationId
+
+    // Analyze caption immediately if present
+    let analyzedContent = null;
+    if (message.caption) {
+      try {
+        console.log('Analyzing caption:', {
+          caption: message.caption,
+          correlation_id: correlationId
+        });
+        analyzedContent = await analyzeCaptionWithAI(message.caption, supabaseClient);
+        console.log('Caption analysis result:', {
+          result: analyzedContent,
+          correlation_id: correlationId
+        });
+      } catch (error) {
+        console.error('Error analyzing caption:', {
+          error,
+          correlation_id: correlationId
+        });
+        // Don't throw here, we'll store the error in the message record
+        analyzedContent = null;
+      }
+    } else {
+      // If no caption, set empty analyzed content
+      analyzedContent = {};
+    }
+
+    // Generate message URL
+    const chatId = message.chat.id.toString();
+    const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
+
+    // Create or update message record
+    const messageData = {
+      message_id: message.message_id,
+      chat_id: message.chat.id,
+      sender_info: message.from || message.sender_chat || {},
+      message_type: determineMessageType(message),
+      telegram_data: message,
+      caption: message.caption,
+      media_group_id: message.media_group_id,
+      message_url: messageUrl,
+      analyzed_content: analyzedContent,
+      correlation_id: correlationId,
+      processed_at: new Date().toISOString(), // Set processed_at since we've analyzed the caption
+      status: analyzedContent ? 'pending' : 'error',
+      processing_error: analyzedContent ? null : 'Failed to analyze caption',
+    };
+
+    console.log('Creating/updating message record:', {
+      message_id: message.message_id,
+      chat_id: message.chat.id,
+      correlation_id: correlationId,
+      has_analyzed_content: !!analyzedContent
+    });
+
+    const { data: existingMessage, error: selectError } = await supabaseClient
+      .from('messages')
+      .select('id')
+      .eq('message_id', message.message_id)
+      .eq('chat_id', message.chat.id)
+      .maybeSingle();
+
+    if (selectError) {
+      throw selectError;
+    }
+
+    let messageRecord;
+    if (existingMessage) {
+      const { data, error: updateError } = await supabaseClient
+        .from('messages')
+        .update(messageData)
+        .eq('id', existingMessage.id)
+        .select()
+        .single();
+
+      if (updateError) throw updateError;
+      messageRecord = data;
+    } else {
+      const { data, error: insertError } = await supabaseClient
+        .from('messages')
+        .insert([messageData])
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+      messageRecord = data;
+    }
+
+    console.log('Message record created/updated:', {
+      record_id: messageRecord?.id,
+      correlation_id: correlationId,
+      status: messageRecord?.status
     });
 
     return new Response(
-      JSON.stringify({ 
-        error: 'Critical error in webhook endpoint',
-        details: error.message,
-        correlation_id: correlationId
+      JSON.stringify({
+        success: true,
+        message: 'Update processed successfully',
+        messageId: messageRecord?.id,
+        correlationId
       }),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500 
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+
+  } catch (error) {
+    console.error('Error in webhook handler:', error);
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }
 });
+
+function determineMessageType(message: any): string {
+  if (message.photo && message.photo.length > 0) return 'photo';
+  if (message.video) return 'video';
+  if (message.document) return 'document';
+  if (message.animation) return 'animation';
+  return 'unknown';
+}

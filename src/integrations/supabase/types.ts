@@ -262,6 +262,7 @@ export type Database = {
           analyzed_content: Json | null
           caption: string | null
           chat_id: number
+          correlation_id: string | null
           created_at: string
           id: string
           last_retry_at: string | null
@@ -287,6 +288,7 @@ export type Database = {
           analyzed_content?: Json | null
           caption?: string | null
           chat_id: number
+          correlation_id?: string | null
           created_at?: string
           id?: string
           last_retry_at?: string | null
@@ -312,6 +314,7 @@ export type Database = {
           analyzed_content?: Json | null
           caption?: string | null
           chat_id?: number
+          correlation_id?: string | null
           created_at?: string
           id?: string
           last_retry_at?: string | null
