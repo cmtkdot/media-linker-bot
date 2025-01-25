@@ -62,7 +62,14 @@ export interface MediaItem {
   file_unique_id: string;
   file_type: 'photo' | 'video' | 'document';
   public_url: string;
+  default_public_url?: string;
   caption?: string;
+  product_name?: string;
+  product_code?: string;
+  quantity?: number;
+  vendor_uid?: string;
+  purchase_date?: string;
+  notes?: string;
   analyzed_content?: {
     product_name?: string;
     product_code?: string;
@@ -77,6 +84,10 @@ export interface MediaItem {
   media_group_id?: string;
   created_at?: string;
   updated_at?: string;
+  telegram_data?: Record<string, any>;
+  glide_data?: Record<string, any>;
+  media_metadata?: Record<string, any>;
+  message_media_data?: MessageMediaData;
 }
 
 export interface MediaItemUpdate extends Partial<MediaItem> {
