@@ -7,7 +7,7 @@ import { RefreshCw, Loader2, Brain } from "lucide-react";
 import { useMediaFilters } from "@/hooks/useMediaFilters";
 import { useMediaData } from "@/hooks/useMediaData";
 import { useMediaActions } from "@/hooks/useMediaActions";
-import { MediaItem, ThumbnailSource } from "@/types/media";
+import { MediaItem } from "@/types/media";
 
 const MediaGrid = () => {
   const [view, setView] = useState<'grid' | 'table'>('grid');
@@ -46,11 +46,9 @@ const MediaGrid = () => {
     handleAnalyzeCaptions
   } = useMediaActions(refetch);
 
-  // Process media items to ensure proper thumbnail handling
+  // Process media items to ensure proper media handling
   const processedMediaItems = mediaItems?.map(item => {
-    if (item.file_type === 'video' && 
-        item.thumbnail_state === 'failed' && 
-        item.telegram_data?.media_group_id) {
+    if (item.file_type === 'video' && item.telegram_data?.media_group_id) {
       // Find associated photo in the same media group
       const mediaGroupPhoto = mediaItems.find(media => 
         media.file_type === 'photo' && 
@@ -59,8 +57,7 @@ const MediaGrid = () => {
       if (mediaGroupPhoto) {
         return {
           ...item,
-          thumbnail_url: mediaGroupPhoto.public_url,
-          thumbnail_source: 'media_group' as ThumbnailSource
+          public_url: mediaGroupPhoto.public_url || item.public_url
         };
       }
     }
