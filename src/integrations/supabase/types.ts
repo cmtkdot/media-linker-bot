@@ -56,7 +56,6 @@ export type Database = {
           created_at: string | null
           fronted_terms: string | null
           glide_product_row_id: string
-          glide_product_row_id2: string | null
           is_fronted: boolean | null
           is_miscellaneous: boolean | null
           is_sample: boolean | null
@@ -101,7 +100,6 @@ export type Database = {
           created_at?: string | null
           fronted_terms?: string | null
           glide_product_row_id: string
-          glide_product_row_id2?: string | null
           is_fronted?: boolean | null
           is_miscellaneous?: boolean | null
           is_sample?: boolean | null
@@ -146,7 +144,6 @@ export type Database = {
           created_at?: string | null
           fronted_terms?: string | null
           glide_product_row_id?: string
-          glide_product_row_id2?: string | null
           is_fronted?: boolean | null
           is_miscellaneous?: boolean | null
           is_sample?: boolean | null

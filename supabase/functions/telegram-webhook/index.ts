@@ -13,6 +13,16 @@ serve(async (req) => {
       return new Response('ok', { headers: corsHeaders });
     }
 
+    // Validate webhook secret
+    const secretHeader = req.headers.get('X-Telegram-Bot-Api-Secret-Token');
+    if (!secretHeader || secretHeader !== TELEGRAM_WEBHOOK_SECRET) {
+      console.error('Invalid webhook secret');
+      return new Response(
+        JSON.stringify({ error: 'Invalid webhook secret' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+      );
+    }
+
     // Create Supabase client
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',

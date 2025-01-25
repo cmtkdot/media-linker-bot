@@ -18,9 +18,18 @@ serve(async (req) => {
       throw new Error('Missing required environment variables');
     }
 
-    // Set webhook URL (replace with your actual Supabase project URL)
+    // Set webhook URL (using the correct project URL)
     const webhookUrl = `https://kzfamethztziwqiocbwz.supabase.co/functions/v1/telegram-webhook`;
     
+    // First, delete any existing webhook
+    await fetch(
+      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/deleteWebhook`,
+      {
+        method: 'POST',
+      }
+    );
+
+    // Set the new webhook
     const response = await fetch(
       `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook`,
       {
@@ -31,12 +40,13 @@ serve(async (req) => {
         body: JSON.stringify({
           url: webhookUrl,
           secret_token: TELEGRAM_WEBHOOK_SECRET,
-          allowed_updates: ['message']
+          allowed_updates: ['message', 'channel_post']
         }),
       }
     );
 
     const result = await response.json();
+    console.log('Webhook setup result:', result);
 
     return new Response(
       JSON.stringify(result),
@@ -44,6 +54,7 @@ serve(async (req) => {
     );
 
   } catch (error) {
+    console.error('Error setting webhook:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
