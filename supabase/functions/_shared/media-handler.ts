@@ -2,6 +2,8 @@ import { processMediaFile } from './database-service.ts';
 import { handleProcessingError } from './error-handler.ts';
 import { MAX_RETRY_ATTEMPTS } from './constants.ts';
 import { downloadAndStoreThumbnail } from './thumbnail-handler.ts';
+import { supabase } from './supabase.ts';
+import { downloadFile } from './file-handler.ts';
 
 export async function processMedia(
   supabase: any,
@@ -86,28 +88,6 @@ export async function processMedia(
         return existingMediaRecord;
       }
 
-      // Handle video thumbnail if available
-      let thumbnailUrl = null;
-      if (mediaType === 'video' && mediaFile.thumb) {
-        console.log('Processing video thumbnail:', {
-          file_id: mediaFile.thumb.file_id,
-          file_unique_id: mediaFile.thumb.file_unique_id
-        });
-        
-        thumbnailUrl = await downloadAndStoreThumbnail(
-          {
-            file_id: mediaFile.thumb.file_id,
-            file_unique_id: mediaFile.thumb.file_unique_id
-          },
-          botToken,
-          supabase
-        );
-
-        if (thumbnailUrl) {
-          console.log('Successfully processed thumbnail:', thumbnailUrl);
-        }
-      }
-
       // Process the media file even without message_id
       const result = await processMediaFile(
         supabase,
@@ -118,7 +98,6 @@ export async function processMedia(
         botToken,
         {
           ...productInfo,
-          thumbnail_url: thumbnailUrl
         }
       );
 
@@ -127,7 +106,6 @@ export async function processMedia(
         media_type: mediaType,
         result_id: result?.id,
         has_message_id: !!messageRecord,
-        thumbnail_url: thumbnailUrl
       });
 
       return result;
@@ -163,4 +141,94 @@ export async function processMedia(
   }
 
   throw new Error(`Processing failed after ${MAX_RETRY_ATTEMPTS} attempts`);
+}
+
+export async function processMediaMessage(message: any) {
+  try {
+    const mediaType = getMediaType(message);
+    if (!mediaType) return null;
+
+    const mediaData = message[mediaType];
+    if (!mediaData) return null;
+
+    const fileId = mediaData.file_id;
+    const fileUniqueId = mediaData.file_unique_id;
+
+    console.log('Processing media:', {
+      type: mediaType,
+      fileId,
+      fileUniqueId
+    });
+
+    // Download the media file
+    const { fileName, fileData } = await downloadFile(fileId);
+    if (!fileData) {
+      console.error('Failed to download media file');
+      return null;
+    }
+
+    // Upload to Supabase Storage
+    const { data: uploadData, error: uploadError } = await supabase
+      .storage
+      .from('media')
+      .upload(fileName, fileData, {
+        contentType: getContentType(fileName)
+      });
+
+    if (uploadError) {
+      console.error('Error uploading media:', uploadError);
+      return null;
+    }
+
+    // Get public URL
+    const { data: { publicUrl } } = supabase
+      .storage
+      .from('media')
+      .getPublicUrl(fileName);
+
+    console.log('Media uploaded successfully:', publicUrl);
+
+    // Return media data
+    return {
+      file_id: fileId,
+      file_unique_id: fileUniqueId,
+      file_type: mediaType,
+      public_url: publicUrl,
+      media_metadata: {
+        file_name: fileName,
+        content_type: getContentType(fileName),
+        size: fileData.length
+      }
+    };
+
+  } catch (error) {
+    console.error('Error processing media:', error);
+    return null;
+  }
+}
+
+function getMediaType(message: any): string | null {
+  if (message.photo) return 'photo';
+  if (message.video) return 'video';
+  if (message.document) return 'document';
+  return null;
+}
+
+function getContentType(fileName: string): string {
+  const ext = fileName.split('.').pop()?.toLowerCase();
+  switch (ext) {
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg';
+    case 'png':
+      return 'image/png';
+    case 'gif':
+      return 'image/gif';
+    case 'mp4':
+      return 'video/mp4';
+    case 'webm':
+      return 'video/webm';
+    default:
+      return 'application/octet-stream';
+  }
 }

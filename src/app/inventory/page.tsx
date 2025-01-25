@@ -27,9 +27,7 @@ const InventoryPage = () => {
         glide_data: item.glide_data as Record<string, any>,
         media_metadata: item.media_metadata as Record<string, any>,
         analyzed_content: item.analyzed_content as Record<string, any>,
-        message_media_data: item.message_media_data as Record<string, any>,
-        thumbnail_state: (item.thumbnail_state || 'pending') as MediaItem['thumbnail_state'],
-        thumbnail_source: (item.thumbnail_source || 'default') as MediaItem['thumbnail_source'],
+        message_media_data: item.message_media_data as Record<string, any>
       }));
     }
   });

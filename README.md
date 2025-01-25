@@ -30,7 +30,6 @@ A web application that automatically collects, processes, and manages media from
      1. Downloads files from Telegram
      2. Validates MIME types and file integrity
      3. Uploads to Supabase storage
-     4. Extracts video thumbnails from Telegram message data
      5. Creates/updates telegram_media records
      6. Handles media group relationships
 
@@ -118,7 +117,6 @@ A web application that automatically collects, processes, and manages media from
    - Key fields:
      - file_id: Telegram file identifier
      - public_url: Supabase storage URL
-     - thumbnail_url: Video preview URL
      - telegram_media_row_id: Glide reference
 
 4. **glide_sync_queue**

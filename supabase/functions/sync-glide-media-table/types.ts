@@ -70,34 +70,38 @@ export interface GlideSyncQueueItem {
   retry_count?: number;
 }
 
-export const GlideTableSchema = {
-  id: { name: 'UkkMS', type: 'string' },
-  file_id: { name: '9Bod8', type: 'string' },
-  file_unique_id: { name: 'IYnip', type: 'string' },
-  file_type: { name: 'hbjE4', type: 'string' },
-  public_url: { name: 'd8Di5', type: 'string' },
-  product_name: { name: 'xGGv3', type: 'string' },
-  product_code: { name: 'xlfB9', type: 'string' },
-  quantity: { name: 'TWRwx', type: 'number' },
-  telegram_data: { name: 'Wm1he', type: 'json' },
-  glide_data: { name: 'ZRV7Z', type: 'json' },
-  media_metadata: { name: 'Eu9Zn', type: 'json' },
-  processed: { name: 'oj7fP', type: 'boolean' },
-  processing_error: { name: 'A4sZX', type: 'string' },
-  last_synced_at: { name: 'PWhCr', type: 'string' },
-  created_at: { name: 'Oa3L9', type: 'string' },
-  updated_at: { name: '9xwrl', type: 'string' },
-  message_id: { name: 'Uzkgt', type: 'string' },
-  caption: { name: 'pRsjz', type: 'string' },
-  vendor_uid: { name: 'uxDo1', type: 'string' },
-  purchase_date: { name: 'AMWxJ', type: 'string' },
-  notes: { name: 'BkUFO', type: 'string' },
-  analyzed_content: { name: 'QhAgy', type: 'json' },
-  purchase_order_uid: { name: '3y8Wt', type: 'string' },
-  default_public_url: { name: 'rCJK2', type: 'string' },
-  telegram_media_row_id: { name: 'NL5gM', type: 'string' },
-  message_url: { name: 'KjP2m', type: 'string' },
-  chat_url: { name: 'Lm3nQ', type: 'string' },
-  thumbnail_url: { name: 'Rt4vX', type: 'string' },
-  glide_app_url: { name: 'Yx9Kp', type: 'string' },
+export interface GlideTableSchema {
+  file_id: { name: string; type: string };
+  file_unique_id: { name: string; type: string };
+  file_type: { name: string; type: string };
+  public_url: { name: string; type: string };
+  caption: { name: string; type: string };
+  product_name: { name: string; type: string };
+  product_code: { name: string; type: string };
+  quantity: { name: string; type: string };
+  vendor_uid: { name: string; type: string };
+  purchase_date: { name: string; type: string };
+  notes: { name: string; type: string };
+  message_url: { name: string; type: string };
+  media_group_id: { name: string; type: string };
+  created_at: { name: string; type: string };
+  updated_at: { name: string; type: string };
+}
+
+export const GlideTableSchema: GlideTableSchema = {
+  file_id: { name: 'Rt4vA', type: 'string' },
+  file_unique_id: { name: 'Rt4vB', type: 'string' },
+  file_type: { name: 'Rt4vC', type: 'string' },
+  public_url: { name: 'Rt4vD', type: 'string' },
+  caption: { name: 'Rt4vE', type: 'string' },
+  product_name: { name: 'Rt4vF', type: 'string' },
+  product_code: { name: 'Rt4vG', type: 'string' },
+  quantity: { name: 'Rt4vH', type: 'number' },
+  vendor_uid: { name: 'Rt4vI', type: 'string' },
+  purchase_date: { name: 'Rt4vJ', type: 'string' },
+  notes: { name: 'Rt4vK', type: 'string' },
+  message_url: { name: 'Rt4vL', type: 'string' },
+  media_group_id: { name: 'Rt4vM', type: 'string' },
+  created_at: { name: 'Rt4vN', type: 'string' },
+  updated_at: { name: 'Rt4vO', type: 'string' }
 };

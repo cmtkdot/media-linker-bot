@@ -20,7 +20,7 @@ const MediaGridContent = ({ items = [], view, isLoading, error, onMediaUpdate }:
   const handleView = (item: MediaItem) => {
     // For videos with failed thumbnails, try to get media group photo
     if (item.file_type === 'video' && 
-        item.thumbnail_state === 'failed' && 
+        item._state === 'failed' && 
         item.telegram_data?.media_group_id) {
       const mediaGroupPhoto = items.find(media => 
         media.file_type === 'photo' && 

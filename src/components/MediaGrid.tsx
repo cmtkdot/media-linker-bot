@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import MediaGridFilters from "./MediaGridFilters";
 import MediaGridContent from "./MediaGridContent";
 import MediaTable from "./MediaTable";
@@ -8,9 +8,14 @@ import { useMediaFilters } from "@/hooks/useMediaFilters";
 import { useMediaData } from "@/hooks/useMediaData";
 import { useMediaActions } from "@/hooks/useMediaActions";
 import { MediaItem } from "@/types/media";
+import { InventoryViewer } from "./inventory/InventoryViewer";
+import { InventoryCard } from "./inventory/InventoryCard";
+import { EditMediaDialog } from "./inventory/EditMediaDialog";
 
 const MediaGrid = () => {
   const [view, setView] = useState<'grid' | 'table'>('grid');
+  const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
+  const [editItem, setEditItem] = useState<MediaItem | null>(null);
   
   const {
     search,
@@ -63,6 +68,19 @@ const MediaGrid = () => {
     }
     return item;
   }) || [];
+
+  const handlePreview = useCallback((item: MediaItem) => {
+    setSelectedItem(item);
+  }, []);
+
+  const handleEdit = useCallback((item: MediaItem) => {
+    setEditItem(item);
+  }, []);
+
+  const handleEditComplete = useCallback((updatedItem: MediaItem) => {
+    setEditItem(null);
+    refetch();
+  }, [refetch]);
 
   return (
     <div className="space-y-4 px-4 py-4">
@@ -131,13 +149,33 @@ const MediaGrid = () => {
           }}
         />
       ) : (
-        <MediaGridContent
-          items={processedMediaItems}
-          view={view}
-          isLoading={isLoading}
-          error={error as Error | null}
-          onMediaUpdate={refetch}
-        />
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {processedMediaItems.map((item) => (
+              <InventoryCard
+                key={item.id}
+                item={item}
+                onPreview={() => handlePreview(item)}
+                onEdit={() => handleEdit(item)}
+              />
+            ))}
+          </div>
+
+          {selectedItem && (
+            <InventoryViewer
+              item={selectedItem}
+              onClose={() => setSelectedItem(null)}
+            />
+          )}
+
+          {editItem && (
+            <EditMediaDialog
+              item={editItem}
+              onClose={() => setEditItem(null)}
+              onSave={handleEditComplete}
+            />
+          )}
+        </>
       )}
     </div>
   );
