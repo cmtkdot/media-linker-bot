@@ -7,6 +7,56 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const KNOWN_VENDOR_UIDS = [
+  'WOO', 'CARL', 'ENC', 'DNY', 'HEFF', 'EST', 'CUS', 'HIP', 'BNC', 'QB', 'KV', 
+  'FISH', 'Q', 'BRAV', 'P', 'JWD', 'BO', 'LOTO', 'OM', 'CMTK', 'MRW', 'FT', 
+  'CHAD', 'SHR', 'CBN', 'SPOB', 'PEPE', 'TURK', 'M', 'PBA', 'DBRO', 'Z', 'CHO', 
+  'RB', 'KPEE', 'DINO', 'KC', 'PRM', 'ANT', 'KNG', 'TOM', 'FAKE', 'FAKEVEN', 
+  'ERN', 'COO', 'BCH', 'JM', 'WITE', 'ANDY', 'BRC', 'BCHO'
+];
+
+const systemPrompt = `You are an intelligent JSON extraction assistant for product information from Telegram captions. Your goal is to extract meaningful product details while being adaptable to different caption formats.
+
+Core Fields to Extract:
+
+product_name:
+- Primary product identifier, typically at the start of the caption
+- Usually before any codes or technical details
+- Should capture the main product description
+
+product_code:
+- Look for alphanumeric codes, often after # symbols
+- May contain strain names or product identifiers
+- Common pattern: letters followed by numbers
+
+vendor_uid:
+- Extract from product codes when present
+- Should match known vendors: ${KNOWN_VENDOR_UIDS.join(', ')}
+- Usually the letters before numbers in codes
+
+quantity:
+- Look for numerical quantities
+- Common patterns: "x" followed by numbers
+- Convert to integer when found
+
+purchase_date:
+- Look for date patterns in codes
+- Convert to YYYY-MM-DD format when confident
+- Common format: 6 digits representing mmDDyy
+
+notes:
+- Additional details or context
+- Often in parentheses or at the end
+- Can include multiple pieces of information
+
+Guidelines:
+- Extract what you can confidently identify
+- product_name is most important - this must be extracted and present
+- Be flexible with formats but maintain accuracy
+- Don't force extractions if unclear
+- Combine related information logically
+- Return clean JSON with only valid extractions`;
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -37,24 +87,11 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4',
         messages: [
           {
             role: 'system',
-            content: `You are a JSON extraction assistant. Extract product information from captions. The MOST IMPORTANT field is product_name which should be everything before the # symbol if present, or the first line of text. Other fields are optional but try to extract them if present:
-
-            Required field:
-            - product_name: Everything before the # symbol, trimmed. If no # symbol, use the first line or full text.
-
-            Optional fields (only include if confident):
-            - product_code: Text between # and x, excluding parentheses. this is usually cannabis strain names
-            - quantity: Number after "x" and before parentheses and any spaces
-            - vendor_uid: Letters before numbers in product code. Common Vendor UID are: [ "WOO\nCARL\nENC\nDNY\nHEFF\nEST\nCUS\nHIP\nBNC\nQB\nKV\nFISH\nQ\nBRAV\nP\nJWD\nBO\nLOTO\nOM\nCMTK\nMRW\nFT\nCHAD\nSHR\nCBN\nSPOB\nPEPE\nTURK\nM\nPBA\nDBRO\nZ\nCHO\nRB\nKPEE\nDINO\nKC\nPRM\nANT\nKNG\nTOM\nFAKE\nFAKEVEN\nERN\nCOO\nBCH\nJM\nWITE\nANDY\nBRC\nBCHO"]
-            - purchase_date: Convert 6 digits from code (mmDDyy) to YYYY-MM-DD if present
-            - notes: Text in parentheses () combined with spaces or any other text after that is not part of the extracted information
-
-            Return ONLY a JSON object with these fields (no markdown).
-            If you can only extract product_name, that's fine - return just that field.`
+            content: systemPrompt
           },
           {
             role: 'user',
@@ -92,7 +129,7 @@ serve(async (req) => {
         extracted_data: result,
         confidence: 1.0,
         timestamp: new Date().toISOString(),
-        model_version: 'gpt-4o-mini'
+        model_version: 'gpt-4'
       }
     };
 
