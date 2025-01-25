@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { handleWebhookUpdate } from "../_shared/webhook-handler.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { analyzeCaptionWithAI } from "../_shared/caption-analyzer.ts";
 
@@ -50,37 +49,11 @@ serve(async (req) => {
       );
     }
 
-    // Analyze caption immediately if present
-    let analyzedContent = null;
-    if (message.caption) {
-      try {
-        console.log('Analyzing caption:', {
-          caption: message.caption,
-          correlation_id: correlationId
-        });
-        analyzedContent = await analyzeCaptionWithAI(message.caption, supabaseClient);
-        console.log('Caption analysis result:', {
-          result: analyzedContent,
-          correlation_id: correlationId
-        });
-      } catch (error) {
-        console.error('Error analyzing caption:', {
-          error,
-          correlation_id: correlationId
-        });
-        // Don't throw here, we'll store the error in the message record
-        analyzedContent = null;
-      }
-    } else {
-      // If no caption, set empty analyzed content
-      analyzedContent = {};
-    }
-
     // Generate message URL
     const chatId = message.chat.id.toString();
     const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
 
-    // Create or update message record
+    // Create message record with minimal processing
     const messageData = {
       message_id: message.message_id,
       chat_id: message.chat.id,
@@ -90,20 +63,17 @@ serve(async (req) => {
       caption: message.caption,
       media_group_id: message.media_group_id,
       message_url: messageUrl,
-      analyzed_content: analyzedContent,
       correlation_id: correlationId,
-      processed_at: new Date().toISOString(), // Set processed_at since we've analyzed the caption
-      status: analyzedContent ? 'pending' : 'error',
-      processing_error: analyzedContent ? null : 'Failed to analyze caption',
+      status: 'pending'
     };
 
-    console.log('Creating/updating message record:', {
+    console.log('Creating message record:', {
       message_id: message.message_id,
       chat_id: message.chat.id,
-      correlation_id: correlationId,
-      has_analyzed_content: !!analyzedContent
+      correlation_id: correlationId
     });
 
+    // Check for existing message
     const { data: existingMessage, error: selectError } = await supabaseClient
       .from('messages')
       .select('id')
@@ -146,7 +116,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        message: 'Update processed successfully',
+        message: 'Message queued for processing',
         messageId: messageRecord?.id,
         correlationId
       }),
