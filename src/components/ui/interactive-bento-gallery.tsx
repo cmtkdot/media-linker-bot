@@ -17,7 +17,7 @@ const InteractiveBentoGallery: React.FC<InteractiveBentoGalleryProps> = ({ items
           onClick={() => onMediaClick(item)}
         >
           <img
-            src={item.thumbnail_url || item.public_url}
+            src={item.public_url}
             alt={getMediaCaption(item)}
             className="w-full h-full object-cover rounded-lg"
           />

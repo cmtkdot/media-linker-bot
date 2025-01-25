@@ -36,7 +36,7 @@ const ProductGroup = ({ group, onMediaClick, onEdit }: ProductGroupProps) => {
               onClick={() => onMediaClick(group[currentIndex], group)}
             >
               <img
-                src={group[currentIndex].thumbnail_url || group[currentIndex].default_public_url}
+                src={group[currentIndex].public_url}
                 alt={getMediaCaption(group[currentIndex]) || ''}
                 className="w-full h-full object-cover"
               />
@@ -46,7 +46,7 @@ const ProductGroup = ({ group, onMediaClick, onEdit }: ProductGroupProps) => {
             </div>
           ) : (
             <img
-              src={group[currentIndex].public_url || group[currentIndex].default_public_url}
+              src={group[currentIndex].public_url}
               alt={getMediaCaption(group[currentIndex]) || ''}
               className="w-full h-full object-cover cursor-pointer"
               onClick={() => onMediaClick(group[currentIndex], group)}

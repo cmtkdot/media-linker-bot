@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { MediaItem } from "@/types/media";
-import MediaCard from "./MediaCard";
+import MediaCard, { MediaCardProps } from "./MediaCard";
 import MediaViewer from "./MediaViewer";
 import MediaEditDialog from "./MediaEditDialog";
 
@@ -68,7 +68,6 @@ const MediaGridContent = ({ items = [], view, isLoading, error, onMediaUpdate }:
       }>
         {items.map((item) => (
           <MediaCard
-            key={item.id}
             item={item}
             onPreview={() => handleView(item)}
             onEdit={handleEdit}
