@@ -34,7 +34,7 @@ const mapToMediaItem = (item: TelegramMedia): MediaItem => {
     ? {
         ...defaultMessageMediaData,
         ...(typeof item.message_media_data === 'object' && item.message_media_data !== null 
-          ? item.message_media_data as unknown as MessageMediaData 
+          ? item.message_media_data as MessageMediaData 
           : {})
       }
     : defaultMessageMediaData;

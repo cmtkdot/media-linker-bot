@@ -127,7 +127,7 @@ export function InventoryCard({ item, onPreview, onEdit, relatedMedia = [] }: In
                   <>
                     <img
                       src={getDisplayUrl(currentItem)}
-                      alt={currentItem.caption || 'Video thumbnail'}
+                      alt={getMediaCaption(currentItem) || 'Video thumbnail'}
                       className="w-full h-full object-cover"
                       onError={(e) => {
                         const img = e.target as HTMLImageElement;
@@ -145,7 +145,7 @@ export function InventoryCard({ item, onPreview, onEdit, relatedMedia = [] }: In
             ) : (
               <img
                 src={getDisplayUrl(currentItem)}
-                alt={currentItem.caption || 'Media item'}
+                alt={getMediaCaption(currentItem) || 'Media item'}
                 className="w-full h-full object-cover"
                 onError={(e) => {
                   const img = e.target as HTMLImageElement;
@@ -275,5 +275,4 @@ export function InventoryCard({ item, onPreview, onEdit, relatedMedia = [] }: In
         </div>
       </CardContent>
     </Card>
-  );
 }

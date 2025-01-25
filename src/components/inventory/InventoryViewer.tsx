@@ -242,7 +242,7 @@ export function InventoryViewer({
               {currentItem.caption && (
                 <div>
                   <h3 className="font-medium">Caption</h3>
-                  <p className="text-sm text-muted-foreground">{currentItem.caption}</p>
+                  <p className="text-sm text-muted-foreground">{getMediaCaption(currentItem)}</p>
                 </div>
               )}
               <div>
@@ -288,7 +288,7 @@ export function InventoryViewer({
                   >
                     <img
                       src={item.thumbnail_url || item.public_url}
-                      alt={item.caption || `Thumbnail ${index + 1}`}
+                      alt={getMediaCaption(item) || `Thumbnail ${index + 1}`}
                       className="w-full h-full object-cover"
                     />
                     {item.file_type === 'video' && (
@@ -324,7 +324,7 @@ export function InventoryViewer({
                 >
                   <img
                     src={item.thumbnail_url || item.public_url}
-                    alt={item.caption || `Thumbnail ${index + 1}`}
+                    alt={getMediaCaption(item) || `Thumbnail ${index + 1}`}
                     className="w-full h-full object-cover"
                   />
                   {item.file_type === 'video' && (
