@@ -29,18 +29,10 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Parse request body and generate correlation ID
     const update = await req.json();
     const correlationId = crypto.randomUUID();
-    
-    console.log('Received webhook update:', {
-      update_id: update.update_id,
-      has_message: !!update.message,
-      has_channel_post: !!update.channel_post,
-      correlation_id: correlationId
-    });
-
     const message = update.message || update.channel_post;
+    
     if (!message) {
       console.log('No message in update');
       return new Response(
@@ -53,6 +45,31 @@ serve(async (req) => {
     const chatId = message.chat.id.toString();
     const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
 
+    // Analyze caption if present
+    let analyzedContent = null;
+    if (message.caption) {
+      try {
+        analyzedContent = await analyzeCaptionWithAI(message.caption);
+        console.log('Caption analyzed:', { 
+          message_id: message.message_id,
+          correlation_id: correlationId,
+          analyzed_content: analyzedContent 
+        });
+      } catch (error) {
+        console.error('Error analyzing caption:', error);
+      }
+    }
+
+    // Extract product information from analyzed content
+    const productInfo = analyzedContent ? {
+      product_name: analyzedContent.product_name,
+      product_code: analyzedContent.product_code,
+      quantity: analyzedContent.quantity,
+      vendor_uid: analyzedContent.vendor_uid,
+      purchase_date: analyzedContent.purchase_date,
+      notes: analyzedContent.notes
+    } : null;
+
     // Create message record with minimal processing
     const messageData = {
       message_id: message.message_id,
@@ -60,30 +77,44 @@ serve(async (req) => {
       sender_info: message.from || message.sender_chat || {},
       message_type: determineMessageType(message),
       telegram_data: message,
-      caption: message.caption,
       media_group_id: message.media_group_id,
       message_url: messageUrl,
       correlation_id: correlationId,
-      status: 'pending'
+      status: 'pending',
+      analyzed_content: analyzedContent
     };
 
-    console.log('Creating message record:', {
-      message_id: message.message_id,
-      chat_id: message.chat.id,
-      correlation_id: correlationId
-    });
+    if (productInfo) {
+      Object.assign(messageData, productInfo);
+    }
 
-    // Check for existing message
-    const { data: existingMessage, error: selectError } = await supabaseClient
+    // If part of a media group, sync analyzed content to all messages in group
+    if (message.media_group_id && analyzedContent) {
+      console.log('Syncing analyzed content to media group:', {
+        media_group_id: message.media_group_id,
+        correlation_id: correlationId
+      });
+
+      const { error: groupUpdateError } = await supabaseClient
+        .from('messages')
+        .update({
+          analyzed_content: analyzedContent,
+          ...productInfo
+        })
+        .eq('media_group_id', message.media_group_id);
+
+      if (groupUpdateError) {
+        console.error('Error updating media group:', groupUpdateError);
+      }
+    }
+
+    // Create or update message record
+    const { data: existingMessage } = await supabaseClient
       .from('messages')
       .select('id')
       .eq('message_id', message.message_id)
       .eq('chat_id', message.chat.id)
       .maybeSingle();
-
-    if (selectError) {
-      throw selectError;
-    }
 
     let messageRecord;
     if (existingMessage) {
@@ -110,13 +141,13 @@ serve(async (req) => {
     console.log('Message record created/updated:', {
       record_id: messageRecord?.id,
       correlation_id: correlationId,
-      status: messageRecord?.status
+      has_analyzed_content: !!analyzedContent
     });
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: 'Message queued for processing',
+        message: 'Message processed successfully',
         messageId: messageRecord?.id,
         correlationId
       }),
