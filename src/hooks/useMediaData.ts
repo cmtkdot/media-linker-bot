@@ -2,7 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { MediaItem, MessageMediaData, ThumbnailSource } from "@/types/media";
 
-interface MediaQueryResult {
+// Explicitly define the database result type
+type MediaQueryResult = {
   id: string;
   file_id: string;
   file_unique_id: string;
@@ -31,7 +32,7 @@ interface MediaQueryResult {
   created_at: string;
   updated_at: string;
   telegram_media_row_id: string | null;
-}
+};
 
 const mapToMediaItem = (item: MediaQueryResult): MediaItem => ({
   id: item.id,
@@ -80,7 +81,7 @@ export const useMediaData = (
         
         if (searchError) throw searchError;
         
-        return (searchResults as unknown as MediaQueryResult[]).map(mapToMediaItem);
+        return (searchResults as MediaQueryResult[]).map(mapToMediaItem);
       }
 
       let query = supabase.from('telegram_media').select('*');
@@ -122,7 +123,7 @@ export const useMediaData = (
       
       if (queryError) throw queryError;
 
-      return (queryResult as unknown as MediaQueryResult[]).map(mapToMediaItem);
+      return (queryResult as MediaQueryResult[]).map(mapToMediaItem);
     }
   });
 };
