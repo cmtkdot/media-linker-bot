@@ -1,29 +1,45 @@
 import React from "react";
 import { MediaItem } from "@/types/media";
 import { getMediaCaption } from "@/utils/media-helpers";
+import { cn } from "@/lib/utils";
 
 interface ImageSwiperProps {
   items: MediaItem[];
-  onMediaClick: (media: MediaItem) => void;
+  currentIndex: number;
+  onSelect: (index: number) => void;
+  className?: string;
 }
 
-const ImageSwiper: React.FC<ImageSwiperProps> = ({ items, onMediaClick }) => {
+export function ImageSwiper({ items, currentIndex, onSelect, className }: ImageSwiperProps) {
   return (
-    <div className="swiper-container">
-      <div className="swiper-wrapper">
-        {items.map((item) => (
-          <div className="swiper-slide" key={item.id} onClick={() => onMediaClick(item)}>
-            <img
-              src={item.thumbnail_url || item.public_url}
-              alt={getMediaCaption(item)}
+    <div className={cn("flex gap-2 overflow-x-auto py-2", className)}>
+      {items.map((item, index) => (
+        <button
+          key={item.id}
+          className={cn(
+            "relative flex-shrink-0 w-16 h-16 rounded-md overflow-hidden",
+            currentIndex === index && "ring-2 ring-primary"
+          )}
+          onClick={() => onSelect(index)}
+        >
+          {item.file_type === 'video' ? (
+            <video
+              src={item.public_url}
               className="w-full h-full object-cover"
+              preload="metadata"
+              muted
+              playsInline
             />
-            <div className="caption">{getMediaCaption(item)}</div>
-          </div>
-        ))}
-      </div>
+          ) : (
+            <img
+              src={item.public_url}
+              alt={item.analyzed_content?.product_name || "Media preview"}
+              className="w-full h-full object-cover"
+              loading="lazy"
+            />
+          )}
+        </button>
+      ))}
     </div>
   );
-};
-
-export default ImageSwiper;
+}

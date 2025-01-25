@@ -49,11 +49,8 @@ export interface TelegramMedia {
   notes?: string;
   analyzed_content?: Record<string, any>;
   purchase_order_uid?: string;
-  default_public_url?: string;
-  telegram_media_row_id?: string;
   message_url?: string;
   chat_url?: string;
-  thumbnail_url?: string;
   glide_app_url?: string;
 }
 

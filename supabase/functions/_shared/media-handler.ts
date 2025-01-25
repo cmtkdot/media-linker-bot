@@ -1,7 +1,6 @@
 import { processMediaFile } from './database-service.ts';
 import { handleProcessingError } from './error-handler.ts';
 import { MAX_RETRY_ATTEMPTS } from './constants.ts';
-import { downloadAndStoreThumbnail } from './thumbnail-handler.ts';
 import { supabase } from './supabase.ts';
 import { downloadFile } from './file-handler.ts';
 

@@ -1,6 +1,5 @@
 import { useState, useCallback } from "react";
 import MediaGridFilters from "./MediaGridFilters";
-import MediaGridContent from "./MediaGridContent";
 import MediaTable from "./MediaTable";
 import { Button } from "@/components/ui/button";
 import { RefreshCw, Loader2, Brain } from "lucide-react";
@@ -9,8 +8,8 @@ import { useMediaData } from "@/hooks/useMediaData";
 import { useMediaActions } from "@/hooks/useMediaActions";
 import { MediaItem } from "@/types/media";
 import { InventoryViewer } from "./inventory/InventoryViewer";
-import { InventoryCard } from "./inventory/InventoryCard";
-import { EditMediaDialog } from "./inventory/EditMediaDialog";
+import InventoryCard from "./inventory/InventoryCard";
+import EditMediaDialog from "./inventory/EditMediaDialog";
 
 const MediaGrid = () => {
   const [view, setView] = useState<'grid' | 'table'>('grid');
@@ -36,13 +35,7 @@ const MediaGrid = () => {
     isLoading, 
     error, 
     refetch 
-  } = useMediaData(
-    search,
-    selectedChannel,
-    selectedType,
-    selectedVendor,
-    selectedSort
-  );
+  } = useMediaData();
 
   const {
     isSyncing,
@@ -50,24 +43,6 @@ const MediaGrid = () => {
     handleSync,
     handleAnalyzeCaptions
   } = useMediaActions(refetch);
-
-  // Process media items to ensure proper media handling
-  const processedMediaItems = mediaItems?.map(item => {
-    if (item.file_type === 'video' && item.telegram_data?.media_group_id) {
-      // Find associated photo in the same media group
-      const mediaGroupPhoto = mediaItems.find(media => 
-        media.file_type === 'photo' && 
-        media.telegram_data?.media_group_id === item.telegram_data?.media_group_id
-      );
-      if (mediaGroupPhoto) {
-        return {
-          ...item,
-          public_url: mediaGroupPhoto.public_url || item.public_url
-        };
-      }
-    }
-    return item;
-  }) || [];
 
   const handlePreview = useCallback((item: MediaItem) => {
     setSelectedItem(item);
@@ -143,15 +118,13 @@ const MediaGrid = () => {
       
       {view === 'table' ? (
         <MediaTable
-          data={processedMediaItems}
-          onEdit={(item) => {
-            console.log('Edit item:', item);
-          }}
+          data={mediaItems || []}
+          onEdit={handleEdit}
         />
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {processedMediaItems.map((item) => (
+            {(mediaItems || []).map((item) => (
               <InventoryCard
                 key={item.id}
                 item={item}
@@ -163,15 +136,17 @@ const MediaGrid = () => {
 
           {selectedItem && (
             <InventoryViewer
-              item={selectedItem}
-              onClose={() => setSelectedItem(null)}
+              open={!!selectedItem}
+              onOpenChange={(open) => !open && setSelectedItem(null)}
+              media={selectedItem}
             />
           )}
 
           {editItem && (
             <EditMediaDialog
+              open={!!editItem}
+              onOpenChange={(open) => !open && setEditItem(null)}
               item={editItem}
-              onClose={() => setEditItem(null)}
               onSave={handleEditComplete}
             />
           )}

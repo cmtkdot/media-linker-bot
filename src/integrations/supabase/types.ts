@@ -587,15 +587,6 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
-      regenerate_all_video_thumbnails: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          video_id: string
-          old_thumbnail: string
-          new_thumbnail: string
-          source: string
-        }[]
-      }
       safe_sync_messages_to_telegram_media: {
         Args: Record<PropertyKey, never>
         Returns: {
