@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { analyzeCaptionWithAI } from "../_shared/caption-analyzer.ts";
+import { processMessageContent } from "../_shared/media-group-sync.ts";
 
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN') || '';
 const TELEGRAM_WEBHOOK_SECRET = Deno.env.get('TELEGRAM_WEBHOOK_SECRET') || '';
@@ -44,30 +44,12 @@ serve(async (req) => {
     const chatId = message.chat.id.toString();
     const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
 
-    // Analyze caption if present
-    let analyzedContent = null;
-    if (message.caption) {
-      try {
-        analyzedContent = await analyzeCaptionWithAI(message.caption);
-        console.log('Caption analyzed:', { 
-          message_id: message.message_id,
-          correlation_id: correlationId,
-          analyzed_content: analyzedContent 
-        });
-      } catch (error) {
-        console.error('Error analyzing caption:', error);
-      }
-    }
-
-    // Extract product information from analyzed content
-    const productInfo = analyzedContent ? {
-      product_name: analyzedContent.product_name,
-      product_code: analyzedContent.product_code,
-      quantity: analyzedContent.quantity,
-      vendor_uid: analyzedContent.vendor_uid,
-      purchase_date: analyzedContent.purchase_date,
-      notes: analyzedContent.notes
-    } : null;
+    // Process message content and get analyzed content
+    const { analyzedContent, messageStatus, productInfo } = await processMessageContent(
+      supabaseClient,
+      message,
+      correlationId
+    );
 
     // Prepare message data
     const messageData = {
@@ -80,41 +62,14 @@ serve(async (req) => {
       message_url: messageUrl,
       correlation_id: correlationId,
       analyzed_content: analyzedContent,
-      // Only set status to pending if we have required data
-      status: (analyzedContent?.product_name || message.media_group_id) ? 'pending' : 'incomplete',
+      status: messageStatus,
       ...productInfo
     };
-
-    // If part of a media group, sync analyzed content to all messages in group
-    if (message.media_group_id && analyzedContent) {
-      console.log('Syncing analyzed content to media group:', {
-        media_group_id: message.media_group_id,
-        correlation_id: correlationId
-      });
-
-      const { error: groupUpdateError } = await supabaseClient
-        .from('messages')
-        .update({
-          analyzed_content: analyzedContent,
-          product_name: productInfo?.product_name,
-          product_code: productInfo?.product_code,
-          quantity: productInfo?.quantity,
-          vendor_uid: productInfo?.vendor_uid,
-          purchase_date: productInfo?.purchase_date,
-          notes: productInfo?.notes,
-          status: 'pending'
-        })
-        .eq('media_group_id', message.media_group_id);
-
-      if (groupUpdateError) {
-        console.error('Error updating media group:', groupUpdateError);
-      }
-    }
 
     // Create or update message record
     const { data: existingMessage } = await supabaseClient
       .from('messages')
-      .select('id, media_group_id, analyzed_content')
+      .select('id')
       .eq('message_id', message.message_id)
       .eq('chat_id', message.chat.id)
       .maybeSingle();
@@ -122,27 +77,6 @@ serve(async (req) => {
     let messageRecord;
     
     if (existingMessage) {
-      // If message exists in a group and has analyzed content, use that
-      if (!analyzedContent && existingMessage.media_group_id) {
-        const { data: groupMessage } = await supabaseClient
-          .from('messages')
-          .select('analyzed_content, product_name, product_code, quantity, vendor_uid, purchase_date, notes')
-          .eq('media_group_id', existingMessage.media_group_id)
-          .not('analyzed_content', 'is', null)
-          .maybeSingle();
-
-        if (groupMessage) {
-          messageData.analyzed_content = groupMessage.analyzed_content;
-          messageData.product_name = groupMessage.product_name;
-          messageData.product_code = groupMessage.product_code;
-          messageData.quantity = groupMessage.quantity;
-          messageData.vendor_uid = groupMessage.vendor_uid;
-          messageData.purchase_date = groupMessage.purchase_date;
-          messageData.notes = groupMessage.notes;
-          messageData.status = 'pending';
-        }
-      }
-
       const { data, error: updateError } = await supabaseClient
         .from('messages')
         .update(messageData)
@@ -153,27 +87,6 @@ serve(async (req) => {
       if (updateError) throw updateError;
       messageRecord = data;
     } else {
-      // For new messages in a group, check if group has analyzed content
-      if (!analyzedContent && message.media_group_id) {
-        const { data: groupMessage } = await supabaseClient
-          .from('messages')
-          .select('analyzed_content, product_name, product_code, quantity, vendor_uid, purchase_date, notes')
-          .eq('media_group_id', message.media_group_id)
-          .not('analyzed_content', 'is', null)
-          .maybeSingle();
-
-        if (groupMessage) {
-          messageData.analyzed_content = groupMessage.analyzed_content;
-          messageData.product_name = groupMessage.product_name;
-          messageData.product_code = groupMessage.product_code;
-          messageData.quantity = groupMessage.quantity;
-          messageData.vendor_uid = groupMessage.vendor_uid;
-          messageData.purchase_date = groupMessage.purchase_date;
-          messageData.notes = groupMessage.notes;
-          messageData.status = 'pending';
-        }
-      }
-
       const { data, error: insertError } = await supabaseClient
         .from('messages')
         .insert([messageData])
