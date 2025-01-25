@@ -29,7 +29,7 @@ export async function syncMediaGroupContent(
   const { error: updateError } = await supabase
     .from('messages')
     .update({
-      analyzed_content: analyzedContent,
+      analyzed_content: analyzedContent || {},
       product_name: productInfo?.product_name,
       product_code: productInfo?.product_code,
       quantity: productInfo?.quantity,
@@ -102,7 +102,12 @@ export async function processMessageContent(
       }
     } catch (error) {
       console.error('Error analyzing caption:', error);
+      // Even if analysis fails, set an empty object to trigger queue processing
+      analyzedContent = {};
     }
+  } else {
+    // No caption, but still set analyzed_content to empty object
+    analyzedContent = {};
   }
 
   // Step 3: If part of a media group, sync analyzed content
@@ -123,6 +128,9 @@ export async function processMessageContent(
           purchase_date: existingAnalysis.purchase_date,
           notes: existingAnalysis.notes
         };
+      } else {
+        // If no existing analysis found, set empty object
+        analyzedContent = {};
       }
     }
   }
