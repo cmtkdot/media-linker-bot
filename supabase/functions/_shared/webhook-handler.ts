@@ -1,7 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { processMediaFiles } from './media-processor.ts';
-import { withDatabaseRetry } from './database-retry.ts';
 import { analyzeCaptionWithAI } from './caption-analyzer.ts';
+import { withDatabaseRetry } from './database-retry.ts';
 
 export async function handleWebhookUpdate(
   update: any, 
@@ -25,59 +24,70 @@ export async function handleWebhookUpdate(
       correlation_id: correlationId
     });
 
+    // Step 1: Extract caption from telegram data
+    const caption = message.caption;
+    let analyzedContent = {};
+
+    // Step 2: Analyze caption if available
+    if (caption) {
+      try {
+        console.log('Analyzing caption:', caption);
+        analyzedContent = await analyzeCaptionWithAI(caption);
+        console.log('Caption analysis result:', analyzedContent);
+      } catch (error) {
+        console.error('Error analyzing caption:', error);
+        // Even if analysis fails, keep empty object to trigger queue
+        analyzedContent = {};
+      }
+    }
+
+    // Step 3: Check for media group and sync analyzed content
+    if (message.media_group_id) {
+      console.log('Checking media group:', message.media_group_id);
+      const { data: existingGroupAnalysis } = await supabase
+        .from('messages')
+        .select('analyzed_content')
+        .eq('media_group_id', message.media_group_id)
+        .not('analyzed_content', 'is', null)
+        .maybeSingle();
+
+      if (existingGroupAnalysis?.analyzed_content && Object.keys(analyzedContent).length === 0) {
+        analyzedContent = existingGroupAnalysis.analyzed_content;
+      }
+    }
+
     // Generate message URL
     const chatId = message.chat.id.toString();
     const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
 
-    // Create message media data structure
-    const messageMediaData = {
-      message: {
-        url: messageUrl,
-        media_group_id: message.media_group_id,
-        caption: message.caption,
-        message_id: message.message_id,
-        chat_id: message.chat.id,
-        date: message.date
-      },
-      sender: {
-        sender_info: message.from || message.sender_chat || {},
-        chat_info: message.chat || {}
-      },
-      meta: {
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        status: 'pending',
-        error: null,
-        correlation_id: correlationId
-      }
+    // Step 4: Create message record with analyzed content
+    const messageData = {
+      message_id: message.message_id,
+      chat_id: message.chat.id,
+      sender_info: message.from || message.sender_chat || {},
+      message_type: determineMessageType(message),
+      telegram_data: message,
+      caption: message.caption,
+      media_group_id: message.media_group_id,
+      message_url: messageUrl,
+      correlation_id: correlationId,
+      analyzed_content: analyzedContent,
+      status: 'pending',
+      product_name: analyzedContent?.product_name || null,
+      product_code: analyzedContent?.product_code || null,
+      quantity: analyzedContent?.quantity || null,
+      vendor_uid: analyzedContent?.vendor_uid || null,
+      purchase_date: analyzedContent?.purchase_date || null,
+      notes: analyzedContent?.notes || null
     };
 
     // Create or update message record with retry
     const messageRecord = await withDatabaseRetry(async () => {
-      const messageData = {
-        message_id: message.message_id,
-        chat_id: message.chat.id,
-        sender_info: message.from || message.sender_chat || {},
-        message_type: determineMessageType(message),
-        telegram_data: message,
-        caption: message.caption,
-        media_group_id: message.media_group_id,
-        message_url: messageUrl,
-        status: 'pending',
-        correlation_id: correlationId
-      };
-
-      console.log('Creating/updating message record:', {
-        message_id: message.message_id,
-        chat_id: message.chat.id,
-        correlation_id: correlationId
-      });
-
       const { data: existingMessage } = await supabase
         .from('messages')
         .select('*')
         .eq('message_id', message.message_id)
-        .eq('chat_id', message.chat.id)
+        .eq('chat_id', message.chat_id)
         .maybeSingle();
 
       if (existingMessage) {
@@ -104,17 +114,18 @@ export async function handleWebhookUpdate(
 
     console.log('Message record created/updated:', {
       record_id: messageRecord?.id,
-      correlation_id: correlationId
+      correlation_id: correlationId,
+      status: messageRecord?.status,
+      has_analyzed_content: !!messageRecord?.analyzed_content,
+      media_group_id: messageRecord?.media_group_id
     });
 
-    // The queue_webhook_message trigger will automatically add this to unified_processing_queue
-    // with the correct queue_type (either 'media' or 'webhook')
-    
     return {
       success: true,
-      message: 'Update processed successfully',
+      message: 'Message processed successfully',
       messageId: messageRecord?.id,
-      correlationId
+      correlationId,
+      status: messageRecord?.status
     };
 
   } catch (error) {
