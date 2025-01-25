@@ -262,70 +262,79 @@ export type Database = {
       }
       messages: {
         Row: {
-          id: string
-          message_id: number
-          chat_id: number
-          sender_info: Json
-          message_type: string
-          telegram_data: Json
-          caption: string | null
-          media_group_id: string | null
-          message_url: string | null
           analyzed_content: Json | null
-          product_name: string | null
-          product_code: string | null
-          quantity: number | null
-          vendor_uid: string | null
-          purchase_date: string | null
-          notes: string | null
-          status: string
-          retry_count: number
+          caption: string | null
+          chat_id: number
           created_at: string
-          updated_at: string | null
+          id: string
+          last_retry_at: string | null
+          media_group_id: string | null
+          message_id: number
+          message_type: string
+          message_url: string | null
+          notes: string | null
+          processed_at: string | null
+          processing_error: string | null
+          product_code: string | null
+          product_name: string | null
+          purchase_date: string | null
+          quantity: number | null
+          retry_count: number | null
+          sender_info: Json
+          status: string | null
+          telegram_data: Json
+          updated_at: string
+          vendor_uid: string | null
         }
         Insert: {
-          id?: string
-          message_id?: number
-          chat_id?: number
-          sender_info?: Json
-          message_type?: string
-          telegram_data?: Json
-          caption?: string | null
-          media_group_id?: string | null
-          message_url?: string | null
           analyzed_content?: Json | null
-          product_name?: string | null
-          product_code?: string | null
-          quantity?: number | null
-          vendor_uid?: string | null
-          purchase_date?: string | null
-          notes?: string | null
-          status?: string
-          retry_count?: number
+          caption?: string | null
+          chat_id: number
           created_at?: string
-          updated_at?: string | null
+          id?: string
+          last_retry_at?: string | null
+          media_group_id?: string | null
+          message_id: number
+          message_type: string
+          message_url?: string | null
+          notes?: string | null
+          processed_at?: string | null
+          processing_error?: string | null
+          product_code?: string | null
+          product_name?: string | null
+          purchase_date?: string | null
+          quantity?: number | null
+          retry_count?: number | null
+          sender_info?: Json
+          status?: string | null
+          telegram_data?: Json
+          updated_at?: string
+          vendor_uid?: string | null
         }
         Update: {
-          id?: string
-          message_id?: number
-          chat_id?: number
-          sender_info?: Json
-          message_type?: string
-          telegram_data?: Json
-          caption?: string | null
-          media_group_id?: string | null
-          message_url?: string | null
           analyzed_content?: Json | null
-          product_name?: string | null
-          product_code?: string | null
-          quantity?: number | null
-          vendor_uid?: string | null
-          purchase_date?: string | null
-          notes?: string | null
-          status?: string
-          retry_count?: number
+          caption?: string | null
+          chat_id?: number
           created_at?: string
-          updated_at?: string | null
+          id?: string
+          last_retry_at?: string | null
+          media_group_id?: string | null
+          message_id?: number
+          message_type?: string
+          message_url?: string | null
+          notes?: string | null
+          processed_at?: string | null
+          processing_error?: string | null
+          product_code?: string | null
+          product_name?: string | null
+          purchase_date?: string | null
+          quantity?: number | null
+          retry_count?: number | null
+          sender_info?: Json
+          status?: string | null
+          telegram_data?: Json
+          updated_at?: string
+          vendor_uid?: string | null
         }
         Relationships: []
       }
@@ -559,7 +568,6 @@ export type Database = {
           id: string
           last_retry_at: string | null
           media_group_id: string | null
-          message_data: Json
           message_id: number
           message_type: string
           message_url: string | null
@@ -573,6 +581,7 @@ export type Database = {
           retry_count: number | null
           sender_info: Json
           status: string | null
+          telegram_data: Json
           updated_at: string
           vendor_uid: string | null
         }
