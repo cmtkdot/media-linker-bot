@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { useState } from 'react';
+import { useToast } from '@/components/ui/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 interface TableResult {
   table_name: string;
@@ -12,12 +12,9 @@ export function useTableOperations() {
 
   const fetchAvailableTables = async () => {
     try {
-      const { data: tablesData, error: tablesError } = await supabase
+      const { data: tablesData } = await supabase
         .from('glide_config')
-        .select('supabase_table_name')
-        .not('supabase_table_name', 'is', null);
-
-      if (tablesError) throw tablesError;
+        .select('supabase_table_name');
 
       const linkedTables = new Set(tablesData?.map(d => d.supabase_table_name) || []);
 
@@ -55,7 +52,7 @@ export function useTableOperations() {
       const { error: updateError } = await supabase
         .from('glide_config')
         .update({ 
-          supabase_table_name: `glide_${tableName}`,
+          supabase_table_name: tableName,
           active: true 
         })
         .eq('id', configId);
@@ -66,13 +63,13 @@ export function useTableOperations() {
         title: "Success",
         description: "Table created and linked successfully",
       });
-      
+
       return true;
-    } catch (error: any) {
-      console.error('Error creating table:', error);
+    } catch (error) {
+      console.error('Error creating and linking table:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to create and link table",
+        description: "Failed to create and link table",
         variant: "destructive",
       });
       return false;
@@ -84,7 +81,7 @@ export function useTableOperations() {
   const linkExistingTable = async (configId: string, tableName: string) => {
     setIsLoading(true);
     try {
-      const { error: updateError } = await supabase
+      const { error } = await supabase
         .from('glide_config')
         .update({ 
           supabase_table_name: tableName,
@@ -92,13 +89,13 @@ export function useTableOperations() {
         })
         .eq('id', configId);
 
-      if (updateError) throw updateError;
+      if (error) throw error;
 
       toast({
         title: "Success",
         description: "Table linked successfully",
       });
-      
+
       return true;
     } catch (error) {
       console.error('Error linking table:', error);
@@ -113,10 +110,61 @@ export function useTableOperations() {
     }
   };
 
+  const retryPendingMessages = async () => {
+    setIsLoading(true);
+    try {
+      const { data: pendingMessages, error: fetchError } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('status', 'pending')
+        .is('processing_error', null)
+        .order('created_at', { ascending: true });
+
+      if (fetchError) throw fetchError;
+
+      if (!pendingMessages || pendingMessages.length === 0) {
+        toast({
+          title: "Info",
+          description: "No pending messages found to retry",
+        });
+        return;
+      }
+
+      for (const message of pendingMessages) {
+        const { error: updateError } = await supabase
+          .from('messages')
+          .update({
+            retry_count: (message.retry_count || 0) + 1,
+            last_retry_at: new Date().toISOString(),
+          })
+          .eq('id', message.id);
+
+        if (updateError) {
+          console.error(`Error updating message ${message.id}:`, updateError);
+        }
+      }
+
+      toast({
+        title: "Success",
+        description: `Retried ${pendingMessages.length} pending messages`,
+      });
+    } catch (error) {
+      console.error('Error retrying pending messages:', error);
+      toast({
+        title: "Error",
+        description: "Failed to retry pending messages",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return {
     isLoading,
     fetchAvailableTables,
     createAndLinkTable,
-    linkExistingTable
+    linkExistingTable,
+    retryPendingMessages
   };
 }
