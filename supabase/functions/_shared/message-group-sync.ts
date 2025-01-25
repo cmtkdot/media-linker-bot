@@ -1,4 +1,3 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { analyzeCaptionWithAI } from './caption-analyzer.ts';
 
 export async function findExistingGroupAnalysis(
@@ -76,24 +75,8 @@ export async function processMessageContent(
     correlationId
   });
 
-  // First check if this is part of a media group with existing analysis
-  if (mediaGroupId) {
-    const existingAnalysis = await findExistingGroupAnalysis(supabase, mediaGroupId);
-    if (existingAnalysis?.analyzed_content) {
-      analyzedContent = existingAnalysis.analyzed_content;
-      productInfo = {
-        product_name: existingAnalysis.product_name,
-        product_code: existingAnalysis.product_code,
-        quantity: existingAnalysis.quantity,
-        vendor_uid: existingAnalysis.vendor_uid,
-        purchase_date: existingAnalysis.purchase_date,
-        notes: existingAnalysis.notes
-      };
-    }
-  }
-
-  // If no existing analysis and message has caption, analyze it
-  if (!analyzedContent && message.caption) {
+  // Always analyze if message has a caption, regardless of media group
+  if (message.caption) {
     try {
       analyzedContent = await analyzeCaptionWithAI(message.caption);
       console.log('Caption analyzed:', {
@@ -111,15 +94,31 @@ export async function processMessageContent(
           purchase_date: analyzedContent.purchase_date,
           notes: analyzedContent.notes
         };
-
-        // If this is part of a media group, sync the analysis to other messages
-        if (mediaGroupId) {
-          await syncMediaGroupContent(supabase, mediaGroupId, analyzedContent, productInfo);
-        }
       }
     } catch (error) {
       console.error('Error analyzing caption:', error);
     }
+  }
+
+  // If part of media group but no caption, check for existing analysis
+  if (mediaGroupId && !analyzedContent) {
+    const existingAnalysis = await findExistingGroupAnalysis(supabase, mediaGroupId);
+    if (existingAnalysis?.analyzed_content) {
+      analyzedContent = existingAnalysis.analyzed_content;
+      productInfo = {
+        product_name: existingAnalysis.product_name,
+        product_code: existingAnalysis.product_code,
+        quantity: existingAnalysis.quantity,
+        vendor_uid: existingAnalysis.vendor_uid,
+        purchase_date: existingAnalysis.purchase_date,
+        notes: existingAnalysis.notes
+      };
+    }
+  }
+
+  // If this message has analyzed content and is part of a group, sync to other messages
+  if (analyzedContent && mediaGroupId) {
+    await syncMediaGroupContent(supabase, mediaGroupId, analyzedContent, productInfo);
   }
 
   const messageStatus = await determineMessageStatus(message, analyzedContent, mediaGroupId);
