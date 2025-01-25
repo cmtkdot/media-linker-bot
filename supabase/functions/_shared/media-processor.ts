@@ -59,7 +59,14 @@ export async function processMediaFiles(
           .from('telegram_media')
           .update({ 
             message_id: messageRecord?.id,
-            message_media_data: messageMediaData
+            message_media_data: messageMediaData,
+            telegram_data: {
+              message_id: message.message_id,
+              chat_id: message.chat.id,
+              chat: message.chat,
+              media_group_id: message.media_group_id,
+              date: message.date
+            }
           })
           .eq('id', existingMedia.id);
 
