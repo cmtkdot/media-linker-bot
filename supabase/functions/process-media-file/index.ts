@@ -36,7 +36,7 @@ serve(async (req) => {
     // Check if media already exists
     const { data: existingMedia } = await supabase
       .from('telegram_media')
-      .select('id, public_url, telegram_data')
+      .select('id, public_url, message_media_data')
       .eq('file_unique_id', fileUniqueId)
       .maybeSingle();
 
@@ -46,22 +46,6 @@ serve(async (req) => {
         JSON.stringify(existingMedia),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
-    }
-
-    // Check if part of a media group and if it's synced
-    const mediaGroupId = existingMedia?.telegram_data?.media_group_id;
-    if (mediaGroupId) {
-      const { data: groupSyncStatus } = await supabase.rpc('is_media_group_synced', {
-        group_id: mediaGroupId
-      });
-
-      if (!groupSyncStatus) {
-        console.log('Media group not fully synced yet:', mediaGroupId);
-        return new Response(
-          JSON.stringify({ message: 'Media group not fully synced', mediaGroupId }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 202 }
-        );
-      }
     }
 
     // Download and process the file
@@ -87,29 +71,26 @@ serve(async (req) => {
       throw new Error('Failed to get public URL after upload');
     }
 
-    // Update media record with public URL through unified queue
+    // Update queue item with success status
     const { data: queueItem, error: queueError } = await withDatabaseRetry(
       async () => {
         return await supabase
           .from('unified_processing_queue')
-          .insert({
-            queue_type: 'media',
-            data: {
-              file_id: fileId,
-              file_unique_id: fileUniqueId,
-              file_type: fileType,
-              public_url: publicUrl,
-              message_id: messageId
-            },
-            status: 'pending',
-            priority: mediaGroupId ? 2 : 1,
-            correlation_id: messageId
+          .update({
+            status: 'processed',
+            processed_at: new Date().toISOString(),
+            message_media_data: {
+              ...existingMedia?.message_media_data,
+              media: {
+                ...existingMedia?.message_media_data?.media,
+                public_url: publicUrl
+              }
+            }
           })
+          .eq('message_id', messageId)
           .select()
           .single();
-      },
-      0,
-      `queue_media_update_${fileUniqueId}`
+      }
     );
 
     if (queueError) throw queueError;
@@ -121,7 +102,11 @@ serve(async (req) => {
     });
 
     return new Response(
-      JSON.stringify({ message: 'Media processing queued', publicUrl, queueItemId: queueItem.id }),
+      JSON.stringify({ 
+        message: 'Media processing completed', 
+        publicUrl, 
+        queueItemId: queueItem.id 
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
