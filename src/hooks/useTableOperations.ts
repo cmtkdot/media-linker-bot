@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
 interface TableResult {
@@ -19,20 +19,20 @@ export function useTableOperations() {
 
       if (tablesError) throw tablesError;
 
-      const linkedTables = new Set(tablesData.map(d => d.supabase_table_name));
+      const linkedTables = new Set(tablesData?.map(d => d.supabase_table_name) || []);
 
       const { data: allTables, error: allTablesError } = await supabase
-        .rpc<TableResult>('get_all_tables');
+        .rpc('get_all_tables') as { data: TableResult[] | null, error: any };
 
       if (allTablesError) throw allTablesError;
 
-      return (allTables || [])
+      return ((allTables || [])
         .filter(table => 
           !linkedTables.has(table.table_name) && 
           !table.table_name.startsWith('_') && 
           !['schema_migrations', 'spatial_ref_sys'].includes(table.table_name)
         )
-        .map(t => t.table_name);
+        .map(t => t.table_name));
     } catch (error) {
       console.error('Error fetching tables:', error);
       toast({
