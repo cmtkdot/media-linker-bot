@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { TableResult } from "@/types/media";
+import { Database, TableResult } from "@/types/media";
 
 interface GlideConfig {
   id: string;
@@ -55,7 +55,7 @@ export function TableLinkDialog({ config, onClose, onSuccess }: TableLinkDialogP
 
       // Get all tables in the database using rpc with explicit type
       const { data: allTables, error: allTablesError } = await supabase
-        .rpc<TableResult, Record<string, unknown>>('get_all_tables');
+        .rpc<TableResult[], Record<string, unknown>>('get_all_tables');
 
       if (allTablesError) throw allTablesError;
 
@@ -85,10 +85,10 @@ export function TableLinkDialog({ config, onClose, onSuccess }: TableLinkDialogP
     setIsCreating(true);
     try {
       // First create the table using the RPC function
-      const { error: functionError } = await supabase.rpc<void, { table_name: string }>(
-        'create_glide_sync_table',
-        { table_name: newTableName }
-      );
+      const { error: functionError } = await supabase
+        .rpc<void, { table_name: string }>('create_glide_sync_table', { 
+          table_name: newTableName 
+        });
 
       if (functionError) throw functionError;
 

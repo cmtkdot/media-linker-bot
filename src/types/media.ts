@@ -79,3 +79,22 @@ export interface SyncResult {
 export interface TableResult {
   table_name: string;
 }
+
+export interface Database {
+  public: {
+    Functions: {
+      get_all_tables: {
+        Args: Record<string, unknown>;
+        Returns: TableResult[];
+      };
+      create_glide_sync_table: {
+        Args: { table_name: string };
+        Returns: void;
+      };
+      sync_messages_to_telegram_media: {
+        Args: Record<string, unknown>;
+        Returns: SyncResult[];
+      };
+    };
+  };
+}
