@@ -13,6 +13,8 @@ serve(async (req) => {
   }
 
   try {
+    console.log('Starting process-media-queue function');
+    
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -57,6 +59,7 @@ serve(async (req) => {
     // Process media groups
     for (const [groupId, items] of mediaGroups.entries()) {
       try {
+        console.log(`Processing media group ${groupId} with ${items.length} items`);
         await processMediaGroup(supabase, items, groupId);
         results.processed += items.length;
       } catch (error) {
@@ -84,6 +87,7 @@ serve(async (req) => {
     // Process standalone items
     for (const item of standaloneItems) {
       try {
+        console.log(`Processing standalone item ${item.id}`);
         await processStandaloneMedia(supabase, item);
         results.processed++;
       } catch (error) {
@@ -104,6 +108,8 @@ serve(async (req) => {
           .eq('id', item.id);
       }
     }
+
+    console.log('Processing complete:', results);
 
     return new Response(
       JSON.stringify(results),

@@ -94,10 +94,14 @@ export async function handleWebhookUpdate(
         vendor_uid: analyzedContent?.vendor_uid || null,
         purchase_date: analyzedContent?.purchase_date || null,
         notes: analyzedContent?.notes || null,
-        status: 'pending',
-        retry_count: 0,
-        correlation_id: correlationId
+        status: 'pending'
       };
+
+      console.log('Creating/updating message record:', {
+        message_id: message.message_id,
+        chat_id: message.chat.id,
+        correlation_id: correlationId
+      });
 
       const { data: existingMessage } = await supabase
         .from('messages')
@@ -128,27 +132,13 @@ export async function handleWebhookUpdate(
       }
     });
 
-    // Process media files if present
-    const hasMedia = message.photo || message.video || message.document || message.animation;
-    if (hasMedia && messageRecord) {
-      await processMediaFiles(
-        message, 
-        messageRecord, 
-        messageMediaData, 
-        supabase, 
-        botToken,
-        correlationId
-      );
-    }
-
-    console.log('Successfully processed update:', {
-      update_id: update.update_id,
-      message_id: message.message_id,
-      chat_id: message.chat.id,
+    console.log('Message record created/updated:', {
       record_id: messageRecord?.id,
       correlation_id: correlationId
     });
 
+    // The queue_webhook_message trigger will automatically add this to unified_processing_queue
+    
     return {
       success: true,
       message: 'Update processed successfully',

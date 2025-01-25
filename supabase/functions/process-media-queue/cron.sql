@@ -1,6 +1,6 @@
 select
   cron.schedule(
-    'process-media-queue-every-minute',
+    'process-media-queue-every-5-minutes',
     '*/5 * * * *',  -- Run every 5 minutes
     $$
     select
