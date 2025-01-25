@@ -1,0 +1,2 @@
+[functions.retry-pending-messages]
+verify_jwt = true
