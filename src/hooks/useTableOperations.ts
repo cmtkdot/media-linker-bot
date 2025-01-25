@@ -1,35 +1,38 @@
-import { useState } from 'react';
-import { useToast } from '@/components/ui/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { useState } from "react";
+import { useToast } from "@/components/ui/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { GlideConfig } from "@/types/glide";
 
-interface TableResult {
-  table_name: string;
+interface TableOperationsResult {
+  isLoading: boolean;
+  fetchAvailableTables: () => Promise<string[]>;
+  createAndLinkTable: (configId: string, tableName: string) => Promise<boolean>;
+  linkExistingTable: (configId: string, tableName: string) => Promise<boolean>;
+  retryPendingMessages: () => Promise<void>;
 }
 
-export function useTableOperations() {
+interface Message {
+  id: string;
+  status: 'pending' | 'processed' | 'error';
+  retry_count: number;
+  correlation_id: string;
+  processing_error?: string | null;
+  last_retry_at?: string | null;
+  analyzed_content?: Record<string, any> | null;
+}
+
+export function useTableOperations(): TableOperationsResult {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
-  const fetchAvailableTables = async () => {
+  const fetchAvailableTables = async (): Promise<string[]> => {
     try {
-      const { data: tablesData } = await supabase
-        .from('glide_config')
-        .select('supabase_table_name');
-
-      const linkedTables = new Set(tablesData?.map(d => d.supabase_table_name) || []);
-
-      const { data: allTables, error: allTablesError } = await supabase
-        .rpc('get_all_tables');
-
-      if (allTablesError) throw allTablesError;
-
-      return ((allTables || []) as TableResult[])
-        .filter(table => 
-          !linkedTables.has(table.table_name) && 
-          !table.table_name.startsWith('_') && 
-          !['schema_migrations', 'spatial_ref_sys'].includes(table.table_name)
-        )
-        .map(t => t.table_name);
+      const { data, error } = await supabase.rpc('get_all_tables');
+      
+      if (error) throw error;
+      
+      return data.map((row: { table_name: string }) => row.table_name)
+        .filter((name: string) => !name.startsWith('_'));
     } catch (error) {
       console.error('Error fetching tables:', error);
       toast({
@@ -41,19 +44,22 @@ export function useTableOperations() {
     }
   };
 
-  const createAndLinkTable = async (configId: string, tableName: string) => {
+  const createAndLinkTable = async (configId: string, tableName: string): Promise<boolean> => {
     setIsLoading(true);
     try {
-      const { error: functionError } = await supabase
-        .rpc('create_glide_sync_table', { p_table_name: tableName });
+      // Create the table
+      const { error: createError } = await supabase.rpc('create_glide_sync_table', {
+        p_table_name: tableName
+      });
 
-      if (functionError) throw functionError;
+      if (createError) throw createError;
 
+      // Update the config with the new table name
       const { error: updateError } = await supabase
         .from('glide_config')
-        .update({ 
-          supabase_table_name: tableName,
-          active: true 
+        .update({
+          active: true,
+          supabase_table_name: tableName
         })
         .eq('id', configId);
 
@@ -78,14 +84,14 @@ export function useTableOperations() {
     }
   };
 
-  const linkExistingTable = async (configId: string, tableName: string) => {
+  const linkExistingTable = async (configId: string, tableName: string): Promise<boolean> => {
     setIsLoading(true);
     try {
       const { error } = await supabase
         .from('glide_config')
-        .update({ 
-          supabase_table_name: tableName,
-          active: true 
+        .update({
+          active: true,
+          supabase_table_name: tableName
         })
         .eq('id', configId);
 
@@ -117,15 +123,14 @@ export function useTableOperations() {
         .from('messages')
         .select('*')
         .eq('status', 'pending')
-        .is('processing_error', null)
         .order('created_at', { ascending: true });
 
       if (fetchError) throw fetchError;
 
-      if (!pendingMessages || pendingMessages.length === 0) {
+      if (!pendingMessages?.length) {
         toast({
           title: "Info",
-          description: "No pending messages found to retry",
+          description: "No pending messages found",
         });
         return;
       }
@@ -133,7 +138,7 @@ export function useTableOperations() {
       let processedCount = 0;
       let errorCount = 0;
 
-      for (const message of pendingMessages) {
+      for (const message of pendingMessages as Message[]) {
         // Skip if max retries reached (default to 3)
         if (message.retry_count >= 3) {
           // Update to error status if max retries reached
@@ -143,6 +148,7 @@ export function useTableOperations() {
               status: 'error',
               processing_error: 'Max retry attempts reached',
               updated_at: new Date().toISOString(),
+              last_retry_at: new Date().toISOString(),
             })
             .eq('id', message.id);
 
@@ -153,7 +159,7 @@ export function useTableOperations() {
           continue;
         }
 
-        // Update retry count and timestamp
+        // Update retry count and timestamp for pending messages
         const { error: updateError } = await supabase
           .from('messages')
           .update({
