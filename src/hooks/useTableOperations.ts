@@ -130,23 +130,54 @@ export function useTableOperations() {
         return;
       }
 
+      let processedCount = 0;
+      let errorCount = 0;
+
       for (const message of pendingMessages) {
+        // Skip if max retries reached (default to 3)
+        if (message.retry_count >= 3) {
+          // Update to error status if max retries reached
+          const { error: errorUpdate } = await supabase
+            .from('messages')
+            .update({
+              status: 'error',
+              processing_error: 'Max retry attempts reached',
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', message.id);
+
+          if (errorUpdate) {
+            console.error(`Error updating message ${message.id} to error status:`, errorUpdate);
+          }
+          errorCount++;
+          continue;
+        }
+
+        // Update retry count and timestamp
         const { error: updateError } = await supabase
           .from('messages')
           .update({
             retry_count: (message.retry_count || 0) + 1,
             last_retry_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            // Keep existing correlation_id
+            correlation_id: message.correlation_id,
+            // Maintain pending status to allow for processing
+            status: 'pending'
           })
           .eq('id', message.id);
 
         if (updateError) {
           console.error(`Error updating message ${message.id}:`, updateError);
+          errorCount++;
+        } else {
+          processedCount++;
         }
       }
 
       toast({
         title: "Success",
-        description: `Retried ${pendingMessages.length} pending messages`,
+        description: `Retried ${processedCount} messages (${errorCount} errors)`,
       });
     } catch (error) {
       console.error('Error retrying pending messages:', error);
