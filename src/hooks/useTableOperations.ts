@@ -22,18 +22,17 @@ export function useTableOperations() {
       const linkedTables = new Set(tablesData?.map(d => d.supabase_table_name) || []);
 
       const { data: allTables, error: allTablesError } = await supabase
-        .from('get_all_tables')
-        .select('table_name');
+        .rpc('get_all_tables');
 
       if (allTablesError) throw allTablesError;
 
-      return ((allTables || [])
+      return ((allTables || []) as TableResult[])
         .filter(table => 
           !linkedTables.has(table.table_name) && 
           !table.table_name.startsWith('_') && 
           !['schema_migrations', 'spatial_ref_sys'].includes(table.table_name)
         )
-        .map(t => t.table_name));
+        .map(t => t.table_name);
     } catch (error) {
       console.error('Error fetching tables:', error);
       toast({
@@ -49,10 +48,7 @@ export function useTableOperations() {
     setIsLoading(true);
     try {
       const { error: functionError } = await supabase
-        .from('create_glide_sync_table')
-        .select()
-        .eq('p_table_name', tableName)
-        .single();
+        .rpc('create_glide_sync_table', { p_table_name: tableName });
 
       if (functionError) throw functionError;
 

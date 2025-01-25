@@ -518,6 +518,18 @@ export type Database = {
       }
     }
     Functions: {
+      create_glide_sync_table: {
+        Args: {
+          p_table_name: string
+        }
+        Returns: undefined
+      }
+      get_all_tables: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          table_name: string
+        }[]
+      }
       is_media_group_synced: {
         Args: {
           group_id: string
