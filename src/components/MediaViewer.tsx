@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { X, ChevronLeft, ChevronRight } from "lucide-react";
 import { MediaItem } from "@/types/media";
+import { getMediaCaption } from "@/utils/media-helpers";
 
 interface MediaViewerProps {
   open: boolean;
@@ -68,7 +69,7 @@ const MediaViewer = ({
               ) : (
                 <img
                   src={mediaUrl}
-                  alt={media.caption || "Media preview"}
+                  alt={getMediaCaption(media) || "Media preview"}
                   className="h-full w-full object-contain"
                 />
               )}
@@ -105,8 +106,8 @@ const MediaViewer = ({
 
           {/* Details Column */}
           <div className="flex-1 flex flex-col space-y-4">
-            {media.caption && (
-              <p className="text-muted-foreground text-sm">{media.caption}</p>
+            {getMediaCaption(media) && (
+              <p className="text-muted-foreground text-sm">{getMediaCaption(media)}</p>
             )}
             <div className="grid gap-3 text-sm">
               {media.product_name && (

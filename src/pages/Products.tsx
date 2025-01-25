@@ -6,6 +6,7 @@ import ProductGroup from "@/components/ProductGroup";
 import MediaEditDialog from "@/components/MediaEditDialog";
 import ProductMediaViewer from "@/components/ProductMediaViewer";
 import { supabase } from "@/integrations/supabase/client";
+import { getMediaCaption } from "@/utils/media-helpers";
 
 const Products = () => {
   const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
@@ -46,7 +47,13 @@ const Products = () => {
       const { error } = await supabase
         .from('telegram_media')
         .update({
-          caption: editItem.caption,
+          message_media_data: {
+            ...editItem.message_media_data,
+            message: {
+              ...editItem.message_media_data?.message,
+              caption: getMediaCaption(editItem)
+            }
+          },
           product_name: editItem.product_name,
           product_code: editItem.product_code,
           quantity: editItem.quantity,
