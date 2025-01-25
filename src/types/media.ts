@@ -84,16 +84,20 @@ export interface Database {
   public: {
     Functions: {
       get_all_tables: {
-        Args: Record<string, unknown>;
+        Args: Record<string, never>;
         Returns: TableResult[];
       };
       create_glide_sync_table: {
         Args: { table_name: string };
-        Returns: void;
+        Returns: undefined;
       };
       sync_messages_to_telegram_media: {
-        Args: Record<string, unknown>;
+        Args: Record<string, never>;
         Returns: SyncResult[];
+      };
+      search_telegram_media: {
+        Args: { search_term: string };
+        Returns: MediaItem[];
       };
     };
   };
