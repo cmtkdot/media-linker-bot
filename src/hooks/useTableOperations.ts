@@ -1,7 +1,10 @@
 import { useState } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { TableResult } from "@/types/media";
+
+interface TableResult {
+  table_name: string;
+}
 
 export function useTableOperations() {
   const [isLoading, setIsLoading] = useState(false);
