@@ -1,12 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { analyzeCaptionWithAI } from './caption-analyzer.ts';
 
-interface MessageGroup {
-  media_group_id: string;
-  messages: any[];
-  analyzed_content?: any;
-}
-
 export async function findExistingGroupAnalysis(
   supabase: any,
   mediaGroupId: string
@@ -58,15 +52,8 @@ export async function determineMessageStatus(
   analyzedContent: any | null,
   mediaGroupId: string | null
 ): Promise<string> {
-  if (!analyzedContent?.product_name && !mediaGroupId) {
-    return 'incomplete';
-  }
-  
-  if (mediaGroupId) {
-    return 'pending'; // Media groups are always pending until processed
-  }
-  
-  return analyzedContent?.product_name ? 'pending' : 'incomplete';
+  // All messages start as pending since we handle analysis upfront
+  return 'pending';
 }
 
 export async function processMessageContent(

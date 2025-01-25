@@ -44,7 +44,7 @@ serve(async (req) => {
     const chatId = message.chat.id.toString();
     const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
 
-    // Process message content and get analyzed content
+    // Process message content and get analyzed content immediately
     const { analyzedContent, messageStatus, productInfo } = await processMessageContent(
       supabaseClient,
       message,
@@ -67,34 +67,14 @@ serve(async (req) => {
     };
 
     // Create or update message record
-    const { data: existingMessage } = await supabaseClient
+    const { data: messageRecord, error: messageError } = await supabaseClient
       .from('messages')
-      .select('id')
-      .eq('message_id', message.message_id)
-      .eq('chat_id', message.chat.id)
-      .maybeSingle();
+      .upsert(messageData)
+      .select()
+      .single();
 
-    let messageRecord;
-    
-    if (existingMessage) {
-      const { data, error: updateError } = await supabaseClient
-        .from('messages')
-        .update(messageData)
-        .eq('id', existingMessage.id)
-        .select()
-        .single();
-
-      if (updateError) throw updateError;
-      messageRecord = data;
-    } else {
-      const { data, error: insertError } = await supabaseClient
-        .from('messages')
-        .insert([messageData])
-        .select()
-        .single();
-
-      if (insertError) throw insertError;
-      messageRecord = data;
+    if (messageError) {
+      throw messageError;
     }
 
     console.log('Message record created/updated:', {
