@@ -23,7 +23,6 @@ serve(async (req) => {
       );
     }
 
-    // Create Supabase client
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -70,7 +69,7 @@ serve(async (req) => {
       notes: analyzedContent.notes
     } : null;
 
-    // Create message record with minimal processing
+    // Prepare message data
     const messageData = {
       message_id: message.message_id,
       chat_id: message.chat.id,
@@ -80,13 +79,11 @@ serve(async (req) => {
       media_group_id: message.media_group_id,
       message_url: messageUrl,
       correlation_id: correlationId,
-      status: 'pending',
-      analyzed_content: analyzedContent
+      analyzed_content: analyzedContent,
+      // Only set status to pending if we have required data
+      status: (analyzedContent?.product_name || message.media_group_id) ? 'pending' : 'incomplete',
+      ...productInfo
     };
-
-    if (productInfo) {
-      Object.assign(messageData, productInfo);
-    }
 
     // If part of a media group, sync analyzed content to all messages in group
     if (message.media_group_id && analyzedContent) {
@@ -99,7 +96,13 @@ serve(async (req) => {
         .from('messages')
         .update({
           analyzed_content: analyzedContent,
-          ...productInfo
+          product_name: productInfo?.product_name,
+          product_code: productInfo?.product_code,
+          quantity: productInfo?.quantity,
+          vendor_uid: productInfo?.vendor_uid,
+          purchase_date: productInfo?.purchase_date,
+          notes: productInfo?.notes,
+          status: 'pending'
         })
         .eq('media_group_id', message.media_group_id);
 
@@ -111,13 +114,35 @@ serve(async (req) => {
     // Create or update message record
     const { data: existingMessage } = await supabaseClient
       .from('messages')
-      .select('id')
+      .select('id, media_group_id, analyzed_content')
       .eq('message_id', message.message_id)
       .eq('chat_id', message.chat.id)
       .maybeSingle();
 
     let messageRecord;
+    
     if (existingMessage) {
+      // If message exists in a group and has analyzed content, use that
+      if (!analyzedContent && existingMessage.media_group_id) {
+        const { data: groupMessage } = await supabaseClient
+          .from('messages')
+          .select('analyzed_content, product_name, product_code, quantity, vendor_uid, purchase_date, notes')
+          .eq('media_group_id', existingMessage.media_group_id)
+          .not('analyzed_content', 'is', null)
+          .maybeSingle();
+
+        if (groupMessage) {
+          messageData.analyzed_content = groupMessage.analyzed_content;
+          messageData.product_name = groupMessage.product_name;
+          messageData.product_code = groupMessage.product_code;
+          messageData.quantity = groupMessage.quantity;
+          messageData.vendor_uid = groupMessage.vendor_uid;
+          messageData.purchase_date = groupMessage.purchase_date;
+          messageData.notes = groupMessage.notes;
+          messageData.status = 'pending';
+        }
+      }
+
       const { data, error: updateError } = await supabaseClient
         .from('messages')
         .update(messageData)
@@ -128,6 +153,27 @@ serve(async (req) => {
       if (updateError) throw updateError;
       messageRecord = data;
     } else {
+      // For new messages in a group, check if group has analyzed content
+      if (!analyzedContent && message.media_group_id) {
+        const { data: groupMessage } = await supabaseClient
+          .from('messages')
+          .select('analyzed_content, product_name, product_code, quantity, vendor_uid, purchase_date, notes')
+          .eq('media_group_id', message.media_group_id)
+          .not('analyzed_content', 'is', null)
+          .maybeSingle();
+
+        if (groupMessage) {
+          messageData.analyzed_content = groupMessage.analyzed_content;
+          messageData.product_name = groupMessage.product_name;
+          messageData.product_code = groupMessage.product_code;
+          messageData.quantity = groupMessage.quantity;
+          messageData.vendor_uid = groupMessage.vendor_uid;
+          messageData.purchase_date = groupMessage.purchase_date;
+          messageData.notes = groupMessage.notes;
+          messageData.status = 'pending';
+        }
+      }
+
       const { data, error: insertError } = await supabaseClient
         .from('messages')
         .insert([messageData])
@@ -141,7 +187,9 @@ serve(async (req) => {
     console.log('Message record created/updated:', {
       record_id: messageRecord?.id,
       correlation_id: correlationId,
-      has_analyzed_content: !!analyzedContent
+      status: messageRecord?.status,
+      has_analyzed_content: !!messageRecord?.analyzed_content,
+      media_group_id: messageRecord?.media_group_id
     });
 
     return new Response(
@@ -149,7 +197,8 @@ serve(async (req) => {
         success: true,
         message: 'Message processed successfully',
         messageId: messageRecord?.id,
-        correlationId
+        correlationId,
+        status: messageRecord?.status
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
