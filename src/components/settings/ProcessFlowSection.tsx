@@ -8,7 +8,7 @@ import { Loader2, Play, RefreshCw, ListChecks } from "lucide-react";
 
 export const ProcessFlowSection = () => {
   const [isProcessingMessages, setIsProcessingMessages] = useState(false);
-  const [isProcessingMedia, setIsProcessingMedia] = useState(false);
+  const [isProcessingMediaGroups, setIsProcessingMediaGroups] = useState(false);
   const [isCheckingQueue, setIsCheckingQueue] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -40,45 +40,45 @@ export const ProcessFlowSection = () => {
     }
   };
 
-  const handleProcessMedia = async () => {
-    setIsProcessingMedia(true);
+  const handleProcessMediaGroups = async () => {
+    setIsProcessingMediaGroups(true);
     try {
-      const { data, error } = await supabase.functions.invoke('sync-missing-rows-to-glide', {
-        body: { operation: 'processMedia' }
+      const { data, error } = await supabase.functions.invoke('process-media-groups', {
+        body: { operation: 'processAll' }
       });
 
       if (error) throw error;
 
       toast({
-        title: "Media Processing Complete",
-        description: `Processed ${data.processed_count || 0} media items`,
+        title: "Media Groups Processing Complete",
+        description: `Processed ${data.processed || 0} groups with ${data.errors || 0} errors`,
       });
 
-      await queryClient.invalidateQueries({ queryKey: ['telegram-media'] });
+      await queryClient.invalidateQueries({ queryKey: ['messages'] });
     } catch (error: any) {
-      console.error('Error processing media:', error);
+      console.error('Error processing media groups:', error);
       toast({
         title: "Processing Failed",
-        description: error.message || "Failed to process media",
+        description: error.message || "Failed to process media groups",
         variant: "destructive",
       });
     } finally {
-      setIsProcessingMedia(false);
+      setIsProcessingMediaGroups(false);
     }
   };
 
   const handleCheckQueue = async () => {
     setIsCheckingQueue(true);
     try {
-      const { data, error } = await supabase.functions.invoke('sync-glide-media-table', {
-        body: { operation: 'processSyncQueue' }
+      const { data, error } = await supabase.functions.invoke('process-media-queue', {
+        body: { operation: 'processAll' }
       });
 
       if (error) throw error;
 
       toast({
         title: "Queue Processing Complete",
-        description: `Processed ${data.processed_count || 0} items from queue`,
+        description: `Processed ${data.processed || 0} items from queue`,
       });
 
       await queryClient.invalidateQueries({ queryKey: ['glide-sync-queue'] });
@@ -130,34 +130,34 @@ export const ProcessFlowSection = () => {
           </div>
 
           <div className="p-4 rounded-lg bg-muted">
-            <h3 className="font-semibold mb-2">Step 2: Process Media Files</h3>
+            <h3 className="font-semibold mb-2">Step 2: Process Media Groups</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              Process media from messages and create records in telegram_media table
+              Analyze captions and prepare media groups for processing
             </p>
             <Button 
-              onClick={handleProcessMedia}
-              disabled={isProcessingMedia}
+              onClick={handleProcessMediaGroups}
+              disabled={isProcessingMediaGroups}
               className="w-full"
               size="lg"
             >
-              {isProcessingMedia ? (
+              {isProcessingMediaGroups ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Processing Media...
+                  Processing Media Groups...
                 </>
               ) : (
                 <>
                   <RefreshCw className="w-4 h-4 mr-2" />
-                  Process Media Files
+                  Process Media Groups
                 </>
               )}
             </Button>
           </div>
 
           <div className="p-4 rounded-lg bg-muted">
-            <h3 className="font-semibold mb-2">Step 3: Check Processing Queue</h3>
+            <h3 className="font-semibold mb-2">Step 3: Process Queue Items</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              Process any queued items that had errors or need retrying
+              Process media files and sync with storage
             </p>
             <Button 
               onClick={handleCheckQueue}
@@ -168,7 +168,7 @@ export const ProcessFlowSection = () => {
               {isCheckingQueue ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Checking Queue...
+                  Processing Queue...
                 </>
               ) : (
                 <>
