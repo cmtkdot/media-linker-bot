@@ -1,5 +1,3 @@
-'use client';
-
 import React, { useState } from "react";
 import {
   Dialog,
@@ -25,6 +23,7 @@ export function InventoryViewer({
 
   const mediaUrl = media.public_url;
   const isVideo = media.file_type === 'video';
+  const mediaGroupId = media.telegram_data?.media_group_id;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -71,10 +70,10 @@ export function InventoryViewer({
                   <dt>Created</dt>
                   <dd>{media.created_at ? new Date(media.created_at).toLocaleDateString() : 'Unknown'}</dd>
                 </div>
-                {media.media_group_id && (
+                {mediaGroupId && (
                   <div className="flex justify-between">
                     <dt>Group ID</dt>
-                    <dd>{media.media_group_id}</dd>
+                    <dd>{mediaGroupId}</dd>
                   </div>
                 )}
               </dl>

@@ -1,5 +1,3 @@
-import { Json } from "@/integrations/supabase/types";
-
 export interface MessageMediaData {
   message: {
     url: string;
@@ -62,6 +60,7 @@ export interface MediaItem {
   
   telegram_media_row_id?: string;
   glide_app_url?: string;
+  media_group_id?: string;
 }
 
 export interface MediaItemUpdate extends Partial<MediaItem> {

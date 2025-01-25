@@ -2,11 +2,6 @@ import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
-interface SyncResponse {
-  updated_groups: number;
-  synced_media: number;
-}
-
 export const useMediaActions = (refetch: () => Promise<unknown>) => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -15,7 +10,7 @@ export const useMediaActions = (refetch: () => Promise<unknown>) => {
   const handleSync = async () => {
     setIsSyncing(true);
     try {
-      const { data, error } = await supabase.functions.invoke<SyncResponse>('sync-media-groups');
+      const { data, error } = await supabase.functions.invoke<{ updated_groups: number; synced_media: number }>('sync-media-groups');
 
       if (error) throw error;
 
@@ -40,14 +35,12 @@ export const useMediaActions = (refetch: () => Promise<unknown>) => {
   const handleAnalyzeCaptions = async () => {
     setIsAnalyzing(true);
     try {
-      const { data: unanalyzedMedia, error: mediaError } = await supabase
+      const { data: unanalyzedMedia } = await supabase
         .from('telegram_media')
         .select('*')
         .is('analyzed_content', null)
         .not('message_media_data->message->caption', 'is', null)
         .limit(100);
-
-      if (mediaError) throw mediaError;
 
       if (!unanalyzedMedia?.length) {
         toast({

@@ -2,6 +2,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { MediaItem, MessageMediaData } from "@/types/media";
 import { withDatabaseRetry } from "@/utils/database-retry";
 
+const convertToMediaItem = (data: any): MediaItem => {
+  const messageMediaData = data.message_media_data as MessageMediaData;
+  return {
+    ...data,
+    message_media_data: messageMediaData,
+    media_group_id: data.telegram_data?.media_group_id
+  };
+};
+
 export class DatabaseService {
   async getMediaItem(id: string): Promise<MediaItem | null> {
     return withDatabaseRetry(async () => {
@@ -12,8 +21,7 @@ export class DatabaseService {
         .single();
 
       if (error) throw error;
-      
-      return data as MediaItem;
+      return data ? convertToMediaItem(data) : null;
     });
   }
 
@@ -25,8 +33,7 @@ export class DatabaseService {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-
-      return data as MediaItem[];
+      return data?.map(convertToMediaItem) || [];
     });
   }
 
@@ -53,12 +60,6 @@ export class DatabaseService {
         .eq('id', id);
       if (error) throw error;
     });
-  }
-
-  private chunkArray<T>(array: T[], size: number): T[][] {
-    return Array.from({ length: Math.ceil(array.length / size) }, (_, i) =>
-      array.slice(i * size, i * size + size)
-    );
   }
 }
 
