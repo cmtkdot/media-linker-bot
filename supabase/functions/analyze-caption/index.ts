@@ -50,6 +50,7 @@ Within "product_code":
  IF product_code exists, find digits after vendor_uid:
  - If 6 digits: mmDDyy -> YYYY-MM-DD
  - If 5 digits: mDDyy -> YYYY-MM-DD (add leading 0)
+ - SO LOGIC FOR 5 DIGITS NUMBER AUTOMATICALLY FOR YOUR KNOWLEDGE ADD A 0 INFRONT OF IT SO IT'LL BE 12324 TURNED INTO 012324 THEN PROCEED WITH THE DATE EXTRACTION
  Examples:
  120523 -> 2023-12-05
  31524 -> 2024-03-15
