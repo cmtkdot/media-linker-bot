@@ -518,83 +518,6 @@ export type Database = {
       }
     }
     Functions: {
-      check_message_sync_status: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          total_messages: number
-          synced_messages: number
-          unsynced_messages: number
-          duplicate_file_ids: number
-        }[]
-      }
-      check_telegram_media_differences: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          record_id: string
-          difference_type: string
-          supabase_data: Json
-          glide_data: Json
-        }[]
-      }
-      cleanup_processed_queues: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      create_glide_sync_table: {
-        Args: {
-          table_name: string
-        }
-        Returns: undefined
-      }
-      get_all_tables: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          table_name: string
-        }[]
-      }
-      get_synced_message_data: {
-        Args: {
-          message_id: number
-          chat_id: number
-        }
-        Returns: {
-          analyzed_content: Json | null
-          caption: string | null
-          chat_id: number
-          created_at: string
-          id: string
-          last_retry_at: string | null
-          media_group_id: string | null
-          message_id: number
-          message_type: string
-          message_url: string | null
-          notes: string | null
-          processed_at: string | null
-          processing_error: string | null
-          product_code: string | null
-          product_name: string | null
-          purchase_date: string | null
-          quantity: number | null
-          retry_count: number | null
-          sender_info: Json
-          status: string | null
-          telegram_data: Json
-          updated_at: string
-          vendor_uid: string | null
-        }
-      }
-      populate_message_media_data: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      safe_sync_messages_to_telegram_media: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          synced_count: number
-          error_count: number
-          details: Json
-        }[]
-      }
       search_telegram_media: {
         Args: {
           search_term: string
@@ -631,22 +554,6 @@ export type Database = {
           telegram_media_row_id: string | null
           updated_at: string
           vendor_uid: string | null
-        }[]
-      }
-      sync_messages_to_telegram_media: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          synced_count: number
-          error_count: number
-        }[]
-      }
-      validate_storage_consistency: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          file_unique_id: string
-          storage_path: string
-          public_url: string
-          issue: string
         }[]
       }
     }
