@@ -1,34 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { MediaItem, MessageMediaData } from "@/types/media";
+import { MediaItem, MessageMediaData, TelegramMessageData } from "@/types/media";
 import { Database } from "@/integrations/supabase/types";
 
 type TelegramMedia = Database['public']['Tables']['telegram_media']['Row'];
 
 const mapToMediaItem = (item: TelegramMedia): MediaItem => {
-  const messageMediaData: MessageMediaData = item.message_media_data || {
-    message: {
-      url: item.message_url || '',
-      media_group_id: item.telegram_data?.media_group_id || '',
-      caption: item.telegram_data?.message_data?.caption || '',
-      message_id: item.telegram_data?.message_data?.message_id || 0,
-      chat_id: item.telegram_data?.message_data?.chat?.id || 0,
-      date: item.telegram_data?.message_data?.date || 0
-    },
-    sender: {
-      sender_info: item.sender_info || {},
-      chat_info: item.telegram_data?.message_data?.chat || {}
-    },
-    analysis: {
-      analyzed_content: item.analyzed_content || {}
-    },
-    meta: {
-      created_at: item.created_at,
-      updated_at: item.updated_at,
-      status: item.processing_error ? 'error' : item.processed ? 'processed' : 'pending',
-      error: item.processing_error
-    }
-  };
+  const messageMediaData = item.message_media_data as MessageMediaData;
+  const telegramData = item.telegram_data as TelegramMessageData;
 
   return {
     id: item.id,
@@ -41,16 +20,16 @@ const mapToMediaItem = (item: TelegramMedia): MediaItem => {
     thumbnail_state: (item.thumbnail_state || 'pending') as MediaItem['thumbnail_state'],
     thumbnail_source: (item.thumbnail_source || 'default') as MediaItem['thumbnail_source'],
     thumbnail_error: item.thumbnail_error || undefined,
-    caption: item.telegram_data?.message_data?.caption,
-    media_group_id: item.telegram_data?.media_group_id,
-    telegram_data: item.telegram_data,
-    glide_data: item.glide_data,
-    media_metadata: item.media_metadata,
+    caption: telegramData?.message_data?.caption,
+    media_group_id: telegramData?.message_data?.media_group_id,
+    telegram_data: telegramData,
+    glide_data: item.glide_data as Record<string, any>,
+    media_metadata: item.media_metadata as Record<string, any>,
     message_media_data: messageMediaData,
     vendor_uid: item.vendor_uid || undefined,
-    purchase_date: item.purchase_date || undefined,
+    purchase_date: item.purchase_date?.toString() || undefined,
     notes: item.notes || undefined,
-    analyzed_content: item.analyzed_content || undefined,
+    analyzed_content: item.analyzed_content as Record<string, any>,
     message_url: item.message_url || undefined,
     glide_app_url: item.glide_app_url || undefined,
     created_at: item.created_at,
