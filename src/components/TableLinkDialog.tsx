@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { TableResult } from "@/types/media";
 
 interface GlideConfig {
   id: string;
@@ -24,10 +25,6 @@ interface TableLinkDialogProps {
   config: GlideConfig | null;
   onClose: () => void;
   onSuccess: () => void;
-}
-
-interface TableResult {
-  table_name: string;
 }
 
 export function TableLinkDialog({ config, onClose, onSuccess }: TableLinkDialogProps) {
@@ -56,9 +53,9 @@ export function TableLinkDialog({ config, onClose, onSuccess }: TableLinkDialogP
       // Get list of linked tables
       const linkedTables = new Set(tablesData.map(d => d.supabase_table_name));
 
-      // Get all tables in the database
+      // Get all tables in the database using rpc with explicit type
       const { data: allTables, error: allTablesError } = await supabase
-        .rpc('get_all_tables') as { data: TableResult[] | null, error: any };
+        .rpc<TableResult>('get_all_tables');
 
       if (allTablesError) throw allTablesError;
 

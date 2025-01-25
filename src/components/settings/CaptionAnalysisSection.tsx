@@ -4,6 +4,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, Brain } from "lucide-react";
 import { MediaItem } from "@/types/media";
+import { convertToMediaItem } from "@/services/database-service";
 
 export function CaptionAnalysisSection() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -19,7 +20,7 @@ export function CaptionAnalysisSection() {
 
       if (fetchError) throw fetchError;
 
-      const items = mediaItems as MediaItem[];
+      const items = (mediaItems || []).map(convertToMediaItem);
       const itemsWithCaptions = items.filter(item => 
         item.message_media_data?.message?.caption
       );
