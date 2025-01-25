@@ -67,7 +67,7 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
         chat_id: message.chat.id,
         sender_info: message.from || message.sender_chat || {},
         message_type: determineMessageType(message),
-        message_data: message,
+        telegram_data: message,
         caption: message.caption,
         media_group_id: message.media_group_id,
         message_url: messageUrl,

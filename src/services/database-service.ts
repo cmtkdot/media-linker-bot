@@ -18,13 +18,13 @@ export class DatabaseService {
         message: {
           url: item.message_url || '',
           media_group_id: item.telegram_data?.media_group_id || '',
-          caption: item.caption || '',
+          caption: item.telegram_data?.caption || '',
           message_id: item.telegram_data?.message_id || 0,
-          chat_id: item.telegram_data?.chat_id || 0,
+          chat_id: item.telegram_data?.chat?.id || 0,
           date: item.telegram_data?.date || 0
         },
         sender: {
-          sender_info: item.sender_info || {},
+          sender_info: item.telegram_data?.from || item.telegram_data?.sender_chat || {},
           chat_info: item.telegram_data?.chat || {}
         },
         analysis: {
@@ -59,13 +59,13 @@ export class DatabaseService {
           message: {
             url: item.message_url || '',
             media_group_id: item.telegram_data?.media_group_id || '',
-            caption: item.caption || '',
+            caption: item.telegram_data?.caption || '',
             message_id: item.telegram_data?.message_id || 0,
-            chat_id: item.telegram_data?.chat_id || 0,
+            chat_id: item.telegram_data?.chat?.id || 0,
             date: item.telegram_data?.date || 0
           },
           sender: {
-            sender_info: item.sender_info || {},
+            sender_info: item.telegram_data?.from || item.telegram_data?.sender_chat || {},
             chat_info: item.telegram_data?.chat || {}
           },
           analysis: {

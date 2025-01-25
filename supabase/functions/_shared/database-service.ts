@@ -100,13 +100,9 @@ export async function processMediaFile(
         purchase_date: productInfo?.purchase_date,
         notes: productInfo?.notes,
         analyzed_content: productInfo?.analyzed_content,
-        telegram_data: {
-          message_id: message.message_id,
-          chat_id: message.chat.id,
-          media_group_id: message.media_group_id,
-          date: message.date,
-          storage_path: uniqueFileName
-        }
+        telegram_data: message,
+        storage_path: uniqueFileName,
+        message_url: `https://t.me/c/${message.chat.id.toString().substring(4)}/${message.message_id}`
       };
 
       return await supabase

@@ -41,7 +41,20 @@ serve(async (req) => {
         messages: [
           {
             role: 'system',
-            content: `Extract product information from captions. Required: product_name (everything before # or first line). Optional: product_code (text between # and x), quantity (number after x), vendor_uid (letters before numbers in code), purchase_date (convert mmDDyy to YYYY-MM-DD), notes (text in parentheses). Return JSON only.`
+            content: `You are a JSON extraction assistant. Extract product information from captions. The MOST IMPORTANT field is product_name which should be everything before the # symbol if present, or the first line of text. Other fields are optional but try to extract them if present:
+
+            Required field:
+            - product_name: Everything before the # symbol, trimmed. If no # symbol, use the first line or full text.
+
+            Optional fields (only include if confident):
+            - product_code: Text between # and x, excluding parentheses. this is usually cannabis strain names
+            - quantity: Number after "x" and before parentheses and any spaces
+            - vendor_uid: Letters before numbers in product code. Common Vendor UID are: [ "WOO\nCARL\nENC\nDNY\nHEFF\nEST\nCUS\nHIP\nBNC\nQB\nKV\nFISH\nQ\nBRAV\nP\nJWD\nBO\nLOTO\nOM\nCMTK\nMRW\nFT\nCHAD\nSHR\nCBN\nSPOB\nPEPE\nTURK\nM\nPBA\nDBRO\nZ\nCHO\nRB\nKPEE\nDINO\nKC\nPRM\nANT\nKNG\nTOM\nFAKE\nFAKEVEN\nERN\nCOO\nBCH\nJM\nWITE\nANDY\nBRC\nBCHO"]
+            - purchase_date: Convert 6 digits from code (mmDDyy) to YYYY-MM-DD if present
+            - notes: Text in parentheses () combined with spaces or any other text after that is not part of the extracted information
+
+            Return ONLY a JSON object with these fields (no markdown).
+            If you can only extract product_name, that's fine - return just that field.`
           },
           {
             role: 'user',
