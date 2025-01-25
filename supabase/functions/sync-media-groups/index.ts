@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
     const { data: mediaWithCaptions, error: mediaError } = await supabase
       .from('telegram_media')
       .select('*')
-      .not('caption', 'is', null)
+      .not('message_media_data->message->caption', 'is', null)
       .is('analyzed_content', null);
 
     if (mediaError) throw mediaError;
@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
         
         const { data: analyzedContent, error: analysisError } = await supabase.functions.invoke('analyze-caption', {
           body: { 
-            caption: media.caption,
+            caption: media.message_media_data.message.caption,
             messageId: media.id
           }
         });
@@ -96,7 +96,7 @@ Deno.serve(async (req) => {
       if (!groupMedia?.length) continue;
 
       // Find the first item with a caption
-      const mediaWithCaption = groupMedia.find(m => m.caption);
+      const mediaWithCaption = groupMedia.find(m => m.message_media_data?.message?.caption);
       
       if (mediaWithCaption && (!mediaWithCaption.analyzed_content || Object.keys(mediaWithCaption.analyzed_content).length === 0)) {
         console.log('Analyzing caption for media group:', mediaGroupId);
@@ -104,7 +104,7 @@ Deno.serve(async (req) => {
         // Call analyze-caption function
         const { data: analyzedContent, error: analysisError } = await supabase.functions.invoke('analyze-caption', {
           body: { 
-            caption: mediaWithCaption.caption,
+            caption: mediaWithCaption.message_media_data.message.caption,
             messageId: mediaWithCaption.id,
             mediaGroupId: mediaGroupId
           }
@@ -121,7 +121,13 @@ Deno.serve(async (req) => {
         const { error: updateError } = await supabase
           .from('telegram_media')
           .update({
-            caption: mediaWithCaption.caption,
+            message_media_data: {
+              ...mediaWithCaption.message_media_data,
+              message: {
+                ...mediaWithCaption.message_media_data.message,
+                caption: mediaWithCaption.message_media_data.message.caption
+              }
+            },
             analyzed_content: analyzedContent,
             product_name: analyzedContent?.product_name,
             product_code: analyzedContent?.product_code,

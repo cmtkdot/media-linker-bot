@@ -69,3 +69,8 @@ export interface MediaItem {
   product_code?: string;
   quantity?: number;
 }
+
+export interface MediaSearchBarProps {
+  search: string;
+  onSearchChange: (value: string) => void;
+}

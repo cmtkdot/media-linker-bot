@@ -100,6 +100,7 @@ const MediaTable = ({ data, onEdit }: MediaTableProps) => {
           }
         }}
       />
+    );
   };
 
   return (
