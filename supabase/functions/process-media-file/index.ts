@@ -1,8 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { getMimeType } from "../_shared/media-validators.ts";
-import { getAndDownloadTelegramFile } from "../_shared/telegram-service.ts";
 import { withDatabaseRetry } from "../_shared/database-retry.ts";
+import { getAndDownloadTelegramFile } from "../_shared/telegram-service.ts";
+import { uploadMediaToStorage } from "../_shared/storage-manager.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -17,7 +17,7 @@ serve(async (req) => {
   try {
     const { fileId, fileUniqueId, fileType, messageId, botToken } = await req.json();
 
-    if (!fileId || !fileUniqueId || !fileType || !botToken) {
+    if (!fileId || !fileUniqueId || !fileType || !messageId || !botToken) {
       throw new Error('Missing required parameters');
     }
 
@@ -41,7 +41,7 @@ serve(async (req) => {
       .maybeSingle();
 
     if (existingMedia?.public_url) {
-      console.log('Media already exists:', existingMedia);
+      console.log('Media already processed:', existingMedia);
       return new Response(
         JSON.stringify(existingMedia),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -65,37 +65,27 @@ serve(async (req) => {
     }
 
     // Download and process the file
+    console.log('Downloading file from Telegram:', fileId);
     const { buffer, filePath } = await getAndDownloadTelegramFile(fileId, botToken);
-    const fileExt = filePath.split('.').pop() || '';
+
+    // Generate safe filename using file_unique_id
+    const fileExt = filePath.split('.').pop() || 'bin';
     const fileName = `${fileUniqueId}.${fileExt}`;
 
-    console.log('Uploading file to storage:', {
-      fileName,
-      fileType,
-      mimeType: getMimeType(filePath)
-    });
-
-    // Upload to storage with retry
-    const { error: uploadError } = await withDatabaseRetry(
-      async () => {
-        return await supabase.storage
-          .from('media')
-          .upload(fileName, buffer, {
-            contentType: getMimeType(filePath),
-            upsert: true,
-            cacheControl: '3600'
-          });
-      },
-      0,
-      `upload_file_${fileName}`
+    console.log('Uploading file to storage:', fileName);
+    
+    // Upload to Supabase Storage
+    const { publicUrl } = await uploadMediaToStorage(
+      supabase,
+      buffer,
+      fileUniqueId,
+      fileExt,
+      fileType === 'photo' ? 'image/jpeg' : undefined
     );
 
-    if (uploadError) throw uploadError;
-
-    // Get public URL
-    const { data: { publicUrl } } = await supabase.storage
-      .from('media')
-      .getPublicUrl(fileName);
+    if (!publicUrl) {
+      throw new Error('Failed to get public URL after upload');
+    }
 
     // Update media record with public URL through unified queue
     const { data: queueItem, error: queueError } = await withDatabaseRetry(
@@ -136,7 +126,7 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Error processing media file:', error);
+    console.error('Error processing media:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
