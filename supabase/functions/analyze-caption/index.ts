@@ -29,6 +29,12 @@ serve(async (req) => {
       });
     }
 
+    // Updated system prompt: 
+    //  - If 6 digits: interpret as mmDDyy -> "xx-xx-xx"
+    //  - If 5 digits: interpret as mDDyy  -> "x-xx-xx"
+    //  - If not 5 or 6 digits, leftover digits go to vendor_uid plus hyphen
+    //  - For instance, #CHAD120523 -> vendor_uid: "CHAD", purchase_date: "12-05-23"
+    //    #Z31524 -> vendor_uid: "Z", purchase_date: "3-15-24"
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -40,57 +46,52 @@ serve(async (req) => {
         messages: [
           {
             role: "system",
-            content: `Extract cannabis product details, with special focus on product codes:
+            content: `Extract cannabis product details with special focus on product codes.
 
-                    REQUIRED:
-                    - product_name: Strain name before # or entire text if no #
+If there is a '#' in the text, treat the substring following '#' (up to the next 'x', space, or string end) as "product_code".
 
-                    OPTIONAL from product_code (after # symbol):
-                    - product_code: Full text after # before x/space
-                    Format: #[vendor_uid][date]
-                    Examples: #CHAD120523, #Z31524, #WOO51223
+Within "product_code":
+1. "vendor_uid": All contiguous letters at the start (1-4 letters). If not found, set null.
+2. "purchase_date": 
+   - If exactly 6 digits (mmDDyy), format them as "xx-xx-xx". 
+     Example: "120523" -> "12-05-23"
+   - If exactly 5 digits (mDDyy), format them as "x-xx-xx".
+     Example: "31524" -> "3-15-24"
+   - If the next part isn't exactly 5 or 6 digits, set "purchase_date" to null and append those digits to the vendor_uid with a hyphen. 
+     Example: "CHAD1234" -> "vendor_uid"="CHAD-1234", "purchase_date"=null
+3. "quantity": The integer after 'x' (if present).
+4. "notes": Any remaining text beyond the quantity.
 
-                    - vendor_uid extraction rules:
-                    - All LETTERS before first number in product_code
-                    - Can be 1-4 letters (Z, WOO, CHAD etc)
-                    - Common examples: WOO,CARL,ENC,DNY,HEFF,EST,CUS,HIP,BNC,QB,KV,FISH,Q,BRAV,P,JWD,BO,LOTO,OM,CMTK,MRW,FT,CHAD,SHR,CBN,SPOB,PEPE,TURK,M,PBA,DBRO,Z,CHO,RB,KPEE,DINO,KC,PRM,ANT,KNG,TOM,FAKE,FAKEVEN,ERN,COO,BCH,JM,WITE,ANDY,BRC,BCHO
-                    - New vendors possible
+"product_name": The text before the '#' or, if no '#' is found, the entire caption.
 
-                    - purchase_date extraction rules:
-                    IF product_code exists, find digits after vendor_uid:
-                    - If 6 digits: mmDDyy -> YYYY-MM-DD
-                    - If 5 digits: mDDyy -> YYYY-MM-DD (add leading 0)
-                    Examples:
-                    120523 -> 2023-12-05
-                    31524 -> 2024-03-15
+Examples:
+"Blue Dream #CHAD120523x2" -> 
+{
+  "product_name": "Blue Dream",
+  "product_code": "CHAD120523",
+  "vendor_uid": "CHAD",
+  "purchase_date": "12-05-23",
+  "quantity": 2,
+  "notes": null
+}
 
-                    - quantity: Number after x
-                    - notes: Remaining text after quantity
+"OG Kush #Z31524 x 1" ->
+{
+  "product_name": "OG Kush",
+  "product_code": "Z31524",
+  "vendor_uid": "Z",
+  "purchase_date": "3-15-24",
+  "quantity": 1,
+  "notes": null
+}
 
-                    Examples showing date formats:
-
-                    "Blue Dream #CHAD120523x2"
-                    {
-                      "product_name": "Blue Dream",
-                      "product_code": "CHAD120523",
-                      "vendor_uid": "CHAD",
-                      "purchase_date": "2023-12-05",
-                      "quantity": 2
-                    }
-
-                    "OG Kush #Z31524 x 1"
-                    {
-                      "product_name": "OG Kush",
-                      "product_code": "Z31524",
-                      "vendor_uid": "Z",
-                      "purchase_date": "2024-03-15",
-                      "quantity": 1
-                    }
-
-                    Key rules:
-                    1. If product_code exists, try to extract vendor_uid and date
-                    2. Handle both 5 and 6 digit dates
-                    3. vendor_uid is all letters before first number\``,
+"Example #CHAD123x2" (not 5 or 6 digits) ->
+{
+  "product_code": "CHAD123",
+  "vendor_uid": "CHAD-123",
+  "purchase_date": null,
+  "quantity": 2
+}`,
           },
           {
             role: "user",
@@ -111,7 +112,7 @@ serve(async (req) => {
     const data = await response.json();
     const cleanContent = data.choices[0].message.content.replace(
       /```json\n|\n```|```/g,
-      "",
+      ""
     );
     const result = JSON.parse(cleanContent);
 
@@ -143,7 +144,7 @@ serve(async (req) => {
     if (messageId) {
       const supabase = createClient(
         Deno.env.get("SUPABASE_URL") ?? "",
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
       );
 
       const { error: updateError } = await supabase
