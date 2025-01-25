@@ -29,27 +29,6 @@ export async function handleWebhookUpdate(
     const chatId = message.chat.id.toString();
     const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
 
-    // Analyze caption if present
-    let analyzedContent = null;
-    if (message.caption) {
-      try {
-        console.log('Analyzing caption:', {
-          caption: message.caption,
-          correlation_id: correlationId
-        });
-        analyzedContent = await analyzeCaptionWithAI(message.caption, supabase);
-        console.log('Caption analysis result:', {
-          result: analyzedContent,
-          correlation_id: correlationId
-        });
-      } catch (error) {
-        console.error('Error analyzing caption:', {
-          error,
-          correlation_id: correlationId
-        });
-      }
-    }
-
     // Create message media data structure
     const messageMediaData = {
       message: {
@@ -63,9 +42,6 @@ export async function handleWebhookUpdate(
       sender: {
         sender_info: message.from || message.sender_chat || {},
         chat_info: message.chat || {}
-      },
-      analysis: {
-        analyzed_content: analyzedContent || {}
       },
       meta: {
         created_at: new Date().toISOString(),
@@ -87,14 +63,8 @@ export async function handleWebhookUpdate(
         caption: message.caption,
         media_group_id: message.media_group_id,
         message_url: messageUrl,
-        analyzed_content: analyzedContent,
-        product_name: analyzedContent?.product_name || null,
-        product_code: analyzedContent?.product_code || null,
-        quantity: analyzedContent?.quantity || null,
-        vendor_uid: analyzedContent?.vendor_uid || null,
-        purchase_date: analyzedContent?.purchase_date || null,
-        notes: analyzedContent?.notes || null,
-        status: 'pending'
+        status: 'pending',
+        correlation_id: correlationId
       };
 
       console.log('Creating/updating message record:', {
@@ -138,6 +108,7 @@ export async function handleWebhookUpdate(
     });
 
     // The queue_webhook_message trigger will automatically add this to unified_processing_queue
+    // with the correct queue_type (either 'media' or 'webhook')
     
     return {
       success: true,
