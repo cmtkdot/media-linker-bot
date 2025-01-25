@@ -40,7 +40,7 @@ serve(async (req) => {
       .eq('file_unique_id', fileUniqueId)
       .maybeSingle();
 
-    if (existingMedia) {
+    if (existingMedia?.public_url) {
       console.log('Media already exists:', existingMedia);
       return new Response(
         JSON.stringify(existingMedia),
@@ -81,28 +81,25 @@ serve(async (req) => {
       .from('media')
       .getPublicUrl(fileName);
 
-    // Create media record
-    const { data: mediaRecord, error: insertError } = await withDatabaseRetry(
+    // Update media record with public URL
+    const { data: mediaRecord, error: updateError } = await withDatabaseRetry(
       async () => {
         return await supabase
           .from('telegram_media')
-          .insert([{
-            file_id: fileId,
-            file_unique_id: fileUniqueId,
-            file_type: fileType,
+          .update({ 
             public_url: publicUrl,
-            storage_path: fileName,
-            message_id: messageId,
-            processed: true
-          }])
+            processed: true,
+            updated_at: new Date().toISOString()
+          })
+          .eq('file_unique_id', fileUniqueId)
           .select()
           .single();
       },
       0,
-      `create_media_record_${fileUniqueId}`
+      `update_media_record_${fileUniqueId}`
     );
 
-    if (insertError) throw insertError;
+    if (updateError) throw updateError;
 
     console.log('Successfully processed media file:', {
       file_id: fileId,
