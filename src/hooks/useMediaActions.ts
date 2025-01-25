@@ -2,6 +2,7 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { MediaItem } from "@/types/media";
+import { convertToMediaItem } from "@/services/database-service";
 
 export const useMediaActions = (refetch: () => Promise<void>) => {
   const [isSyncing, setIsSyncing] = useState(false);
@@ -42,7 +43,7 @@ export const useMediaActions = (refetch: () => Promise<void>) => {
 
       if (fetchError) throw fetchError;
 
-      const items = mediaItems as MediaItem[];
+      const items = mediaItems.map(convertToMediaItem);
       const itemsWithCaptions = items.filter(item => 
         item.message_media_data?.message?.caption
       );

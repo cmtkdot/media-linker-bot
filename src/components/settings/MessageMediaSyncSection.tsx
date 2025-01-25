@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, RefreshCw } from "lucide-react";
+import { SyncResult } from "@/types/media";
 
 export const MessageMediaSyncSection = () => {
   const [isSyncing, setIsSyncing] = useState(false);
@@ -15,7 +16,7 @@ export const MessageMediaSyncSection = () => {
     setIsSyncing(true);
     try {
       // First, sync messages to telegram_media using the database service
-      const { data: syncResults, error: syncError } = await supabase.rpc('sync_messages_to_telegram_media');
+      const { data: syncResults, error: syncError } = await supabase.rpc('sync_messages_to_telegram_media') as { data: SyncResult[] | null, error: any };
       
       if (syncError) {
         console.error('Error in sync_messages_to_telegram_media:', syncError);
