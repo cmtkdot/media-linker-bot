@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Database, TableResult } from "@/types/media";
+import { TableSelector } from "./table/TableSelector";
+import { NewTableForm } from "./table/NewTableForm";
+import { Database } from "@/types/database";
 
 interface GlideConfig {
   id: string;
@@ -42,7 +42,6 @@ export function TableLinkDialog({ config, onClose, onSuccess }: TableLinkDialogP
 
   const fetchAvailableTables = async () => {
     try {
-      // Get all tables from Supabase
       const { data: tablesData, error: tablesError } = await supabase
         .from('glide_config')
         .select('supabase_table_name')
@@ -50,16 +49,14 @@ export function TableLinkDialog({ config, onClose, onSuccess }: TableLinkDialogP
 
       if (tablesError) throw tablesError;
 
-      // Get list of linked tables
       const linkedTables = new Set(tablesData.map(d => d.supabase_table_name));
 
-      // Get all tables in the database using rpc
-      const { data: allTables, error: allTablesError } = await supabase
-        .rpc<TableResult[], Record<string, never>>('get_all_tables');
+      const supabaseClient = supabase as unknown as Database;
+      const { data: allTables, error: allTablesError } = await supabaseClient
+        .rpc('get_all_tables');
 
       if (allTablesError) throw allTablesError;
 
-      // Filter out system tables and already linked tables
       const availableTables = (allTables || [])
         .map(t => t.table_name)
         .filter(table => 
@@ -84,15 +81,14 @@ export function TableLinkDialog({ config, onClose, onSuccess }: TableLinkDialogP
 
     setIsCreating(true);
     try {
-      // First create the table using the RPC function
-      const { error: functionError } = await supabase
-        .rpc<undefined, { table_name: string }>('create_glide_sync_table', { 
+      const supabaseClient = supabase as unknown as Database;
+      const { error: functionError } = await supabaseClient
+        .rpc('create_glide_sync_table', { 
           table_name: newTableName 
         });
 
       if (functionError) throw functionError;
 
-      // Update the glide_config with the new table name and set active to true
       const { error: updateError } = await supabase
         .from('glide_config')
         .update({ 
@@ -168,21 +164,11 @@ export function TableLinkDialog({ config, onClose, onSuccess }: TableLinkDialogP
           </TabsList>
 
           <TabsContent value="existing" className="space-y-4">
-            <div>
-              <label className="text-sm font-medium">Select Table</label>
-              <Select value={selectedTable} onValueChange={setSelectedTable}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a table" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableTables.map((table) => (
-                    <SelectItem key={table} value={table}>
-                      {table}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <TableSelector
+              availableTables={availableTables}
+              selectedTable={selectedTable}
+              onTableSelect={setSelectedTable}
+            />
 
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={onClose}>
@@ -204,38 +190,14 @@ export function TableLinkDialog({ config, onClose, onSuccess }: TableLinkDialogP
             </div>
           </TabsContent>
 
-          <TabsContent value="new" className="space-y-4">
-            <div>
-              <label className="text-sm font-medium">New Table Name</label>
-              <Input
-                placeholder="Enter table name"
-                value={newTableName}
-                onChange={(e) => setNewTableName(e.target.value)}
-                className="mt-1"
-              />
-              <p className="text-sm text-muted-foreground mt-1">
-                This will create a new table: glide_{newTableName}
-              </p>
-            </div>
-
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={onClose}>
-                Cancel
-              </Button>
-              <Button
-                onClick={handleCreateTable}
-                disabled={!newTableName || isCreating}
-              >
-                {isCreating ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Creating...
-                  </>
-                ) : (
-                  'Create & Link Table'
-                )}
-              </Button>
-            </div>
+          <TabsContent value="new">
+            <NewTableForm
+              newTableName={newTableName}
+              onTableNameChange={setNewTableName}
+              onSubmit={handleCreateTable}
+              isCreating={isCreating}
+              onCancel={onClose}
+            />
           </TabsContent>
         </Tabs>
       </DialogContent>

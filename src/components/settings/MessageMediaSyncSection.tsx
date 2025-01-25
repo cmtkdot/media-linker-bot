@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, RefreshCw } from "lucide-react";
-import { SyncResult } from "@/types/media";
+import { Database } from "@/types/database";
 
 export const MessageMediaSyncSection = () => {
   const [isSyncing, setIsSyncing] = useState(false);
@@ -15,9 +15,9 @@ export const MessageMediaSyncSection = () => {
   const handleSync = async () => {
     setIsSyncing(true);
     try {
-      // First, sync messages to telegram_media using the database service
-      const { data: syncResults, error: syncError } = await supabase
-        .rpc<SyncResult[], Record<string, never>>('sync_messages_to_telegram_media');
+      const supabaseClient = supabase as unknown as Database;
+      const { data: syncResults, error: syncError } = await supabaseClient
+        .rpc('sync_messages_to_telegram_media');
       
       if (syncError) {
         console.error('Error in sync_messages_to_telegram_media:', syncError);
@@ -26,7 +26,6 @@ export const MessageMediaSyncSection = () => {
 
       const syncResult = syncResults?.[0] || { synced_count: 0, error_count: 0 };
 
-      // Then call the edge function to process the media files
       const { data, error } = await supabase.functions.invoke('sync-message-media', {
         body: { operation: 'syncAll' }
       });
@@ -42,7 +41,6 @@ export const MessageMediaSyncSection = () => {
     } catch (error: any) {
       console.error('Error in message media sync:', error);
       
-      // Parse the error message from the response body if available
       let errorMessage = error.message;
       try {
         if (error.body) {
