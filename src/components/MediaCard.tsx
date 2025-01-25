@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { PlayCircle, Eye, Edit, ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import { cn } from "@/lib/utils";
+import { getMediaCaption } from "@/utils/media-helpers";
 
 interface MediaCardProps {
   item: MediaItem;
@@ -40,12 +41,6 @@ const MediaCard = ({ item, onPreview, onEdit, relatedMedia = [] }: MediaCardProp
   }, [isHovering, currentItem]);
 
   const getDisplayUrl = (mediaItem: MediaItem) => {
-    if (mediaItem.file_type === 'video') {
-      if (mediaItem.thumbnail_state === 'downloaded' || mediaItem.thumbnail_state === 'generated') {
-        return !isHovering ? mediaItem.thumbnail_url : mediaItem.public_url;
-      }
-      return mediaItem.public_url || mediaItem.default_public_url || fallbackImage;
-    }
     return mediaItem.public_url || mediaItem.default_public_url || fallbackImage;
   };
 
@@ -55,10 +50,6 @@ const MediaCard = ({ item, onPreview, onEdit, relatedMedia = [] }: MediaCardProp
 
   const handlePrevious = () => {
     setCurrentIndex((prev) => (prev - 1 + allMedia.length) % allMedia.length);
-  };
-
-  const getCaption = (mediaItem: MediaItem) => {
-    return mediaItem.message_media_data?.message?.caption || 'Untitled';
   };
 
   return (
@@ -79,39 +70,27 @@ const MediaCard = ({ item, onPreview, onEdit, relatedMedia = [] }: MediaCardProp
           <div className="absolute inset-0 bg-gray-100">
             {currentItem.file_type === 'video' ? (
               <div className="relative w-full h-full">
-                {isHovering ? (
-                  <video
-                    ref={videoRef}
-                    src={getDisplayUrl(currentItem)}
-                    className="w-full h-full object-cover"
-                    loop
-                    muted
-                    playsInline
-                  />
-                ) : (
-                  <>
-                    <img
-                      src={getDisplayUrl(currentItem)}
-                      alt={getCaption(currentItem)}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        const img = e.target as HTMLImageElement;
-                        if (img.src !== fallbackImage) {
-                          img.src = fallbackImage;
-                        }
-                      }}
-                    />
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <PlayCircle className="w-12 h-12 text-white opacity-75" />
-                    </div>
-                  </>
+                <video
+                  ref={videoRef}
+                  src={getDisplayUrl(currentItem)}
+                  className="w-full h-full object-cover"
+                  preload="metadata"
+                  muted
+                  playsInline
+                  loop={isHovering}
+                />
+                {!isHovering && (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <PlayCircle className="w-12 h-12 text-white opacity-75" />
+                  </div>
                 )}
               </div>
             ) : (
               <img
                 src={getDisplayUrl(currentItem)}
-                alt={getCaption(currentItem)}
+                alt={getMediaCaption(currentItem)}
                 className="w-full h-full object-cover"
+                loading="lazy"
                 onError={(e) => {
                   const img = e.target as HTMLImageElement;
                   if (img.src !== fallbackImage) {
@@ -189,7 +168,7 @@ const MediaCard = ({ item, onPreview, onEdit, relatedMedia = [] }: MediaCardProp
         {/* Media info */}
         <div className="p-3">
           <p className="text-sm font-medium truncate">
-            {getCaption(currentItem)}
+            {getMediaCaption(currentItem)}
           </p>
           <p className="text-xs text-muted-foreground">
             {currentItem.file_type.charAt(0).toUpperCase() + currentItem.file_type.slice(1)}
