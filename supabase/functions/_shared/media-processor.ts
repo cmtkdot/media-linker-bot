@@ -137,7 +137,6 @@ export async function processMediaFiles(
               thumbnail_state: thumbnailState,
               thumbnail_source: thumbnailSource,
               thumbnail_error: thumbnailError,
-              caption: message.caption,
               telegram_data: {
                 message_id: message.message_id,
                 chat_id: message.chat.id,
