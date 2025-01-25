@@ -341,6 +341,7 @@ export type Database = {
       telegram_media: {
         Row: {
           analyzed_content: Json | null
+          caption: string | null
           created_at: string
           default_public_url: string | null
           file_id: string
@@ -374,6 +375,7 @@ export type Database = {
         }
         Insert: {
           analyzed_content?: Json | null
+          caption?: string | null
           created_at?: string
           default_public_url?: string | null
           file_id: string
@@ -407,6 +409,7 @@ export type Database = {
         }
         Update: {
           analyzed_content?: Json | null
+          caption?: string | null
           created_at?: string
           default_public_url?: string | null
           file_id?: string
@@ -587,6 +590,15 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      regenerate_all_video_thumbnails: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          video_id: string
+          old_thumbnail: string
+          new_thumbnail: string
+          source: string
+        }[]
+      }
       safe_sync_messages_to_telegram_media: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -601,6 +613,7 @@ export type Database = {
         }
         Returns: {
           analyzed_content: Json | null
+          caption: string | null
           created_at: string
           default_public_url: string | null
           file_id: string

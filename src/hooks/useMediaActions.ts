@@ -1,17 +1,10 @@
 import { useState } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { MediaItem } from "@/types/media";
 
 interface SyncResponse {
   updated_groups: number;
   synced_media: number;
-}
-
-interface AnalyzedMedia {
-  id: string;
-  caption: string | null;
-  product_name: string | null;
 }
 
 export const useMediaActions = (refetch: () => Promise<unknown>) => {
@@ -49,36 +42,45 @@ export const useMediaActions = (refetch: () => Promise<unknown>) => {
     try {
       const { data: unanalyzedMedia, error: mediaError } = await supabase
         .from('telegram_media')
-        .select('id, caption, product_name')
-        .is('product_name', null)
-        .not('caption', 'is', null) as { data: AnalyzedMedia[] | null, error: Error | null };
+        .select('*')
+        .is('analyzed_content', null)
+        .not('message_media_data->message->caption', 'is', null)
+        .limit(100);
 
       if (mediaError) throw mediaError;
 
       if (!unanalyzedMedia?.length) {
         toast({
           title: "No Unanalyzed Captions",
-          description: "All media items with captions have been analyzed and have product names extracted.",
+          description: "All media items with captions have been analyzed.",
         });
         return;
       }
 
-      toast({
-        title: "Starting Caption Analysis",
-        description: `Found ${unanalyzedMedia.length} items that need analysis.`,
-      });
+      let analyzedCount = 0;
+      let errorCount = 0;
 
-      for (const item of unanalyzedMedia) {
-        const { error: analysisError } = await supabase.functions.invoke('analyze-caption', {
-          body: { 
-            caption: item.caption,
-            messageId: item.id
+      for (const media of unanalyzedMedia) {
+        try {
+          const caption = media.message_media_data?.message?.caption;
+          
+          const { error: analysisError } = await supabase.functions.invoke('analyze-caption', {
+            body: { 
+              caption,
+              messageId: media.id
+            }
+          });
+
+          if (analysisError) {
+            console.error('Error analyzing caption:', analysisError);
+            errorCount++;
+            continue;
           }
-        });
 
-        if (analysisError) {
-          console.error('Error analyzing caption:', analysisError);
-          continue;
+          analyzedCount++;
+        } catch (error) {
+          console.error('Error analyzing caption:', error);
+          errorCount++;
         }
       }
 
@@ -86,7 +88,7 @@ export const useMediaActions = (refetch: () => Promise<unknown>) => {
 
       toast({
         title: "Caption Analysis Complete",
-        description: `Analyzed ${unanalyzedMedia.length} captions. Check the table view to see the results.`,
+        description: `Analyzed ${analyzedCount} captions with ${errorCount} errors.`,
       });
     } catch (error: any) {
       console.error('Error analyzing captions:', error);
