@@ -6,7 +6,6 @@ import { Database } from "@/integrations/supabase/types";
 type TelegramMedia = Database['public']['Tables']['telegram_media']['Row'];
 
 const mapToMediaItem = (item: TelegramMedia): MediaItem => {
-  // Create a base message media data structure with default values
   const defaultMessageMediaData: MessageMediaData = {
     message: {
       url: item.message_url || '',
@@ -31,7 +30,6 @@ const mapToMediaItem = (item: TelegramMedia): MediaItem => {
     }
   };
 
-  // Safely merge with actual message_media_data if it exists
   const messageMediaData: MessageMediaData = item.message_media_data 
     ? {
         ...defaultMessageMediaData,
@@ -52,7 +50,6 @@ const mapToMediaItem = (item: TelegramMedia): MediaItem => {
     thumbnail_state: (item.thumbnail_state || 'pending') as MediaItem['thumbnail_state'],
     thumbnail_source: (item.thumbnail_source || 'default') as MediaItem['thumbnail_source'],
     thumbnail_error: item.thumbnail_error || undefined,
-    caption: messageMediaData.message.caption,
     media_group_id: messageMediaData.message.media_group_id,
     telegram_data: (item.telegram_data || {}) as TelegramMessageData,
     glide_data: item.glide_data as Record<string, any>,

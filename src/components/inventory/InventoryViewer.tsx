@@ -23,6 +23,7 @@ import {
 import { MediaItem } from "@/types/media";
 import { cn } from "@/lib/utils";
 import { useMediaQuery } from "@/hooks/use-media-query";
+import { getMediaCaption } from "@/utils/media-helpers";
 
 interface InventoryViewerProps {
   open: boolean;
@@ -111,7 +112,7 @@ export function InventoryViewer({
             ) : (
               <ImageIcon className="h-5 w-5" />
             )}
-            {currentItem.caption || "Media Preview"}
+            {getMediaCaption(currentItem) || "Media Preview"}
             {allMedia.length > 1 && (
               <span className="text-sm text-muted-foreground">
                 ({currentIndex + 1}/{allMedia.length})

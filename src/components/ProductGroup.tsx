@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MediaItem } from "@/types/media";
 import { ChevronLeft, ChevronRight, PlayCircle, Edit } from "lucide-react";
 import { format } from "date-fns";
+import { getMediaCaption } from "@/utils/media-helpers";
 
 interface ProductGroupProps {
   group: MediaItem[];
@@ -36,7 +37,7 @@ const ProductGroup = ({ group, onMediaClick, onEdit }: ProductGroupProps) => {
             >
               <img
                 src={group[currentIndex].thumbnail_url || group[currentIndex].default_public_url}
-                alt={group[currentIndex].caption || ''}
+                alt={getMediaCaption(group[currentIndex]) || ''}
                 className="w-full h-full object-cover"
               />
               <div className="absolute inset-0 flex items-center justify-center">
@@ -46,7 +47,7 @@ const ProductGroup = ({ group, onMediaClick, onEdit }: ProductGroupProps) => {
           ) : (
             <img
               src={group[currentIndex].public_url || group[currentIndex].default_public_url}
-              alt={group[currentIndex].caption || ''}
+              alt={getMediaCaption(group[currentIndex]) || ''}
               className="w-full h-full object-cover cursor-pointer"
               onClick={() => onMediaClick(group[currentIndex], group)}
             />
@@ -89,7 +90,7 @@ const ProductGroup = ({ group, onMediaClick, onEdit }: ProductGroupProps) => {
         </CardTitle>
         {mainProduct.caption && (
           <p className="text-lg text-muted-foreground mt-4">
-            {mainProduct.caption}
+            {getMediaCaption(mainProduct)}
           </p>
         )}
         {mainProduct.product_code && (

@@ -7,6 +7,7 @@ import { PlayCircle, Eye, Edit, ChevronLeft, ChevronRight, Info } from "lucide-r
 import { useEffect, useState, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { useMediaQuery } from "@/hooks/use-media-query";
+import { getMediaCaption } from "@/utils/media-helpers";
 
 interface InventoryCardProps {
   item: MediaItem;
@@ -257,9 +258,9 @@ export function InventoryCard({ item, onPreview, onEdit, relatedMedia = [] }: In
           <h3 className="font-medium text-sm mb-1">
             {currentItem.product_name || 'Untitled Product'}
           </h3>
-          {currentItem.caption && (
+          {getMediaCaption(currentItem) && (
             <p className="text-sm opacity-90 line-clamp-2">
-              {currentItem.caption}
+              {getMediaCaption(currentItem)}
             </p>
           )}
           {currentItem.product_code && (

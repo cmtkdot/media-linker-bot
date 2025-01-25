@@ -2,10 +2,11 @@ import React from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MediaItem } from "@/types/media";
+import { getMediaCaption } from "@/utils/media-helpers";
 
 interface MediaEditFormProps {
   editItem: MediaItem;
-  onItemChange: (field: keyof MediaItem, value: any) => void;
+  onItemChange: (field: keyof MediaItem | 'caption', value: any) => void;
   formatDate: (date: string | null) => string | null;
 }
 
@@ -16,9 +17,21 @@ export const MediaEditForm = ({ editItem, onItemChange, formatDate }: MediaEditF
         <Label htmlFor="caption" className="text-right">Caption</Label>
         <Input
           id="caption"
-          value={editItem.caption || ''}
+          value={getMediaCaption(editItem)}
           className="col-span-3"
-          onChange={(e) => onItemChange('caption', e.target.value)}
+          onChange={(e) => {
+            const updatedItem = {
+              ...editItem,
+              message_media_data: {
+                ...editItem.message_media_data,
+                message: {
+                  ...editItem.message_media_data?.message,
+                  caption: e.target.value
+                }
+              }
+            };
+            onItemChange('message_media_data', updatedItem.message_media_data);
+          }}
         />
       </div>
       <div className="grid grid-cols-4 items-center gap-4">

@@ -14,6 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import MediaViewer from "./MediaViewer";
 import { MediaItem } from "@/types/media";
+import { getMediaCaption } from "@/utils/media-helpers";
 
 interface MediaTableProps {
   data: MediaItem[];
@@ -69,7 +70,7 @@ const MediaTable = ({ data, onEdit }: MediaTableProps) => {
         <div className="relative w-16 h-16">
           <img
             src={previewUrl}
-            alt={item.caption || "Video thumbnail"}
+            alt={getMediaCaption(item) || "Video thumbnail"}
             className="w-full h-full object-cover rounded"
             onError={(e) => {
               const img = e.target as HTMLImageElement;
@@ -90,7 +91,7 @@ const MediaTable = ({ data, onEdit }: MediaTableProps) => {
     return (
       <img
         src={previewUrl}
-        alt={item.caption || "Media"}
+        alt={getMediaCaption(item) || "Media"}
         className="w-16 h-16 object-cover rounded"
         onError={(e) => {
           const img = e.target as HTMLImageElement;
@@ -99,7 +100,6 @@ const MediaTable = ({ data, onEdit }: MediaTableProps) => {
           }
         }}
       />
-    );
   };
 
   return (
@@ -130,7 +130,7 @@ const MediaTable = ({ data, onEdit }: MediaTableProps) => {
                 <TableCell onClick={(e) => e.stopPropagation()}>
                   {getMediaPreview(item)}
                 </TableCell>
-                <TableCell>{item.caption || '-'}</TableCell>
+                <TableCell>{getMediaCaption(item)}</TableCell>
                 <TableCell>{item.product_name || '-'}</TableCell>
                 <TableCell>{item.product_code || '-'}</TableCell>
                 <TableCell>{item.vendor_uid || '-'}</TableCell>
