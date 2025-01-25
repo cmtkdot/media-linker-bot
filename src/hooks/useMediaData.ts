@@ -20,7 +20,6 @@ export function useMediaData() {
         file_unique_id: item.file_unique_id,
         file_type: item.file_type,
         public_url: item.public_url,
-        default_public_url: item.default_public_url,
         caption: item.caption,
         product_name: item.product_name,
         product_code: item.product_code,
@@ -32,13 +31,15 @@ export function useMediaData() {
         message_url: item.message_url,
         telegram_media_row_id: item.telegram_media_row_id,
         glide_app_url: item.glide_app_url,
-        media_group_id: item.media_group_id,
         created_at: item.created_at,
         updated_at: item.updated_at,
         telegram_data: item.telegram_data,
         glide_data: item.glide_data,
         media_metadata: item.media_metadata,
-        message_media_data: item.message_media_data
+        message_media_data: item.message_media_data,
+        processed: item.processed,
+        processing_error: item.processing_error,
+        storage_path: item.storage_path
       }));
     }
   });

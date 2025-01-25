@@ -34,7 +34,7 @@ const ProductMediaViewer = ({
 }: ProductMediaViewerProps) => {
   if (!media) return null;
 
-  const mediaUrl = media.public_url || media.default_public_url;
+  const mediaUrl = media.public_url;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

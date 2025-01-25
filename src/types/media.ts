@@ -52,7 +52,7 @@ export interface MediaItem {
   storage_path?: string;
   
   // Message reference
-  message_id: number;
+  message_id: string;
   message_url?: string;
   caption?: string;
   

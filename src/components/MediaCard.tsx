@@ -6,7 +6,7 @@ import { useEffect, useState, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { getMediaCaption } from "@/utils/media-helpers";
 
-interface MediaCardProps {
+export interface MediaCardProps {
   item: MediaItem;
   onPreview: () => void;
   onEdit: (item: MediaItem) => void;
@@ -41,7 +41,7 @@ const MediaCard = ({ item, onPreview, onEdit, relatedMedia = [] }: MediaCardProp
   }, [isHovering, currentItem]);
 
   const getDisplayUrl = (mediaItem: MediaItem) => {
-    return mediaItem.public_url || mediaItem.default_public_url || fallbackImage;
+    return mediaItem.public_url || fallbackImage;
   };
 
   const handleNext = () => {
