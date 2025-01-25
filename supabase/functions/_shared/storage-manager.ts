@@ -1,11 +1,17 @@
 import { ensureStorageBucket } from './storage-utils.ts';
 import { getMimeType } from './media-validators.ts';
 
+interface StorageOptions {
+  maxSize?: number;
+  compress?: boolean;
+}
+
 export const uploadMediaToStorage = async (
   supabase: any,
   buffer: ArrayBuffer,
   fileUniqueId: string,
   fileExt: string,
+  options?: StorageOptions,
   defaultMimeType: string = 'application/octet-stream'
 ) => {
   const fileName = `${fileUniqueId}.${fileExt}`;
@@ -37,6 +43,17 @@ export const uploadMediaToStorage = async (
       return { publicUrl };
     }
 
+    // Handle video optimization if needed
+    if (options?.compress && finalMimeType.startsWith('video/')) {
+      // Add video compression logic here if needed
+      console.log('Video compression would be applied here');
+    }
+
+    // Check file size
+    if (options?.maxSize && buffer.byteLength > options.maxSize) {
+      throw new Error(`File size exceeds maximum allowed (${options.maxSize} bytes)`);
+    }
+
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('media')
       .upload(fileName, buffer, {
@@ -56,7 +73,8 @@ export const uploadMediaToStorage = async (
 
     console.log('Successfully uploaded file:', {
       fileName,
-      publicUrl
+      publicUrl,
+      size: buffer.byteLength
     });
 
     return { publicUrl };

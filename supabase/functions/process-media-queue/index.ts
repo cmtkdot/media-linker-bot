@@ -1,7 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { withDatabaseRetry } from "../_shared/database-retry.ts";
-import { processMediaGroup, processStandaloneMedia } from "../_shared/unified-media-processor.ts";
+import { processMediaItem } from "../_shared/unified-media-processor.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -19,12 +18,18 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Get pending queue items in batches
+    const botToken = Deno.env.get('TELEGRAM_BOT_TOKEN');
+    if (!botToken) {
+      throw new Error('TELEGRAM_BOT_TOKEN is not configured');
+    }
+
+    // Get pending queue items
     const { data: queueItems, error: queueError } = await supabase
       .from('unified_processing_queue')
       .select('*')
       .eq('status', 'pending')
       .eq('queue_type', 'media')
+      .order('priority', { ascending: false })
       .order('created_at', { ascending: true })
       .limit(10);
 
@@ -32,99 +37,34 @@ serve(async (req) => {
 
     console.log(`Processing ${queueItems?.length || 0} queue items`);
 
-    // Group items by media_group_id
-    const mediaGroups = new Map();
-    const standaloneItems = [];
-
-    for (const item of queueItems || []) {
-      const mediaGroupId = item.data?.message?.media_group_id;
-      
-      if (mediaGroupId) {
-        if (!mediaGroups.has(mediaGroupId)) {
-          mediaGroups.set(mediaGroupId, []);
-        }
-        mediaGroups.get(mediaGroupId).push(item);
-      } else {
-        standaloneItems.push(item);
-      }
-    }
-
     const results = [];
+    const errors = [];
 
-    // Process media groups
-    for (const [groupId, items] of mediaGroups) {
+    // Process each item independently
+    for (const item of queueItems || []) {
       try {
-        console.log(`Processing media group ${groupId} with ${items.length} items`);
-        await processMediaGroup(supabase, items, groupId);
+        const result = await processMediaItem(supabase, item, botToken);
         results.push({
-          group_id: groupId,
+          item_id: item.id,
           status: 'processed',
-          items_count: items.length
+          media_id: result.id
         });
       } catch (error) {
-        console.error(`Error processing media group ${groupId}:`, error);
-        results.push({
-          group_id: groupId,
-          status: 'error',
-          error: error.message
-        });
-
-        // Update all items in the group with error status
-        for (const item of items) {
-          await withDatabaseRetry(async () => {
-            const { error: updateError } = await supabase
-              .from('unified_processing_queue')
-              .update({
-                status: 'error',
-                error_message: error.message,
-                retry_count: (item.retry_count || 0) + 1
-              })
-              .eq('id', item.id);
-
-            if (updateError) throw updateError;
-          });
-        }
-      }
-    }
-
-    // Process standalone items
-    for (const item of standaloneItems) {
-      try {
-        console.log(`Processing standalone media item ${item.id}`);
-        await processStandaloneMedia(supabase, item);
-        results.push({
+        console.error(`Error processing item ${item.id}:`, error);
+        errors.push({
           item_id: item.id,
-          status: 'processed'
-        });
-      } catch (error) {
-        console.error(`Error processing standalone item ${item.id}:`, error);
-        results.push({
-          item_id: item.id,
-          status: 'error',
-          error: error.message
-        });
-
-        await withDatabaseRetry(async () => {
-          const { error: updateError } = await supabase
-            .from('unified_processing_queue')
-            .update({
-              status: 'error',
-              error_message: error.message,
-              retry_count: (item.retry_count || 0) + 1
-            })
-            .eq('id', item.id);
-
-          if (updateError) throw updateError;
+          error: error.message,
+          code: error.code
         });
       }
     }
 
     return new Response(
-      JSON.stringify({ 
-        processed: results.length, 
-        groups_processed: mediaGroups.size,
-        standalone_processed: standaloneItems.length,
-        results 
+      JSON.stringify({
+        processed: results.length,
+        errors: errors.length,
+        results,
+        errors
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
