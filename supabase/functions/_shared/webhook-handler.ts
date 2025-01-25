@@ -3,7 +3,12 @@ import { processMediaFiles } from './media-processor.ts';
 import { withDatabaseRetry } from './database-retry.ts';
 import { analyzeCaptionWithAI } from './caption-analyzer.ts';
 
-export async function handleWebhookUpdate(update: any, supabase: any, botToken: string) {
+export async function handleWebhookUpdate(
+  update: any, 
+  supabase: any, 
+  botToken: string,
+  correlationId: string
+) {
   const message = update.message || update.channel_post;
   if (!message) {
     console.log('No message in update');
@@ -16,7 +21,8 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
       message_id: message.message_id,
       chat_id: message.chat.id,
       media_group_id: message.media_group_id,
-      has_caption: !!message.caption
+      has_caption: !!message.caption,
+      correlation_id: correlationId
     });
 
     // Generate message URL
@@ -27,11 +33,20 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
     let analyzedContent = null;
     if (message.caption) {
       try {
-        console.log('Analyzing caption:', message.caption);
+        console.log('Analyzing caption:', {
+          caption: message.caption,
+          correlation_id: correlationId
+        });
         analyzedContent = await analyzeCaptionWithAI(message.caption);
-        console.log('Caption analysis result:', analyzedContent);
+        console.log('Caption analysis result:', {
+          result: analyzedContent,
+          correlation_id: correlationId
+        });
       } catch (error) {
-        console.error('Error analyzing caption:', error);
+        console.error('Error analyzing caption:', {
+          error,
+          correlation_id: correlationId
+        });
       }
     }
 
@@ -56,7 +71,8 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         status: 'pending',
-        error: null
+        error: null,
+        correlation_id: correlationId
       }
     };
 
@@ -79,7 +95,8 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
         purchase_date: analyzedContent?.purchase_date || null,
         notes: analyzedContent?.notes || null,
         status: 'pending',
-        retry_count: 0
+        retry_count: 0,
+        correlation_id: correlationId
       };
 
       const { data: existingMessage } = await supabase
@@ -109,25 +126,34 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
         if (insertError) throw insertError;
         return data;
       }
-    }, 0, `create_message_${message.message_id}`);
+    }, 0, `create_message_${message.message_id}_${correlationId}`);
 
     // Process media files if present
     const hasMedia = message.photo || message.video || message.document || message.animation;
     if (hasMedia && messageRecord) {
-      await processMediaFiles(message, messageRecord, messageMediaData, supabase, botToken);
+      await processMediaFiles(
+        message, 
+        messageRecord, 
+        messageMediaData, 
+        supabase, 
+        botToken,
+        correlationId
+      );
     }
 
     console.log('Successfully processed update:', {
       update_id: update.update_id,
       message_id: message.message_id,
       chat_id: message.chat.id,
-      record_id: messageRecord?.id
+      record_id: messageRecord?.id,
+      correlation_id: correlationId
     });
 
     return {
       success: true,
       message: 'Update processed successfully',
-      messageId: messageRecord?.id
+      messageId: messageRecord?.id,
+      correlationId
     };
 
   } catch (error) {
@@ -136,7 +162,8 @@ export async function handleWebhookUpdate(update: any, supabase: any, botToken: 
       stack: error.stack,
       update_id: update.update_id,
       message_id: message?.message_id,
-      chat_id: message?.chat?.id
+      chat_id: message?.chat?.id,
+      correlation_id: correlationId
     });
     throw error;
   }

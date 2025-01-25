@@ -29,18 +29,24 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Parse request body
+    // Parse request body and generate correlation ID
     const update = await req.json();
+    const correlationId = crypto.randomUUID();
+    
     console.log('Received webhook update:', {
       update_id: update.update_id,
       has_message: !!update.message,
       has_channel_post: !!update.channel_post,
-      media_group_id: update.message?.media_group_id || update.channel_post?.media_group_id
+      media_group_id: update.message?.media_group_id || update.channel_post?.media_group_id,
+      correlation_id: correlationId
     });
 
     try {
-      const result = await handleWebhookUpdate(update, supabaseClient, TELEGRAM_BOT_TOKEN);
-      console.log('Successfully processed webhook:', result);
+      const result = await handleWebhookUpdate(update, supabaseClient, TELEGRAM_BOT_TOKEN, correlationId);
+      console.log('Successfully processed webhook:', {
+        ...result,
+        correlation_id: correlationId
+      });
 
       return new Response(
         JSON.stringify(result),
@@ -54,6 +60,7 @@ serve(async (req) => {
         error: error.message,
         stack: error.stack,
         update_id: update.update_id,
+        correlation_id: correlationId,
         media_group_id: update.message?.media_group_id || update.channel_post?.media_group_id
       });
 
@@ -67,16 +74,21 @@ serve(async (req) => {
             error_message: error.message,
             chat_id: update.message?.chat?.id || update.channel_post?.chat?.id,
             message_id: update.message?.message_id || update.channel_post?.message_id,
-            correlation_id: crypto.randomUUID()
+            correlation_id: correlationId,
+            status: 'error'
           });
       } catch (dbError) {
-        console.error('Failed to store failed webhook update:', dbError);
+        console.error('Failed to store failed webhook update:', {
+          error: dbError,
+          correlation_id: correlationId
+        });
       }
 
       return new Response(
         JSON.stringify({ 
           error: 'Error processing webhook update',
-          details: error.message
+          details: error.message,
+          correlation_id: correlationId
         }),
         { 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -85,15 +97,18 @@ serve(async (req) => {
       );
     }
   } catch (error) {
+    const correlationId = crypto.randomUUID();
     console.error('Critical error in webhook endpoint:', {
       error: error.message,
-      stack: error.stack
+      stack: error.stack,
+      correlation_id: correlationId
     });
 
     return new Response(
       JSON.stringify({ 
         error: 'Critical error in webhook endpoint',
-        details: error.message
+        details: error.message,
+        correlation_id: correlationId
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
