@@ -33,24 +33,20 @@ export interface MessageMediaData {
 }
 
 export interface MediaItem {
-  // Database fields
   id: string;
   created_at: string;
   updated_at: string;
   
-  // File information
   file_id: string;
   file_unique_id: string;
   file_type: string;
   public_url: string;
   storage_path?: string;
   
-  // Message reference
   message_id: string;
   message_url?: string;
   caption?: string;
   
-  // Product information
   product_name?: string;
   product_code?: string;
   quantity?: number;
@@ -58,20 +54,16 @@ export interface MediaItem {
   purchase_date?: string;
   notes?: string;
   
-  // Processing status
   processed?: boolean;
   processing_error?: string;
   
-  // Rich data objects
   analyzed_content?: Record<string, any>;
   telegram_data: TelegramMessage;
   message_media_data: MessageMediaData;
   
-  // Additional metadata
   glide_data?: Record<string, any>;
   media_metadata?: Record<string, any>;
   
-  // Glide integration
   telegram_media_row_id?: string;
   glide_app_url?: string;
 }

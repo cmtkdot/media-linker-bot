@@ -1,8 +1,9 @@
-import { processMediaFile } from './database-service.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleProcessingError } from './error-handler.ts';
 import { MAX_RETRY_ATTEMPTS } from './constants.ts';
-import { supabase } from './supabase.ts';
 import { downloadFile } from './file-handler.ts';
+import { getMimeType } from './media-validators.ts';
+import { handleMediaGroup } from './media-group-handler.ts';
 
 export async function processMedia(
   supabase: any,
@@ -18,8 +19,7 @@ export async function processMedia(
     chat_id: message?.chat?.id,
     retry_count: retryCount,
     has_existing_media: !!existingMedia,
-    has_message_record: !!messageRecord,
-    product_info: productInfo
+    has_message_record: !!messageRecord
   });
 
   while (retryCount < MAX_RETRY_ATTEMPTS) {
@@ -43,23 +43,11 @@ export async function processMedia(
         throw new Error('No media file found in message');
       }
 
-      // Simplified file naming - just use the unique ID
+      // Use file unique ID for naming
       const uniqueId = mediaFile.file_unique_id;
-      
-      // Update mediaFile with new naming convention
-      mediaFile = {
-        ...mediaFile,
-        customFileName: uniqueId
-      };
+      mediaFile = { ...mediaFile, customFileName: uniqueId };
 
-      console.log('Processing media file:', {
-        type: mediaType,
-        file_id: mediaFile.file_id,
-        message_id: messageRecord?.id,
-        custom_file_name: uniqueId
-      });
-
-      // Check for existing media first
+      // Check for existing media
       const { data: existingMediaRecord } = await supabase
         .from('telegram_media')
         .select('*')
@@ -67,53 +55,87 @@ export async function processMedia(
         .maybeSingle();
 
       if (existingMediaRecord) {
-        console.log('Found existing media record:', {
-          id: existingMediaRecord.id,
-          file_unique_id: existingMediaRecord.file_unique_id
-        });
-
-        // Update existing record with new message_id if available
-        if (messageRecord?.id && !existingMediaRecord.message_id) {
-          const { error: updateError } = await supabase
-            .from('telegram_media')
-            .update({ message_id: messageRecord.id })
-            .eq('id', existingMediaRecord.id);
-
-          if (updateError) {
-            console.error('Error updating message_id:', updateError);
-          }
-        }
-
+        console.log('Found existing media:', existingMediaRecord.id);
         return existingMediaRecord;
       }
 
-      // Process the media file even without message_id
-      const result = await processMediaFile(
-        supabase,
-        mediaFile,
-        mediaType,
-        message,
-        messageRecord || null,
-        botToken,
-        {
-          ...productInfo,
-        }
-      );
+      // Download and process the file
+      const { buffer, filePath } = await downloadFile(mediaFile.file_id, botToken);
+      const fileExt = filePath.split('.').pop() || '';
+      const fileName = `${uniqueId}.${fileExt}`;
 
-      console.log('Media processing completed successfully:', {
-        file_id: mediaFile.file_id,
-        media_type: mediaType,
-        result_id: result?.id,
-        has_message_id: !!messageRecord,
-      });
+      // Upload to storage
+      const { error: uploadError } = await supabase.storage
+        .from('media')
+        .upload(fileName, buffer, {
+          contentType: getMimeType(filePath),
+          upsert: true
+        });
 
-      return result;
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: { publicUrl } } = await supabase.storage
+        .from('media')
+        .getPublicUrl(fileName);
+
+      // Create media record
+      const { data: mediaRecord, error: insertError } = await supabase
+        .from('telegram_media')
+        .insert([{
+          file_id: mediaFile.file_id,
+          file_unique_id: mediaFile.file_unique_id,
+          file_type: mediaType,
+          message_id: messageRecord?.id,
+          public_url: publicUrl,
+          storage_path: fileName,
+          telegram_data: message,
+          message_media_data: {
+            message: {
+              url: `https://t.me/c/${message.chat.id.toString().substring(4)}/${message.message_id}`,
+              media_group_id: message.media_group_id,
+              caption: message.caption,
+              message_id: message.message_id,
+              chat_id: message.chat.id,
+              date: message.date
+            },
+            sender: {
+              sender_info: message.from || message.sender_chat || {},
+              chat_info: message.chat || {}
+            },
+            analysis: {
+              analyzed_content: productInfo?.analyzed_content || {}
+            },
+            meta: {
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              status: 'pending',
+              error: null
+            },
+            media: {
+              file_id: mediaFile.file_id,
+              file_unique_id: mediaFile.file_unique_id,
+              file_type: mediaType,
+              public_url: publicUrl,
+              storage_path: fileName
+            }
+          }
+        }])
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+
+      if (message.media_group_id) {
+        await handleMediaGroup(supabase, message, messageRecord);
+      }
+
+      return mediaRecord;
 
     } catch (error) {
       console.error('Error in processMedia:', {
         error: error.message,
-        retry_count: retryCount,
-        message_id: messageRecord?.id
+        retry_count: retryCount
       });
 
       retryCount++;
@@ -134,100 +156,9 @@ export async function processMedia(
         throw error;
       }
 
-      // Add delay before retry
       await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
     }
   }
 
   throw new Error(`Processing failed after ${MAX_RETRY_ATTEMPTS} attempts`);
-}
-
-export async function processMediaMessage(message: any) {
-  try {
-    const mediaType = getMediaType(message);
-    if (!mediaType) return null;
-
-    const mediaData = message[mediaType];
-    if (!mediaData) return null;
-
-    const fileId = mediaData.file_id;
-    const fileUniqueId = mediaData.file_unique_id;
-
-    console.log('Processing media:', {
-      type: mediaType,
-      fileId,
-      fileUniqueId
-    });
-
-    // Download the media file
-    const { fileName, fileData } = await downloadFile(fileId);
-    if (!fileData) {
-      console.error('Failed to download media file');
-      return null;
-    }
-
-    // Upload to Supabase Storage
-    const { data: uploadData, error: uploadError } = await supabase
-      .storage
-      .from('media')
-      .upload(fileName, fileData, {
-        contentType: getContentType(fileName)
-      });
-
-    if (uploadError) {
-      console.error('Error uploading media:', uploadError);
-      return null;
-    }
-
-    // Get public URL
-    const { data: { publicUrl } } = supabase
-      .storage
-      .from('media')
-      .getPublicUrl(fileName);
-
-    console.log('Media uploaded successfully:', publicUrl);
-
-    // Return media data
-    return {
-      file_id: fileId,
-      file_unique_id: fileUniqueId,
-      file_type: mediaType,
-      public_url: publicUrl,
-      media_metadata: {
-        file_name: fileName,
-        content_type: getContentType(fileName),
-        size: fileData.length
-      }
-    };
-
-  } catch (error) {
-    console.error('Error processing media:', error);
-    return null;
-  }
-}
-
-function getMediaType(message: any): string | null {
-  if (message.photo) return 'photo';
-  if (message.video) return 'video';
-  if (message.document) return 'document';
-  return null;
-}
-
-function getContentType(fileName: string): string {
-  const ext = fileName.split('.').pop()?.toLowerCase();
-  switch (ext) {
-    case 'jpg':
-    case 'jpeg':
-      return 'image/jpeg';
-    case 'png':
-      return 'image/png';
-    case 'gif':
-      return 'image/gif';
-    case 'mp4':
-      return 'video/mp4';
-    case 'webm':
-      return 'video/webm';
-    default:
-      return 'application/octet-stream';
-  }
 }
