@@ -13,16 +13,33 @@ interface ProcessingError {
 
 interface MediaQueueItem {
   id: string;
-  data: {
-    file_id: string;
-    file_unique_id: string;
-    file_type: string;
+  message_media_data: {
     message: {
+      url: string;
       media_group_id?: string;
       caption?: string;
+      message_id: number;
+      chat_id: number;
+      date: number;
     };
-    analysis?: {
+    sender: {
+      sender_info: Record<string, any>;
+      chat_info: Record<string, any>;
+    };
+    analysis: {
       analyzed_content?: Record<string, any>;
+    };
+    meta: {
+      created_at: string;
+      updated_at: string;
+      status: string;
+      error: string | null;
+    };
+    media: {
+      file_id: string;
+      file_unique_id: string;
+      file_type: string;
+      public_url?: string;
     };
     telegram_data: Record<string, any>;
   };
@@ -39,7 +56,7 @@ async function handleProcessingError(
     error_code: error.code,
     error_message: error.message,
     item_id: item.id,
-    file_id: item.data.file_id,
+    file_id: item.message_media_data.media.file_id,
     details: error.details
   });
 
@@ -73,7 +90,7 @@ export async function processMediaItem(
     const { data: existingMedia } = await supabase
       .from('telegram_media')
       .select('id, file_id')
-      .eq('file_unique_id', item.data.file_unique_id)
+      .eq('file_unique_id', item.message_media_data.media.file_unique_id)
       .maybeSingle();
 
     if (existingMedia) {
@@ -85,12 +102,12 @@ export async function processMediaItem(
     }
 
     // Validate media file
-    await validateMediaFile(item.data, item.data.file_type);
+    await validateMediaFile(item.message_media_data.media, item.message_media_data.media.file_type);
 
     // Download and process file
-    console.log('Downloading file from Telegram:', item.data.file_id);
+    console.log('Downloading file from Telegram:', item.message_media_data.media.file_id);
     const { buffer, filePath } = await getAndDownloadTelegramFile(
-      item.data.file_id,
+      item.message_media_data.media.file_id,
       botToken
     );
 
@@ -99,13 +116,27 @@ export async function processMediaItem(
     const { publicUrl } = await uploadMediaToStorage(
       supabase,
       buffer,
-      item.data.file_unique_id,
+      item.message_media_data.media.file_unique_id,
       fileExt,
-      item.data.file_type === 'video' ? {
+      item.message_media_data.media.file_type === 'video' ? {
         maxSize: 50 * 1024 * 1024, // 50MB limit for videos
         compress: true
       } : undefined
     );
+
+    // Update message_media_data with public URL
+    const updatedMessageMediaData = {
+      ...item.message_media_data,
+      media: {
+        ...item.message_media_data.media,
+        public_url: publicUrl
+      },
+      meta: {
+        ...item.message_media_data.meta,
+        status: 'processed',
+        updated_at: new Date().toISOString()
+      }
+    };
 
     // Create telegram_media record
     const { data: mediaRecord, error: insertError } = await withDatabaseRetry(
@@ -113,25 +144,15 @@ export async function processMediaItem(
         return await supabase
           .from('telegram_media')
           .insert({
-            file_id: item.data.file_id,
-            file_unique_id: item.data.file_unique_id,
-            file_type: item.data.file_type,
+            file_id: item.message_media_data.media.file_id,
+            file_unique_id: item.message_media_data.media.file_unique_id,
+            file_type: item.message_media_data.media.file_type,
             public_url: publicUrl,
-            analyzed_content: item.data.analysis?.analyzed_content || {},
-            telegram_data: item.data.telegram_data,
-            message_media_data: {
-              message: item.data.message,
-              sender: item.data.telegram_data.from || item.data.telegram_data.sender_chat,
-              analysis: {
-                analyzed_content: item.data.analysis?.analyzed_content || {}
-              },
-              meta: {
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-                status: 'processed',
-                error: null
-              }
-            }
+            message_media_data: updatedMessageMediaData,
+            analyzed_content: item.message_media_data.analysis.analyzed_content || {},
+            telegram_data: item.message_media_data.telegram_data,
+            message_url: item.message_media_data.message.url,
+            caption: item.message_media_data.message.caption
           })
           .select()
           .single();
@@ -146,7 +167,8 @@ export async function processMediaItem(
         .from('unified_processing_queue')
         .update({
           status: 'completed',
-          processed_at: new Date().toISOString()
+          processed_at: new Date().toISOString(),
+          message_media_data: updatedMessageMediaData
         })
         .eq('id', item.id);
 

@@ -518,6 +518,10 @@ export type Database = {
       }
     }
     Functions: {
+      cleanup_processed_queue_items: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       create_glide_sync_table: {
         Args: {
           p_table_name: string
