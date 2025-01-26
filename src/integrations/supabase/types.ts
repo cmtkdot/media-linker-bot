@@ -518,6 +518,10 @@ export type Database = {
       }
     }
     Functions: {
+      cleanup_processed_queue_items: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       create_glide_sync_table: {
         Args: {
           p_table_name: string
@@ -529,6 +533,10 @@ export type Database = {
         Returns: {
           table_name: string
         }[]
+      }
+      handle_retry_logic: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
       is_media_group_synced: {
         Args: {

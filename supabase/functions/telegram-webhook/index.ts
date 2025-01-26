@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { analyzeCaptionWithAI } from "../_shared/caption-analyzer.ts";
+import { processMessageContent } from "../_shared/message-group-sync.ts";
 
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN') || '';
 const TELEGRAM_WEBHOOK_SECRET = Deno.env.get('TELEGRAM_WEBHOOK_SECRET') || '';
@@ -23,24 +23,15 @@ serve(async (req) => {
       );
     }
 
-    // Create Supabase client
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Parse request body and generate correlation ID
     const update = await req.json();
     const correlationId = crypto.randomUUID();
-    
-    console.log('Received webhook update:', {
-      update_id: update.update_id,
-      has_message: !!update.message,
-      has_channel_post: !!update.channel_post,
-      correlation_id: correlationId
-    });
-
     const message = update.message || update.channel_post;
+    
     if (!message) {
       console.log('No message in update');
       return new Response(
@@ -53,72 +44,121 @@ serve(async (req) => {
     const chatId = message.chat.id.toString();
     const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
 
-    // Create message record with minimal processing
+    // Log incoming media group message
+    if (message.media_group_id) {
+      console.log('Processing media group message:', {
+        media_group_id: message.media_group_id,
+        message_id: message.message_id,
+        has_caption: !!message.caption,
+        photo_count: message.photo?.length || 0,
+        correlation_id: correlationId
+      });
+    }
+
+    // Process message content and get analyzed content immediately
+    const { analyzedContent, messageStatus, productInfo } = await processMessageContent(
+      supabaseClient,
+      message,
+      correlationId
+    );
+
+    // Check for existing media group messages
+    let existingGroupMessages = [];
+    if (message.media_group_id) {
+      const { data: groupMessages } = await supabaseClient
+        .from('messages')
+        .select('*')
+        .eq('media_group_id', message.media_group_id)
+        .order('created_at', { ascending: true });
+      
+      existingGroupMessages = groupMessages || [];
+      
+      console.log('Found existing group messages:', {
+        media_group_id: message.media_group_id,
+        existing_count: existingGroupMessages.length,
+        correlation_id: correlationId
+      });
+    }
+
+    // Prepare message data
     const messageData = {
       message_id: message.message_id,
       chat_id: message.chat.id,
       sender_info: message.from || message.sender_chat || {},
       message_type: determineMessageType(message),
       telegram_data: message,
-      caption: message.caption,
       media_group_id: message.media_group_id,
       message_url: messageUrl,
       correlation_id: correlationId,
-      status: 'pending'
+      analyzed_content: analyzedContent,
+      status: messageStatus,
+      ...productInfo
     };
 
-    console.log('Creating message record:', {
-      message_id: message.message_id,
-      chat_id: message.chat.id,
-      correlation_id: correlationId
-    });
-
-    // Check for existing message
-    const { data: existingMessage, error: selectError } = await supabaseClient
+    // Create or update message record
+    const { data: messageRecord, error: messageError } = await supabaseClient
       .from('messages')
-      .select('id')
-      .eq('message_id', message.message_id)
-      .eq('chat_id', message.chat.id)
-      .maybeSingle();
+      .upsert(messageData)
+      .select()
+      .single();
 
-    if (selectError) {
-      throw selectError;
+    if (messageError) {
+      console.error('Error creating/updating message:', {
+        error: messageError,
+        media_group_id: message.media_group_id,
+        message_id: message.message_id,
+        correlation_id: correlationId
+      });
+      throw messageError;
     }
 
-    let messageRecord;
-    if (existingMessage) {
-      const { data, error: updateError } = await supabaseClient
-        .from('messages')
-        .update(messageData)
-        .eq('id', existingMessage.id)
-        .select()
-        .single();
+    // If this is a media group message, ensure all messages in group are properly linked
+    if (message.media_group_id && messageRecord) {
+      console.log('Syncing media group messages:', {
+        media_group_id: message.media_group_id,
+        current_message_id: messageRecord.id,
+        existing_count: existingGroupMessages.length,
+        correlation_id: correlationId
+      });
 
-      if (updateError) throw updateError;
-      messageRecord = data;
-    } else {
-      const { data, error: insertError } = await supabaseClient
-        .from('messages')
-        .insert([messageData])
-        .select()
-        .single();
+      // Update all messages in the group with shared analyzed content
+      if (analyzedContent) {
+        const { error: groupUpdateError } = await supabaseClient
+          .from('messages')
+          .update({
+            analyzed_content: analyzedContent,
+            status: 'processed',
+            ...productInfo
+          })
+          .eq('media_group_id', message.media_group_id);
 
-      if (insertError) throw insertError;
-      messageRecord = data;
+        if (groupUpdateError) {
+          console.error('Error updating media group:', {
+            error: groupUpdateError,
+            media_group_id: message.media_group_id,
+            correlation_id: correlationId
+          });
+        }
+      }
     }
 
     console.log('Message record created/updated:', {
       record_id: messageRecord?.id,
       correlation_id: correlationId,
-      status: messageRecord?.status
+      status: messageRecord?.status,
+      has_analyzed_content: !!messageRecord?.analyzed_content,
+      media_group_id: messageRecord?.media_group_id
     });
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: 'Message queued for processing',
+        message: 'Message processed successfully',
         messageId: messageRecord?.id,
-        correlationId
+        correlationId,
+        status: messageRecord?.status,
+        mediaGroupId: message.media_group_id,
+        groupSize: existingGroupMessages.length + 1
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

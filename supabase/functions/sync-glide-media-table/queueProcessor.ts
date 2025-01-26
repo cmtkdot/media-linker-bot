@@ -2,7 +2,6 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import { GlideAPI } from './glideApi.ts';
 import type { GlideSyncQueueItem, GlideConfig } from './types.ts';
 import { mapSupabaseToGlide } from './productMapper.ts';
-import { SyncErrorType } from '../_shared/sync-logger.ts';
 
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY = 1000;
@@ -104,6 +103,13 @@ export class QueueProcessor {
         .eq('id', item.id);
 
     } catch (error) {
+      console.error('Error processing queue item:', {
+        item_id: item.id,
+        operation: item.operation,
+        error: error.message,
+        retry_count: item.retry_count || 0
+      });
+
       await this.supabase
         .from('glide_sync_queue')
         .update({
