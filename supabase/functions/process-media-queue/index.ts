@@ -13,6 +13,8 @@ serve(async (req) => {
   }
 
   try {
+    console.log('Starting process-media-queue function');
+    
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -33,9 +35,12 @@ serve(async (req) => {
       .order('created_at', { ascending: true })
       .limit(10);
 
-    if (queueError) throw queueError;
+    if (queueError) {
+      console.error('Error fetching queue items:', queueError);
+      throw queueError;
+    }
 
-    console.log(`Processing ${queueItems?.length || 0} queue items`);
+    console.log(`Found ${queueItems?.length || 0} pending queue items`);
 
     const results = [];
     const errors = [];
@@ -43,21 +48,62 @@ serve(async (req) => {
     // Process each item independently
     for (const item of queueItems || []) {
       try {
+        console.log(`Processing queue item ${item.id}:`, {
+          queue_type: item.queue_type,
+          message_id: item.message_id,
+          chat_id: item.chat_id,
+          has_media_data: !!item.message_media_data
+        });
+
         const result = await processMediaItem(supabase, item, botToken);
+        console.log(`Successfully processed item ${item.id}:`, {
+          media_id: result.id,
+          public_url: result.public_url
+        });
+        
         results.push({
           item_id: item.id,
           status: 'processed',
           media_id: result.id
         });
       } catch (error) {
-        console.error(`Error processing item ${item.id}:`, error);
+        console.error(`Error processing item ${item.id}:`, {
+          error: error.message,
+          code: error.code,
+          item_data: {
+            message_id: item.message_id,
+            chat_id: item.chat_id,
+            queue_type: item.queue_type
+          }
+        });
+        
         errors.push({
           item_id: item.id,
           error: error.message,
           code: error.code
         });
+
+        // Update queue item with error
+        const { error: updateError } = await supabase
+          .from('unified_processing_queue')
+          .update({
+            status: 'error',
+            error_message: error.message,
+            retry_count: (item.retry_count || 0) + 1,
+            processed_at: new Date().toISOString()
+          })
+          .eq('id', item.id);
+
+        if (updateError) {
+          console.error(`Error updating queue item ${item.id}:`, updateError);
+        }
       }
     }
+
+    console.log('Queue processing complete:', {
+      processed: results.length,
+      errors: errors.length
+    });
 
     return new Response(
       JSON.stringify({
@@ -70,7 +116,7 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Error processing queue:', error);
+    console.error('Error in process-media-queue:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
