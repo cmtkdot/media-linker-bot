@@ -102,19 +102,39 @@ export async function handleWebhookUpdate(
       }
     });
 
-    console.log('Message record created/updated:', {
-      record_id: messageRecord?.id,
+    // Insert into unified_processing_queue with simplified queue_type
+    const queueType = message.photo || message.video || message.document || message.animation 
+      ? 'media' 
+      : 'webhook';
+
+    const { error: queueError } = await supabase
+      .from('unified_processing_queue')
+      .insert({
+        queue_type: queueType,
+        data: messageMediaData,
+        status: 'pending',
+        correlation_id: correlationId,
+        chat_id: message.chat.id,
+        message_id: message.message_id
+      });
+
+    if (queueError) {
+      console.error('Error queueing message:', queueError);
+      throw queueError;
+    }
+
+    console.log('Message queued successfully:', {
+      queue_type: queueType,
+      message_id: messageRecord?.id,
       correlation_id: correlationId
     });
 
-    // The queue_webhook_message trigger will automatically add this to unified_processing_queue
-    // with the correct queue_type (either 'media' or 'webhook')
-    
     return {
       success: true,
       message: 'Update processed successfully',
       messageId: messageRecord?.id,
-      correlationId
+      correlationId,
+      queueType
     };
 
   } catch (error) {
