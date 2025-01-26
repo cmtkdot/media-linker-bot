@@ -5,8 +5,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const PABBLY_WEBHOOK_URL = "https://connect.pabbly.com/workflow/sendwebhookdata/IjU3NjYwNTZlMDYzNDA0MzU1MjY5NTUzYzUxMzci_pc"
-
 serve(async (req) => {
   // Handle CORS
   if (req.method === 'OPTIONS') {
@@ -20,6 +18,11 @@ serve(async (req) => {
       throw new Error('Caption is required')
     }
 
+    const webhookUrl = Deno.env.get('PABBLY_WEBHOOK_URL')
+    if (!webhookUrl) {
+      throw new Error('Webhook URL not configured')
+    }
+
     console.log('Forwarding caption to external webhook:', {
       caption,
       messageId,
@@ -28,7 +31,7 @@ serve(async (req) => {
     })
 
     // Forward to Pabbly webhook
-    const webhookResponse = await fetch(PABBLY_WEBHOOK_URL, {
+    const webhookResponse = await fetch(webhookUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
