@@ -1,10 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
+
+const PABBLY_WEBHOOK_URL = "https://connect.pabbly.com/workflow/sendwebhookdata/IjU3NjYwNTZlMDYzNDA0MzU1MjY5NTUzYzUxMzci_pc"
 
 serve(async (req) => {
   // Handle CORS
@@ -13,31 +14,46 @@ serve(async (req) => {
   }
 
   try {
-    const { caption } = await req.json()
+    const { caption, messageId, chatId, mediaGroupId } = await req.json()
 
     if (!caption) {
       throw new Error('Caption is required')
     }
 
-    console.log('Analyzing caption:', caption)
+    console.log('Forwarding caption to external webhook:', {
+      caption,
+      messageId,
+      chatId,
+      mediaGroupId
+    })
 
-    // Create analyzed content structure
-    const analyzedContent = {
-      raw_text: caption,
-      extracted_data: {
-        product_name: null,
-        product_code: null,
-        quantity: null,
-        vendor_uid: null,
-        purchase_date: null,
-        notes: null
+    // Forward to Pabbly webhook
+    const webhookResponse = await fetch(PABBLY_WEBHOOK_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
       },
-      confidence: 1,
-      timestamp: new Date().toISOString(),
-      model_version: "direct-pass"
+      body: JSON.stringify({
+        caption,
+        messageId,
+        chatId,
+        mediaGroupId,
+        timestamp: new Date().toISOString()
+      })
+    })
+
+    if (!webhookResponse.ok) {
+      throw new Error(`Webhook error: ${webhookResponse.statusText}`)
     }
 
-    console.log('Analysis complete:', analyzedContent)
+    const analyzedContent = await webhookResponse.json()
+
+    console.log('Received analyzed content:', analyzedContent)
+
+    // Validate the response structure
+    if (!analyzedContent.extracted_data) {
+      throw new Error('Invalid response structure from webhook')
+    }
 
     return new Response(
       JSON.stringify(analyzedContent),
@@ -53,7 +69,23 @@ serve(async (req) => {
     console.error('Error in analyze-caption:', error)
     
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error.message,
+        fallback: {
+          raw_text: caption,
+          extracted_data: {
+            product_name: null,
+            product_code: null,
+            quantity: null,
+            vendor_uid: null,
+            purchase_date: null,
+            notes: null
+          },
+          confidence: 0,
+          timestamp: new Date().toISOString(),
+          model_version: "fallback"
+        }
+      }),
       { 
         headers: { 
           ...corsHeaders,
