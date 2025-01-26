@@ -534,6 +534,10 @@ export type Database = {
           table_name: string
         }[]
       }
+      handle_retry_logic: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       is_media_group_synced: {
         Args: {
           group_id: string
