@@ -13,7 +13,7 @@ serve(async (req) => {
 
   try {
     const { caption, messageId, chatId, mediaGroupId } = await req.json()
-
+    
     if (!caption) {
       throw new Error('Caption is required')
     }
@@ -46,25 +46,26 @@ serve(async (req) => {
     })
 
     if (!webhookResponse.ok) {
-      throw new Error(`Webhook error: ${webhookResponse.statusText}`)
+      throw new Error(`Webhook error: ${webhookResponse.status} ${webhookResponse.statusText}`)
     }
 
-    const analyzedContent = await webhookResponse.json()
+    const analysisResult = await webhookResponse.json()
 
-    console.log('Received analyzed content:', analyzedContent)
-
-    // Validate the response structure
-    if (!analyzedContent.extracted_data) {
-      throw new Error('Invalid response structure from webhook')
+    // Validate webhook response structure
+    if (!analysisResult || typeof analysisResult !== 'object') {
+      throw new Error('Invalid webhook response format')
     }
+
+    console.log('Received analysis result:', analysisResult)
 
     return new Response(
-      JSON.stringify(analyzedContent),
-      { 
-        headers: { 
-          ...corsHeaders,
-          'Content-Type': 'application/json'
-        }
+      JSON.stringify({
+        success: true,
+        data: analysisResult
+      }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
       }
     )
 
@@ -72,29 +73,16 @@ serve(async (req) => {
     console.error('Error in analyze-caption:', error)
     
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
+        success: false,
         error: error.message,
-        fallback: {
-          raw_text: caption,
-          extracted_data: {
-            product_name: null,
-            product_code: null,
-            quantity: null,
-            vendor_uid: null,
-            purchase_date: null,
-            notes: null
-          },
-          confidence: 0,
-          timestamp: new Date().toISOString(),
-          model_version: "fallback"
+        data: {
+          analyzed_content: {} // Fallback empty analysis
         }
       }),
-      { 
-        headers: { 
-          ...corsHeaders,
-          'Content-Type': 'application/json'
-        },
-        status: 400
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 500,
       }
     )
   }
