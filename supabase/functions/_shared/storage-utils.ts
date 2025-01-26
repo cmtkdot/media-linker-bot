@@ -1,86 +1,45 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { supabase } from "@/integrations/supabase/client";
+import { MediaItem } from "@/types/media";
 
-export async function ensureStorageBucket(supabase: any) {
+export const generateSafeFileName = (fileUniqueId: string, fileType: string): string => {
+  // Remove non-ASCII characters and special characters
+  const safeId = fileUniqueId.replace(/[^\x00-\x7F]/g, '').replace(/[^a-zA-Z0-9]/g, '_');
+  
+  // Determine file extension based on type
+  const extension = fileType === 'photo' ? 'jpg' 
+    : fileType === 'video' ? 'mp4'
+    : fileType === 'document' ? 'pdf'
+    : 'bin';
+
+  return `${safeId}.${extension}`;
+};
+
+export const uploadToStorage = async (
+  buffer: ArrayBuffer,
+  fileUniqueId: string,
+  fileType: string,
+  mimeType: string
+): Promise<string> => {
+  const fileName = generateSafeFileName(fileUniqueId, fileType);
+  
   try {
-    // Check if bucket exists
-    const { data: buckets, error: listError } = await supabase
-      .storage
-      .listBuckets();
+    const { error: uploadError } = await supabase.storage
+      .from('media')
+      .upload(fileName, buffer, {
+        contentType: mimeType,
+        upsert: true,
+        cacheControl: '3600'
+      });
 
-    if (listError) {
-      console.error('Error checking buckets:', listError);
-      throw listError;
-    }
+    if (uploadError) throw uploadError;
 
-    const mediaBucket = buckets.find((b: any) => b.name === 'media');
-    
-    if (!mediaBucket) {
-      console.log('Creating media bucket...');
-      const { error: createError } = await supabase
-        .storage
-        .createBucket('media', {
-          public: true,
-          fileSizeLimit: 100000000, // 100MB
-          allowedMimeTypes: [
-            'image/jpeg',
-            'image/png',
-            'image/gif',
-            'image/webp',
-            'video/mp4',
-            'video/quicktime',
-            'video/webm'
-          ]
-        });
+    const { data: { publicUrl } } = await supabase.storage
+      .from('media')
+      .getPublicUrl(fileName);
 
-      if (createError) {
-        console.error('Error creating bucket:', createError);
-        throw createError;
-      }
-      console.log('Media bucket created successfully');
-    } else {
-      console.log('Media bucket already exists');
-    }
+    return publicUrl;
   } catch (error) {
-    console.error('Error in ensureStorageBucket:', error);
+    console.error('Error uploading to storage:', error);
     throw error;
   }
-}
-
-export function sanitizeFileName(fileName: string): string {
-  // Remove non-ASCII characters and special characters
-  const sanitized = fileName
-    .replace(/[^\x00-\x7F]/g, '')
-    .replace(/[^a-zA-Z0-9.-]/g, '_');
-  
-  // Ensure the filename isn't too long
-  const MAX_LENGTH = 100;
-  const extension = sanitized.split('.').pop() || '';
-  const name = sanitized.slice(0, -extension.length - 1);
-  
-  if (name.length > MAX_LENGTH) {
-    return `${name.slice(0, MAX_LENGTH)}.${extension}`;
-  }
-  
-  return sanitized;
-}
-
-export function getMimeType(fileName: string, defaultType: string = 'application/octet-stream'): string {
-  const ext = fileName.split('.').pop()?.toLowerCase();
-  
-  const mimeTypes: { [key: string]: string } = {
-    // Images
-    'jpg': 'image/jpeg',
-    'jpeg': 'image/jpeg',
-    'png': 'image/png',
-    'gif': 'image/gif',
-    'webp': 'image/webp',
-    // Videos
-    'mp4': 'video/mp4',
-    'mov': 'video/quicktime',
-    'webm': 'video/webm',
-    'avi': 'video/x-msvideo',
-    'mkv': 'video/x-matroska'
-  };
-
-  return ext ? (mimeTypes[ext] || defaultType) : defaultType;
-}
+};
