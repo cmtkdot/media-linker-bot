@@ -6,8 +6,6 @@ import { buildWebhookMessageData } from "./webhook-message-builder.ts";
 
 // Helper function to get highest quality photo
 function getHighestQualityPhoto(photos: TelegramPhotoSize[]): TelegramPhotoSize {
-  // Sort photos by file size (descending) and get the first one
-  // Telegram sends photos in different sizes, with the highest quality usually having the largest file size
   return photos.sort((a, b) => {
     const sizeA = a.file_size || 0;
     const sizeB = b.file_size || 0;
@@ -40,9 +38,7 @@ export async function handleWebhookUpdate(
 
     // Generate message URL
     const chatId = message.chat.id.toString();
-    const messageUrl = `https://t.me/c/${chatId.substring(4)}/${
-      message.message_id
-    }`;
+    const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
 
     // Check for existing messages in the same media group
     let existingGroupMessages = [];
@@ -54,28 +50,18 @@ export async function handleWebhookUpdate(
         .order("created_at", { ascending: true });
 
       existingGroupMessages = groupMessages || [];
-      console.log(
-        "Found existing group messages:",
-        existingGroupMessages.length
-      );
+      console.log("Found existing group messages:", existingGroupMessages.length);
     }
 
-    // Analyze message content and handle caption inheritance
-    const analyzedMessageContent = await analyzeWebhookMessage(
-      message,
-      existingGroupMessages
-    );
+    // Analyze message content
+    const analyzedMessageContent = await analyzeWebhookMessage(message, existingGroupMessages);
     console.log("Message analysis result:", analyzedMessageContent);
 
-    // Build complete message data structure
-    const messageData = buildWebhookMessageData(
-      message,
-      messageUrl,
-      analyzedMessageContent
-    );
+    // Build message data structure
+    const messageData = buildWebhookMessageData(message, messageUrl, analyzedMessageContent);
     console.log("Built message data structure");
 
-    // Create message record
+    // Create message record first
     const { data: messageRecord, error: messageError } = await supabase
       .from("messages")
       .insert({
@@ -103,17 +89,45 @@ export async function handleWebhookUpdate(
       throw messageError;
     }
 
+    console.log("Created message record:", messageRecord.id);
+
     // Process media if present
     const mediaType = getMediaType(message);
     if (mediaType) {
-      // For photos, get the highest quality version
       const mediaFile = mediaType === "photo"
         ? getHighestQualityPhoto(message.photo || [])
         : message.video || message.document || message.animation;
 
       if (mediaFile) {
         try {
-          // Process media using the improved processor
+          console.log("Processing media file:", {
+            file_id: mediaFile.file_id,
+            file_type: mediaType,
+            message_id: messageRecord.id
+          });
+
+          // Create telegram_media record first
+          const { data: telegramMedia, error: mediaError } = await supabase
+            .from("telegram_media")
+            .insert({
+              file_id: mediaFile.file_id,
+              file_unique_id: mediaFile.file_unique_id,
+              file_type: mediaType,
+              message_id: messageRecord.id,
+              telegram_data: message,
+              message_media_data: messageData,
+              correlation_id: correlationId
+            })
+            .select()
+            .single();
+
+          if (mediaError) {
+            throw mediaError;
+          }
+
+          console.log("Created telegram_media record:", telegramMedia.id);
+
+          // Process media file and upload to storage
           const processingParams: MediaProcessingParams = {
             fileId: mediaFile.file_id,
             fileUniqueId: mediaFile.file_unique_id,
@@ -125,14 +139,6 @@ export async function handleWebhookUpdate(
             messageUrl,
             analyzedContent: analyzedMessageContent.analyzed_content,
           };
-
-          console.log("Processing media with params:", {
-            fileId: mediaFile.file_id,
-            fileType: mediaType,
-            fileSize: mediaFile.file_size,
-            width: mediaFile.width,
-            height: mediaFile.height
-          });
 
           const result = await processMediaFile(supabase, processingParams);
 
@@ -150,8 +156,7 @@ export async function handleWebhookUpdate(
           await supabase
             .from("messages")
             .update({
-              processing_error:
-                error instanceof Error ? error.message : String(error),
+              processing_error: error instanceof Error ? error.message : String(error),
               status: "error",
             })
             .eq("id", messageRecord.id);
