@@ -13,6 +13,7 @@ export async function processQueueItem(
     const mediaData = item.message_media_data.media;
     const messageData = item.message_media_data.message;
     const analysisData = item.message_media_data.analysis;
+    const telegramData = item.message_media_data.telegram_data;
 
     // Check if media already exists
     const { data: existingMedia } = await supabase
@@ -43,7 +44,7 @@ export async function processQueueItem(
       fileExt
     );
 
-    // Create or update telegram_media record
+    // Create or update telegram_media record with complete data structure
     const mediaRecord = {
       file_id: mediaData.file_id,
       file_unique_id: mediaData.file_unique_id,
@@ -58,6 +59,7 @@ export async function processQueueItem(
           storage_path: storagePath
         }
       },
+      telegram_data: telegramData || {},
       // Extract analyzed content fields
       product_name: analysisData?.product_name,
       product_code: analysisData?.product_code,
