@@ -1,4 +1,4 @@
-import { TelegramMediaFile } from './types';
+import { MediaFile } from './types.ts';
 
 export function validateMediaFile(
   mediaFile: Record<string, any>,
@@ -29,25 +29,5 @@ export function validateMediaFile(
       break;
     default:
       throw new Error(`Unsupported media type: ${mediaType}`);
-  }
-}
-
-export function validateStorageFile(fileName: string): Promise<boolean> {
-  try {
-    const { data, error } = await supabase.storage
-      .from('media')
-      .list('', {
-        search: fileName
-      });
-
-    if (error) {
-      console.error('Error validating storage file:', error);
-      return false;
-    }
-
-    return data && data.length > 0;
-  } catch (error) {
-    console.error('Error in validateStorageFile:', error);
-    return false;
   }
 }
