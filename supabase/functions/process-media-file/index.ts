@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { MediaProcessingError } from "../_shared/error-handler.ts";
 import { processMediaMessage } from "../_shared/media-processor.ts";
 
 const corsHeaders = {
@@ -13,12 +12,12 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const supabase = createClient(
-    Deno.env.get('SUPABASE_URL') ?? '',
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-  );
-
   try {
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
     const { 
       fileId, 
       fileUniqueId, 
@@ -30,15 +29,10 @@ serve(async (req) => {
     } = await req.json();
 
     if (!fileId || !fileUniqueId || !fileType || !messageId || !botToken) {
-      throw new MediaProcessingError(
-        'Missing required parameters',
-        'INVALID_PARAMETERS',
-        { fileId, fileType, messageId },
-        false
-      );
+      throw new Error('Missing required parameters');
     }
 
-    const { publicUrl, storagePath } = await processMediaMessage(
+    const result = await processMediaMessage(
       supabase,
       messageId,
       fileId,
@@ -50,30 +44,31 @@ serve(async (req) => {
     );
 
     return new Response(
-      JSON.stringify({ 
-        message: 'Media processing completed',
-        publicUrl,
-        storagePath
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify(result),
+      { 
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json' 
+        } 
+      }
     );
 
   } catch (error) {
     console.error('Error processing media:', error);
     
-    const errorResponse = {
-      error: error instanceof MediaProcessingError 
-        ? error.message 
-        : 'An unexpected error occurred',
-      code: error instanceof MediaProcessingError ? error.code : 'UNKNOWN_ERROR',
-      details: error instanceof MediaProcessingError ? error.details : undefined
-    };
-
     return new Response(
-      JSON.stringify(errorResponse),
+      JSON.stringify({
+        success: false,
+        message: error instanceof Error ? error.message : 'An unexpected error occurred',
+        data: { status: 'error' },
+        error: error instanceof Error ? error.message : String(error)
+      }),
       { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, 
-        status: 500 
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json' 
+        },
+        status: 500
       }
     );
   }

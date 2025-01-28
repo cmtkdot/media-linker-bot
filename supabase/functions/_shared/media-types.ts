@@ -59,3 +59,15 @@ export interface MessageMediaData {
   };
   telegram_data: Record<string, any>;
 }
+
+export interface ProcessingResult {
+  success: boolean;
+  message: string;
+  data?: {
+    publicUrl?: string;
+    storagePath?: string;
+    messageId?: string;
+    status: string;
+  };
+  error?: string;
+}
