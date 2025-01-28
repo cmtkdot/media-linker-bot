@@ -39,6 +39,12 @@ export async function handleWebhookUpdate(
       },
       analysis: {
         analyzed_content: {},
+        product_name: undefined,
+        product_code: undefined,
+        quantity: undefined,
+        vendor_uid: undefined,
+        purchase_date: undefined,
+        notes: undefined
       },
       meta: {
         created_at: new Date().toISOString(),
@@ -46,8 +52,28 @@ export async function handleWebhookUpdate(
         status: 'pending',
         error: null,
         is_original_caption: false,
-        original_message_id: null
+        original_message_id: null,
+        correlation_id: correlationId,
+        processed_at: null,
+        last_retry_at: null,
+        retry_count: 0
       },
+      media: message.photo ? {
+        file_id: message.photo[message.photo.length - 1].file_id,
+        file_unique_id: message.photo[message.photo.length - 1].file_unique_id,
+        file_type: 'photo',
+        mime_type: 'image/jpeg'
+      } : message.video ? {
+        file_id: message.video.file_id,
+        file_unique_id: message.video.file_unique_id,
+        file_type: 'video',
+        mime_type: message.video.mime_type || 'video/mp4'
+      } : message.document ? {
+        file_id: message.document.file_id,
+        file_unique_id: message.document.file_unique_id,
+        file_type: 'document',
+        mime_type: message.document.mime_type
+      } : undefined,
       telegram_data: message
     };
 
@@ -58,7 +84,7 @@ export async function handleWebhookUpdate(
         message_id: message.message_id,
         chat_id: message.chat.id,
         sender_info: message.from || message.sender_chat || {},
-        message_type: message.photo ? 'photo' : message.video ? 'video' : 'text',
+        message_type: message.photo ? 'photo' : message.video ? 'video' : message.document ? 'document' : 'text',
         telegram_data: message,
         media_group_id: message.media_group_id,
         message_url: messageUrl,

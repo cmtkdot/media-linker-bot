@@ -27,7 +27,10 @@ export interface MessageMediaData {
     error: string | null;
     is_original_caption: boolean;
     original_message_id: string | null;
-    correlation_id?: string;
+    correlation_id: string;
+    processed_at: string | null;
+    last_retry_at: string | null;
+    retry_count: number;
   };
   media?: {
     file_id: string;
