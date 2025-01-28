@@ -268,6 +268,7 @@ export type Database = {
           last_retry_at: string | null
           media_group_id: string | null
           message_id: number
+          message_media_data: Json | null
           message_type: string
           message_url: string | null
           notes: string | null
@@ -294,6 +295,7 @@ export type Database = {
           last_retry_at?: string | null
           media_group_id?: string | null
           message_id: number
+          message_media_data?: Json | null
           message_type: string
           message_url?: string | null
           notes?: string | null
@@ -320,6 +322,7 @@ export type Database = {
           last_retry_at?: string | null
           media_group_id?: string | null
           message_id?: number
+          message_media_data?: Json | null
           message_type?: string
           message_url?: string | null
           notes?: string | null
@@ -465,6 +468,7 @@ export type Database = {
           id: string
           max_retries: number | null
           message_id: number | null
+          message_media_data: Json | null
           priority: number | null
           processed_at: string | null
           queue_type: string
@@ -480,6 +484,7 @@ export type Database = {
           id?: string
           max_retries?: number | null
           message_id?: number | null
+          message_media_data?: Json | null
           priority?: number | null
           processed_at?: string | null
           queue_type: string
@@ -495,6 +500,7 @@ export type Database = {
           id?: string
           max_retries?: number | null
           message_id?: number | null
+          message_media_data?: Json | null
           priority?: number | null
           processed_at?: string | null
           queue_type?: string
@@ -587,7 +593,14 @@ export type Database = {
       [_ in never]: never
     }
     CompositeTypes: {
-      [_ in never]: never
+      message_media_data_type: {
+        message: Json | null
+        sender: Json | null
+        analysis: Json | null
+        meta: Json | null
+        media: Json | null
+        telegram_data: Json | null
+      }
     }
   }
 }
