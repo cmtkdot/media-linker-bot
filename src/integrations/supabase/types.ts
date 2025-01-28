@@ -414,6 +414,7 @@ export type Database = {
       }
       telegram_media: {
         Row: {
+          analyzed_content: Json | null
           correlation_id: string | null
           created_at: string
           file_id: string
@@ -435,6 +436,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          analyzed_content?: Json | null
           correlation_id?: string | null
           created_at?: string
           file_id: string
@@ -456,6 +458,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          analyzed_content?: Json | null
           correlation_id?: string | null
           created_at?: string
           file_id?: string
@@ -527,6 +530,7 @@ export type Database = {
           search_term: string
         }
         Returns: {
+          analyzed_content: Json | null
           correlation_id: string | null
           created_at: string
           file_id: string
