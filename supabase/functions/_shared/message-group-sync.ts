@@ -9,16 +9,37 @@ export async function processMessageContent(
   correlationId: string
 ) {
   try {
+    console.log('Processing message content:', {
+      message_id: message.message_id,
+      media_group_id: mediaGroupId,
+      has_analyzed_content: !!analyzedContent,
+      is_original_caption: isOriginalCaption
+    });
+
     if (!mediaGroupId) {
-      return { isOriginalCaption, originalMessageId: null };
+      return { 
+        isOriginalCaption, 
+        originalMessageId: null,
+        analyzedContent 
+      };
     }
 
     // Get existing messages in the group
-    const { data: existingMessages } = await supabase
+    const { data: existingMessages, error: fetchError } = await supabase
       .from('messages')
       .select('id, is_original_caption, analyzed_content, caption')
       .eq('media_group_id', mediaGroupId)
       .order('created_at', { ascending: true });
+
+    if (fetchError) {
+      console.error('Error fetching existing messages:', fetchError);
+      throw fetchError;
+    }
+
+    console.log('Found existing messages:', {
+      media_group_id: mediaGroupId,
+      message_count: existingMessages?.length
+    });
 
     let originalMessageId = null;
     
@@ -32,18 +53,33 @@ export async function processMessageContent(
         
         // Update all existing messages in the group with the analyzed content
         if (existingMessages?.length > 0) {
-          await supabase
+          console.log('Updating existing messages with analyzed content:', {
+            media_group_id: mediaGroupId,
+            message_count: existingMessages.length
+          });
+
+          const { error: updateError } = await supabase
             .from('messages')
             .update({
               analyzed_content: analyzedContent,
               original_message_id: null // Will be updated after current message insert
             })
             .eq('media_group_id', mediaGroupId);
+
+          if (updateError) {
+            console.error('Error updating existing messages:', updateError);
+            throw updateError;
+          }
         }
       } else {
         // Use existing caption holder's ID and content
         originalMessageId = existingCaptionHolder.id;
         analyzedContent = existingCaptionHolder.analyzed_content;
+
+        console.log('Using existing caption holder:', {
+          original_message_id: originalMessageId,
+          has_analyzed_content: !!analyzedContent
+        });
       }
     } else if (existingMessages?.length > 0) {
       // For non-caption messages, use existing analyzed content if available
@@ -51,6 +87,11 @@ export async function processMessageContent(
       if (existingCaptionHolder) {
         originalMessageId = existingCaptionHolder.id;
         analyzedContent = existingCaptionHolder.analyzed_content;
+
+        console.log('Using existing group analyzed content:', {
+          original_message_id: originalMessageId,
+          has_analyzed_content: !!analyzedContent
+        });
       }
     }
 

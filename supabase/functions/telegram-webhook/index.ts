@@ -39,6 +39,14 @@ serve(async (req) => {
       );
     }
 
+    console.log('Processing webhook update:', {
+      update_id: update.update_id,
+      message_id: message.message_id,
+      chat_id: message.chat.id,
+      media_group_id: message.media_group_id,
+      has_caption: !!message.caption
+    });
+
     // Generate message URL
     const chatId = message.chat.id.toString();
     const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
@@ -50,7 +58,6 @@ serve(async (req) => {
         analyzedContent = await analyzeCaptionWithAI(message.caption);
         console.log('Caption analyzed:', { 
           message_id: message.message_id,
-          correlation_id: correlationId,
           analyzed_content: analyzedContent
         });
       } catch (error) {
@@ -65,7 +72,7 @@ serve(async (req) => {
         message,
         message.media_group_id,
         analyzedContent,
-        false,
+        message.caption ? true : false,
         correlationId
       );
 
@@ -136,6 +143,7 @@ serve(async (req) => {
       media_group_id: message.media_group_id
     });
 
+    // Insert/update message record
     const { data: messageRecord, error: messageError } = await supabaseClient
       .from('messages')
       .upsert(messageData)
@@ -147,15 +155,44 @@ serve(async (req) => {
       throw messageError;
     }
 
-    // Queue for processing
-    const queueType = message.photo || message.video || message.document || message.animation 
-      ? 'media' 
-      : 'webhook';
+    // If this is part of a media group and has analyzed content, sync it
+    if (message.media_group_id && analyzedContent) {
+      if (isOriginalCaption) {
+        console.log('Syncing analyzed content to media group:', {
+          media_group_id: message.media_group_id,
+          original_message_id: messageRecord.id
+        });
 
+        // Update all messages in the group to point to this message as original
+        const { error: updateError } = await supabaseClient
+          .from('messages')
+          .update({
+            analyzed_content: analyzedContent,
+            original_message_id: messageRecord.id,
+            is_original_caption: false,
+            message_media_data: {
+              ...messageMediaData,
+              meta: {
+                ...messageMediaData.meta,
+                is_original_caption: false,
+                original_message_id: messageRecord.id
+              }
+            }
+          })
+          .eq('media_group_id', message.media_group_id)
+          .neq('id', messageRecord.id);
+
+        if (updateError) {
+          console.error('Error syncing media group:', updateError);
+        }
+      }
+    }
+
+    // Queue for processing
     const { error: queueError } = await supabaseClient
       .from('unified_processing_queue')
       .insert({
-        queue_type: queueType,
+        queue_type: message.media_group_id ? 'media_group' : 'media',
         data: messageMediaData,
         status: 'pending',
         correlation_id: correlationId,
@@ -175,7 +212,6 @@ serve(async (req) => {
         message: 'Update processed successfully',
         messageId: messageRecord.id,
         correlationId,
-        queueType,
         isOriginalCaption,
         status: 'pending'
       }),
