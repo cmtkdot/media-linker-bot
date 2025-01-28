@@ -32,7 +32,7 @@ export async function processTextMessage(message: any, messageUrl: string, corre
     correlation_id: correlationId,
     analyzed_content: analyzedContent,
     text: message.text,
-    status: 'processed' // Text messages are processed immediately
+    status: 'processed'
   };
 }
 

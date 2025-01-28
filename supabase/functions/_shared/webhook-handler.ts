@@ -29,28 +29,59 @@ export async function handleWebhookUpdate(
     // Check if message already exists
     const { data: existingMessage } = await supabase
       .from('messages')
-      .select('id, is_original_caption, analyzed_content')
+      .select('id, is_original_caption, analyzed_content, media_group_id')
       .eq('message_id', message.message_id)
       .eq('chat_id', message.chat.id)
       .maybeSingle();
-
-    if (existingMessage) {
-      console.log('Message already exists:', existingMessage);
-      return {
-        success: true,
-        message: 'Message already processed',
-        messageId: existingMessage.id,
-        correlationId
-      };
-    }
 
     const chatId = message.chat.id.toString();
     const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
     const messageType = determineMessageType(message);
 
+    // If message exists and it's part of a media group, update it
+    if (existingMessage && message.media_group_id) {
+      console.log('Updating existing message in media group:', {
+        message_id: message.message_id,
+        media_group_id: message.media_group_id
+      });
+
+      let analyzedContent = existingMessage.analyzed_content;
+      
+      // If this message has a caption and no analyzed content yet
+      if (message.caption && (!analyzedContent || Object.keys(analyzedContent).length === 0)) {
+        analyzedContent = await analyzeCaptionWithAI(message.caption);
+        
+        // Update all messages in the group with the new analyzed content
+        const { data: groupMessages } = await supabase
+          .from('messages')
+          .select('id')
+          .eq('media_group_id', message.media_group_id);
+
+        if (groupMessages?.length > 0) {
+          await Promise.all(groupMessages.map(async (groupMsg: any) => {
+            await supabase
+              .from('messages')
+              .update({
+                analyzed_content: analyzedContent,
+                caption: message.caption,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', groupMsg.id);
+          }));
+        }
+      }
+
+      return {
+        success: true,
+        message: 'Message updated successfully',
+        messageId: existingMessage.id,
+        correlationId
+      };
+    }
+
+    // Handle new message creation
     let messageData;
     
-    // Handle text-only messages
     if (messageType === 'text') {
       messageData = await processTextMessage(message, messageUrl, correlationId);
     } else {
@@ -62,7 +93,7 @@ export async function handleWebhookUpdate(
       if (message.media_group_id) {
         const { data: groupMessages } = await supabase
           .from('messages')
-          .select('id, is_original_caption, analyzed_content, caption, message_type')
+          .select('id, is_original_caption, analyzed_content, caption')
           .eq('media_group_id', message.media_group_id)
           .order('created_at', { ascending: true });
 
@@ -74,7 +105,7 @@ export async function handleWebhookUpdate(
             analyzedContent = await analyzeCaptionWithAI(message.caption);
             
             if (groupMessages?.length > 0) {
-              for (const groupMsg of groupMessages) {
+              await Promise.all(groupMessages.map(async (groupMsg: any) => {
                 await supabase
                   .from('messages')
                   .update({
@@ -82,7 +113,7 @@ export async function handleWebhookUpdate(
                     caption: message.caption
                   })
                   .eq('id', groupMsg.id);
-              }
+              }));
             }
           } else {
             originalMessageId = existingCaptionHolder.id;
@@ -113,6 +144,7 @@ export async function handleWebhookUpdate(
         original_message_id: originalMessageId,
         analyzed_content: analyzedContent,
         caption: message.caption,
+        text: message.text,
         status: messageType === 'text' ? 'processed' : 'pending'
       };
     }
@@ -124,8 +156,7 @@ export async function handleWebhookUpdate(
       message_id: messageData.message_id,
       chat_id: messageData.chat_id,
       media_group_id: messageData.media_group_id,
-      is_original_caption: messageData.is_original_caption,
-      message_type: messageData.message_type
+      is_original_caption: messageData.is_original_caption
     });
 
     // Insert message record
