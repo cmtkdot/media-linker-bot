@@ -34,14 +34,6 @@ export interface WebhookMessageData {
     last_retry_at: string | null;
     retry_count: number;
   };
-  media?: {
-    file_id: string;
-    file_unique_id: string;
-    file_type: string;
-    public_url?: string;
-    storage_path?: string;
-    mime_type?: string;
-  };
   telegram_data: Record<string, any>;
 }
 
@@ -52,8 +44,8 @@ export function buildWebhookMessageData(
 ): WebhookMessageData {
   const now = new Date().toISOString();
   
-  // Extract media info if present
-  const mediaInfo = message.photo?.[0] || message.video || message.document || null;
+  const extractedData = analyzedContent.analyzed_content?.analyzed_content?.extracted_data || 
+                       analyzedContent.analyzed_content?.extracted_data || {};
   
   return {
     message: {
@@ -70,12 +62,12 @@ export function buildWebhookMessageData(
     },
     analysis: {
       analyzed_content: analyzedContent.analyzed_content,
-      product_name: analyzedContent.analyzed_content?.extracted_data?.product_name,
-      product_code: analyzedContent.analyzed_content?.extracted_data?.product_code,
-      quantity: analyzedContent.analyzed_content?.extracted_data?.quantity,
-      vendor_uid: analyzedContent.analyzed_content?.extracted_data?.vendor_uid,
-      purchase_date: analyzedContent.analyzed_content?.extracted_data?.purchase_date,
-      notes: analyzedContent.analyzed_content?.extracted_data?.notes
+      product_name: extractedData.product_name,
+      product_code: extractedData.product_code,
+      quantity: extractedData.quantity,
+      vendor_uid: extractedData.vendor_uid,
+      purchase_date: extractedData.purchase_date,
+      notes: extractedData.notes
     },
     meta: {
       created_at: now,
@@ -88,12 +80,6 @@ export function buildWebhookMessageData(
       last_retry_at: null,
       retry_count: 0
     },
-    media: mediaInfo ? {
-      file_id: mediaInfo.file_id,
-      file_unique_id: mediaInfo.file_unique_id,
-      file_type: message.photo ? 'photo' : message.video ? 'video' : 'document',
-      mime_type: message.video?.mime_type || message.document?.mime_type || 'image/jpeg'
-    } : undefined,
     telegram_data: message
   };
 }
