@@ -1,8 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { withRetry, MediaProcessingError } from "../_shared/error-handler.ts";
-import { uploadMediaToStorage } from "../_shared/storage-manager.ts";
-import { validateMediaFile } from "../_shared/media-handler.ts";
+import { uploadMediaToStorage, validateMediaFile } from "../_shared/media-handler.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -45,68 +44,14 @@ serve(async (req) => {
       correlation_id: correlationId
     });
 
-    // Get file from Telegram
-    const fileInfo = await withRetry(
-      async () => {
-        const response = await fetch(
-          `https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`
-        );
-        if (!response.ok) {
-          throw new MediaProcessingError(
-            'Failed to get file info from Telegram',
-            'TELEGRAM_API_ERROR',
-            { status: response.status }
-          );
-        }
-        return response.json();
-      },
-      'get_file_info',
-      messageId,
-      correlationId,
-      supabase
-    );
-
-    if (!fileInfo.ok || !fileInfo.result.file_path) {
-      throw new MediaProcessingError(
-        'Invalid file info from Telegram',
-        'INVALID_FILE_INFO',
-        fileInfo,
-        false
-      );
-    }
-
-    // Download file
-    const fileBuffer = await withRetry(
-      async () => {
-        const downloadUrl = `https://api.telegram.org/file/bot${botToken}/${fileInfo.result.file_path}`;
-        const fileResponse = await fetch(downloadUrl);
-        if (!fileResponse.ok) {
-          throw new MediaProcessingError(
-            'Failed to download file from Telegram',
-            'DOWNLOAD_ERROR',
-            { status: fileResponse.status }
-          );
-        }
-        return fileResponse.arrayBuffer();
-      },
-      'download_file',
-      messageId,
-      correlationId,
-      supabase
-    );
-
-    // Upload to storage
-    const { publicUrl, storagePath } = await withRetry(
-      async () => uploadMediaToStorage(
-        supabase,
-        fileBuffer,
-        fileUniqueId,
-        fileType
-      ),
-      'upload_to_storage',
-      messageId,
-      correlationId,
-      supabase
+    // Get file from Telegram and upload to storage
+    const { publicUrl, storagePath } = await uploadMediaToStorage(
+      supabase,
+      new ArrayBuffer(0), // This will be replaced with actual file data in uploadMediaToStorage
+      fileUniqueId,
+      fileType,
+      botToken,
+      fileId
     );
 
     // Update database records
