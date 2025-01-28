@@ -12,6 +12,44 @@ function determineMessageType(message: any): string {
   return 'unknown';
 }
 
+// Add delay function for media group processing
+async function waitForMediaGroupCompletion(supabase: any, mediaGroupId: string, maxAttempts = 5): Promise<boolean> {
+  console.log(`Waiting for media group ${mediaGroupId} to complete...`);
+  
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    // Check if all media in the group is present
+    const { data: messages, error } = await supabase
+      .from('messages')
+      .select('id, message_type, media_group_size')
+      .eq('media_group_id', mediaGroupId);
+
+    if (error) {
+      console.error('Error checking media group:', error);
+      continue;
+    }
+
+    const hasVideo = messages.some(m => m.message_type === 'video');
+    const expectedSize = messages[0]?.media_group_size || 0;
+    const currentSize = messages.length;
+
+    console.log(`Media group status: ${currentSize}/${expectedSize} messages, has video: ${hasVideo}`);
+
+    if (currentSize >= expectedSize) {
+      if (hasVideo) {
+        // Add extra delay for video processing
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      }
+      return true;
+    }
+
+    // Wait before next check
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+
+  console.log(`Media group ${mediaGroupId} incomplete after ${maxAttempts} attempts`);
+  return false;
+}
+
 export async function handleWebhookUpdate(
   update: any, 
   supabase: any,
@@ -77,6 +115,15 @@ export async function handleWebhookUpdate(
         if (message.document) mediaGroupSize += 1;
         if (message.animation) mediaGroupSize += 1;
         mediaGroupSize = Math.max(mediaGroupSize, 1);
+      }
+
+      // Wait for media group completion if this is a photo and there might be videos
+      const messageType = determineMessageType(message);
+      if (messageType === 'photo' && mediaGroupSize > 1) {
+        const isComplete = await waitForMediaGroupCompletion(supabase, message.media_group_id);
+        if (!isComplete) {
+          console.log('Media group not complete, continuing anyway but caption sync might be delayed');
+        }
       }
     }
 
