@@ -44,12 +44,15 @@ export async function processMediaMessage(
     const updatedMediaData = {
       ...message.message_media_data,
       media: {
-        ...mediaFile,
+        ...message.message_media_data.media,
+        file_id: mediaFile.file_id,
+        file_unique_id: mediaFile.file_unique_id,
+        file_type: mediaFile.file_type,
         public_url: publicUrl,
         storage_path: storagePath
       },
       meta: {
-        ...message.message_media_data?.meta,
+        ...message.message_media_data.meta,
         status: 'processed',
         processed_at: new Date().toISOString()
       }
@@ -65,22 +68,14 @@ export async function processMediaMessage(
       })
       .eq('id', messageId);
 
-    // 6. Create/Update telegram_media record
+    // 6. Create/Update telegram_media record using message_media_data
+    // Note: The trigger fn_process_media will handle extracting values from message_media_data
     await supabase
       .from('telegram_media')
       .upsert({
         message_id: messageId,
-        file_id: mediaFile.file_id,
-        file_unique_id: mediaFile.file_unique_id,
-        file_type: mediaFile.file_type,
-        public_url: publicUrl,
-        storage_path: storagePath,
         message_media_data: updatedMediaData,
         correlation_id: correlationId,
-        telegram_data: message.telegram_data,
-        is_original_caption: message.is_original_caption,
-        original_message_id: message.original_message_id,
-        processed: true,
         updated_at: new Date().toISOString()
       });
 
