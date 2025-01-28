@@ -114,7 +114,7 @@ serve(async (req) => {
       ],
       temperature: 0.1,
       max_tokens: 500,
-      response_format: { type: "json" } // Force JSON response
+      response_format: { type: "json_object" }
     });
 
     const result = completion.choices[0].message.content;
@@ -122,9 +122,7 @@ serve(async (req) => {
 
     let parsedResult;
     try {
-      // Clean the response string before parsing
-      const cleanedResult = result.replace(/```json\n|\n```/g, '').trim();
-      parsedResult = JSON.parse(cleanedResult);
+      parsedResult = JSON.parse(result);
     } catch (error) {
       console.error('Error parsing AI response:', error);
       throw new Error('Invalid AI response format');
