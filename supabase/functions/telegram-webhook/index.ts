@@ -51,6 +51,7 @@ serve(async (req) => {
 
     const chatId = message.chat.id.toString();
     const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
+    const messageType = determineMessageType(message);
 
     // Analyze message content
     const analyzedContent = await analyzeWebhookMessage(message);
@@ -61,21 +62,20 @@ serve(async (req) => {
     console.log('Creating message record with data:', {
       message_id: message.message_id,
       chat_id: message.chat.id,
-      message_type: determineMessageType(message),
+      message_type: messageType,
       media_group_id: message.media_group_id,
-      correlation_id: correlationId,
-      has_analyzed_content: !!analyzedContent?.analyzed_content
+      correlation_id: correlationId
     });
 
-    // Create message record with telegram_data
+    // Create message record
     const { data: messageRecord, error: messageError } = await supabaseClient
       .from('messages')
       .insert({
         message_id: message.message_id,
         chat_id: message.chat.id,
         sender_info: message.from || message.sender_chat || {},
-        message_type: determineMessageType(message),
-        telegram_data: message, // Ensure telegram_data is included
+        message_type: messageType,
+        telegram_data: message,
         message_url: messageUrl,
         correlation_id: correlationId,
         caption: message.caption,
@@ -86,10 +86,7 @@ serve(async (req) => {
         is_original_caption: analyzedContent.is_original_caption,
         original_message_id: analyzedContent.original_message_id,
         analyzed_content: analyzedContent.analyzed_content,
-        message_media_data: {
-          ...messageData,
-          telegram_data: message // Include telegram_data in message_media_data
-        },
+        message_media_data: messageData,
         last_group_message_at: new Date().toISOString()
       })
       .select()
@@ -104,12 +101,10 @@ serve(async (req) => {
       record_id: messageRecord.id,
       message_id: messageRecord.message_id,
       chat_id: messageRecord.chat_id,
-      message_type: messageRecord.message_type,
-      has_telegram_data: !!messageRecord.telegram_data
+      message_type: messageRecord.message_type
     });
 
     // Queue for processing if it's a media message
-    const messageType = determineMessageType(message);
     if (messageType === 'photo' || messageType === 'video') {
       console.log('Queueing message for processing:', {
         message_id: message.message_id,
@@ -120,10 +115,7 @@ serve(async (req) => {
       const queueItem: QueueItem = {
         id: messageRecord.id,
         queue_type: message.media_group_id ? 'media_group' : 'media',
-        message_media_data: {
-          ...messageData,
-          telegram_data: message // Ensure telegram_data is included in queue item
-        },
+        message_media_data: messageData,
         correlation_id: correlationId,
         status: 'pending'
       };
@@ -148,8 +140,8 @@ serve(async (req) => {
       message: 'Update processed successfully',
       messageId: messageRecord.id,
       data: {
-        telegram_data: messageRecord.telegram_data,
-        message_media_data: messageRecord.message_media_data,
+        telegram_data: message,
+        message_media_data: messageData,
         status: messageRecord.status
       }
     };
