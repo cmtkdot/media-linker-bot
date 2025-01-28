@@ -28,54 +28,36 @@ interface MediaQueueItem {
     };
     analysis: {
       analyzed_content?: Record<string, any>;
+      product_name?: string;
+      product_code?: string;
+      quantity?: number;
+      vendor_uid?: string;
+      purchase_date?: string;
+      notes?: string;
     };
     meta: {
       created_at: string;
       updated_at: string;
       status: string;
       error: string | null;
+      is_original_caption: boolean;
+      original_message_id: string | null;
+      processed_at: string | null;
+      last_retry_at: string | null;
+      retry_count: number;
     };
-    media: {
+    media?: {
       file_id: string;
       file_unique_id: string;
       file_type: string;
       public_url?: string;
+      storage_path?: string;
+      mime_type?: string;
     };
     telegram_data: Record<string, any>;
   };
   status: string;
   correlation_id: string;
-}
-
-async function handleProcessingError(
-  supabase: any,
-  error: ProcessingError,
-  item: MediaQueueItem
-): Promise<void> {
-  console.error('Media processing error:', {
-    error_code: error.code,
-    error_message: error.message,
-    item_id: item.id,
-    file_id: item.message_media_data.media.file_id,
-    details: error.details
-  });
-
-  await withDatabaseRetry(async () => {
-    const { error: updateError } = await supabase
-      .from('unified_processing_queue')
-      .update({
-        status: 'error',
-        error_message: JSON.stringify({
-          code: error.code,
-          message: error.message,
-          details: error.details
-        }),
-        processed_at: new Date().toISOString()
-      })
-      .eq('id', item.id);
-
-    if (updateError) throw updateError;
-  });
 }
 
 export async function processMediaItem(
@@ -85,6 +67,14 @@ export async function processMediaItem(
 ) {
   try {
     console.log(`Processing media item ${item.id}`);
+
+    if (!item.message_media_data?.media) {
+      throw {
+        code: 'INVALID_MEDIA',
+        message: 'No media data found in message',
+        details: { item_id: item.id }
+      };
+    }
 
     // Check for duplicate file_id
     const { data: existingMedia } = await supabase
@@ -118,22 +108,21 @@ export async function processMediaItem(
       buffer,
       item.message_media_data.media.file_unique_id,
       fileExt,
-      item.message_media_data.media.file_type === 'video' ? {
-        maxSize: 50 * 1024 * 1024, // 50MB limit for videos
-        compress: true
-      } : undefined
+      item.message_media_data.media.mime_type
     );
 
-    // Update message_media_data with public URL
+    // Update message_media_data with public URL and storage info
     const updatedMessageMediaData = {
       ...item.message_media_data,
       media: {
         ...item.message_media_data.media,
-        public_url: publicUrl
+        public_url: publicUrl,
+        storage_path: `${item.message_media_data.media.file_unique_id}.${fileExt}`
       },
       meta: {
         ...item.message_media_data.meta,
         status: 'processed',
+        processed_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }
     };
@@ -148,11 +137,19 @@ export async function processMediaItem(
             file_unique_id: item.message_media_data.media.file_unique_id,
             file_type: item.message_media_data.media.file_type,
             public_url: publicUrl,
+            storage_path: updatedMessageMediaData.media.storage_path,
             message_media_data: updatedMessageMediaData,
             analyzed_content: item.message_media_data.analysis.analyzed_content || {},
+            product_name: item.message_media_data.analysis.product_name,
+            product_code: item.message_media_data.analysis.product_code,
+            quantity: item.message_media_data.analysis.quantity,
+            vendor_uid: item.message_media_data.analysis.vendor_uid,
+            purchase_date: item.message_media_data.analysis.purchase_date,
+            notes: item.message_media_data.analysis.notes,
             telegram_data: item.message_media_data.telegram_data,
             message_url: item.message_media_data.message.url,
-            caption: item.message_media_data.message.caption
+            caption: item.message_media_data.message.caption,
+            correlation_id: item.correlation_id
           })
           .select()
           .single();
@@ -160,20 +157,6 @@ export async function processMediaItem(
     );
 
     if (insertError) throw insertError;
-
-    // Update queue status
-    await withDatabaseRetry(async () => {
-      const { error: queueError } = await supabase
-        .from('unified_processing_queue')
-        .update({
-          status: 'completed',
-          processed_at: new Date().toISOString(),
-          message_media_data: updatedMessageMediaData
-        })
-        .eq('id', item.id);
-
-      if (queueError) throw queueError;
-    });
 
     console.log('Successfully processed media item:', {
       item_id: item.id,
@@ -190,7 +173,20 @@ export async function processMediaItem(
       details: error.details || {}
     };
 
-    await handleProcessingError(supabase, processError, item);
-    throw error;
+    console.error('Error processing media:', processError);
+
+    // Log the error to media_processing_logs
+    await supabase
+      .from('media_processing_logs')
+      .insert({
+        message_id: item.id,
+        file_id: item.message_media_data?.media?.file_id,
+        file_type: item.message_media_data?.media?.file_type,
+        error_message: processError.message,
+        correlation_id: item.correlation_id,
+        status: 'error'
+      });
+
+    throw processError;
   }
 }
