@@ -1,7 +1,5 @@
-import { WebhookUpdate, TelegramMessage } from "../types/telegram-types.ts";
-import { analyzeWebhookMessage } from "../webhook-message-analyzer.ts";
-import { buildWebhookMessageData } from "../webhook-message-builder.ts";
-import { queueWebhookMessage } from "./queue/queue-manager.ts";
+import { WebhookUpdate } from "./types/telegram-types.ts";
+import { MessageMediaData } from "./types/message-types.ts";
 
 export async function handleWebhookUpdate(
   supabase: any,
@@ -23,12 +21,37 @@ export async function handleWebhookUpdate(
       correlation_id: correlationId
     });
 
-    // Build message data with proper structure
+    // Build message data
     const messageUrl = `https://t.me/c/${Math.abs(message.chat.id)}/${message.message_id}`;
-    const analyzedContent = await analyzeWebhookMessage(message);
-    const messageData = buildWebhookMessageData(message, messageUrl, analyzedContent);
+    
+    const messageMediaData: MessageMediaData = {
+      message: {
+        url: messageUrl,
+        media_group_id: message.media_group_id,
+        caption: message.caption,
+        message_id: message.message_id,
+        chat_id: message.chat.id,
+        date: message.date
+      },
+      sender: {
+        sender_info: message.from || message.sender_chat || {},
+        chat_info: message.chat
+      },
+      analysis: {
+        analyzed_content: {},
+      },
+      meta: {
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        status: 'pending',
+        error: null,
+        is_original_caption: false,
+        original_message_id: null
+      },
+      telegram_data: message
+    };
 
-    // Insert into messages table with complete structure
+    // Insert into messages table
     const { data: messageRecord, error } = await supabase
       .from('messages')
       .insert({
@@ -40,12 +63,7 @@ export async function handleWebhookUpdate(
         media_group_id: message.media_group_id,
         message_url: messageUrl,
         correlation_id: correlationId,
-        message_media_data: messageData,
-        is_original_caption: analyzedContent.is_original_caption,
-        original_message_id: analyzedContent.original_message_id,
-        analyzed_content: analyzedContent.analyzed_content,
-        caption: message.caption,
-        media_group_size: message.media_group_id ? await getMediaGroupSize(supabase, message) : null,
+        message_media_data: messageMediaData,
         status: 'pending'
       })
       .select()
@@ -55,7 +73,7 @@ export async function handleWebhookUpdate(
 
     // Queue for processing if it's a media message
     if (message.photo || message.video || message.document) {
-      await queueWebhookMessage(supabase, messageData, correlationId, 'media');
+      await queueForProcessing(supabase, messageMediaData, correlationId);
     }
 
     return {
@@ -63,7 +81,6 @@ export async function handleWebhookUpdate(
       message: 'Message processed successfully',
       messageId: messageRecord.id,
       data: {
-        analyzed_content: messageRecord.analyzed_content,
         telegram_data: messageRecord.telegram_data,
         status: messageRecord.status
       }
@@ -74,13 +91,15 @@ export async function handleWebhookUpdate(
   }
 }
 
-async function getMediaGroupSize(supabase: any, message: TelegramMessage): Promise<number> {
-  if (!message.media_group_id) return 0;
-  
-  const { count } = await supabase
-    .from('messages')
-    .select('*', { count: 'exact', head: true })
-    .eq('media_group_id', message.media_group_id);
-    
-  return count + 1; // Include current message
+async function queueForProcessing(supabase: any, messageMediaData: MessageMediaData, correlationId: string) {
+  const { error } = await supabase
+    .from('unified_processing_queue')
+    .insert({
+      queue_type: messageMediaData.message.media_group_id ? 'media_group' : 'media',
+      message_media_data: messageMediaData,
+      correlation_id: correlationId,
+      status: 'pending'
+    });
+
+  if (error) throw error;
 }

@@ -37,5 +37,5 @@ export interface MessageMediaData {
     storage_path?: string;
     mime_type?: string;
   };
-  telegram_data?: Record<string, any>;
+  telegram_data: Record<string, any>;
 }
