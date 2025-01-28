@@ -1,8 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { withDatabaseRetry } from "../_shared/database-retry.ts";
-import { getAndDownloadTelegramFile } from "../_shared/telegram-service.ts";
-import { uploadMediaToStorage } from "../_shared/storage-manager.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -48,72 +45,145 @@ serve(async (req) => {
       );
     }
 
-    // Download and process the file
-    console.log('Downloading file from Telegram:', fileId);
-    const { buffer, filePath } = await getAndDownloadTelegramFile(fileId, botToken);
+    // Get file from Telegram
+    const filePath = await getTelegramFilePath(fileId, botToken);
+    const buffer = await downloadTelegramFile(filePath, botToken);
 
-    // Generate safe filename using file_unique_id
+    // Generate storage path from file_unique_id and proper extension
     const fileExt = filePath.split('.').pop() || 'bin';
+    const storagePath = `${fileUniqueId}.${fileExt}`;
 
-    console.log('Uploading file to storage:', fileUniqueId);
+    console.log('Uploading file to storage:', storagePath);
     
     // Upload to Supabase Storage
-    const { publicUrl } = await uploadMediaToStorage(
-      supabase,
-      buffer,
-      fileUniqueId,
-      fileExt,
-      fileType === 'photo' ? 'image/jpeg' : undefined
-    );
+    const { error: uploadError } = await supabase.storage
+      .from('media')
+      .upload(storagePath, buffer, {
+        contentType: fileType === 'photo' ? 'image/jpeg' : 'application/octet-stream',
+        upsert: true,
+        cacheControl: '3600'
+      });
+
+    if (uploadError) {
+      throw uploadError;
+    }
+
+    const { data: { publicUrl } } = await supabase.storage
+      .from('media')
+      .getPublicUrl(storagePath);
 
     if (!publicUrl) {
       throw new Error('Failed to get public URL after upload');
     }
 
-    // Update queue item with success status
-    const { data: queueItem, error: queueError } = await withDatabaseRetry(
-      async () => {
-        return await supabase
-          .from('unified_processing_queue')
-          .update({
-            status: 'processed',
-            processed_at: new Date().toISOString(),
-            message_media_data: {
-              ...existingMedia?.message_media_data,
-              media: {
-                ...existingMedia?.message_media_data?.media,
-                public_url: publicUrl
-              }
-            }
-          })
-          .eq('message_id', messageId)
-          .select()
-          .single();
-      }
-    );
+    // Update telegram_media with the new file information
+    const { data: message } = await supabase
+      .from('messages')
+      .select('message_media_data, correlation_id')
+      .eq('id', messageId)
+      .single();
 
-    if (queueError) throw queueError;
+    if (!message) {
+      throw new Error('Message not found');
+    }
+
+    const updatedMessageMediaData = {
+      ...message.message_media_data,
+      media: {
+        ...message.message_media_data.media,
+        file_id: fileId,
+        file_unique_id: fileUniqueId,
+        file_type: fileType,
+        public_url: publicUrl,
+        storage_path: storagePath
+      }
+    };
+
+    const { error: updateError } = await supabase
+      .from('telegram_media')
+      .update({
+        public_url: publicUrl,
+        storage_path: storagePath,
+        processed: true,
+        message_media_data: updatedMessageMediaData,
+        updated_at: new Date().toISOString()
+      })
+      .eq('message_id', messageId);
+
+    if (updateError) {
+      throw updateError;
+    }
 
     console.log('Successfully processed media file:', {
       file_id: fileId,
       public_url: publicUrl,
-      queue_item_id: queueItem.id
+      storage_path: storagePath
     });
 
     return new Response(
       JSON.stringify({ 
-        message: 'Media processing completed', 
-        publicUrl, 
-        queueItemId: queueItem.id 
+        message: 'Media processing completed',
+        publicUrl,
+        storagePath
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
     console.error('Error processing media:', error);
+    
+    // Log the error to our new media_processing_logs table
+    try {
+      const supabase = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      );
+
+      await supabase
+        .from('media_processing_logs')
+        .insert({
+          message_id: messageId,
+          file_id: fileId,
+          file_type: fileType,
+          error_message: error.message,
+          status: 'error'
+        });
+    } catch (logError) {
+      console.error('Failed to log error:', logError);
+    }
+
     return new Response(
       JSON.stringify({ error: error.message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }
 });
+
+async function getTelegramFilePath(fileId: string, botToken: string): Promise<string> {
+  const response = await fetch(
+    `https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`
+  );
+
+  if (!response.ok) {
+    throw new Error(`Failed to get file info: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  
+  if (!data.ok || !data.result.file_path) {
+    throw new Error('Failed to get file path from Telegram');
+  }
+
+  return data.result.file_path;
+}
+
+async function downloadTelegramFile(filePath: string, botToken: string): Promise<ArrayBuffer> {
+  const downloadUrl = `https://api.telegram.org/file/bot${botToken}/${filePath}`;
+  const response = await fetch(downloadUrl);
+
+  if (!response.ok) {
+    throw new Error(`Failed to download file: ${response.statusText}`);
+  }
+
+  return await response.arrayBuffer();
+}

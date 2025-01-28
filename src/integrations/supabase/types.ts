@@ -250,6 +250,66 @@ export type Database = {
           },
         ]
       }
+      media_processing_logs: {
+        Row: {
+          correlation_id: string | null
+          created_at: string | null
+          error_message: string | null
+          file_id: string
+          file_type: string
+          id: string
+          last_retry_at: string | null
+          message_id: string | null
+          processed_at: string | null
+          retry_count: number | null
+          status: string | null
+          storage_path: string | null
+        }
+        Insert: {
+          correlation_id?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          file_id: string
+          file_type: string
+          id?: string
+          last_retry_at?: string | null
+          message_id?: string | null
+          processed_at?: string | null
+          retry_count?: number | null
+          status?: string | null
+          storage_path?: string | null
+        }
+        Update: {
+          correlation_id?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          file_id?: string
+          file_type?: string
+          id?: string
+          last_retry_at?: string | null
+          message_id?: string | null
+          processed_at?: string | null
+          retry_count?: number | null
+          status?: string | null
+          storage_path?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_processing_logs_correlation_id_fkey"
+            columns: ["correlation_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["correlation_id"]
+          },
+          {
+            foreignKeyName: "media_processing_logs_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           analyzed_content: Json | null
@@ -478,65 +538,6 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "messages"
             referencedColumns: ["id"]
-          },
-        ]
-      }
-      unified_processing_queue: {
-        Row: {
-          chat_id: number | null
-          correlation_id: string | null
-          created_at: string | null
-          data: Json
-          error_message: string | null
-          id: string
-          max_retries: number | null
-          message_id: number | null
-          message_media_data: Json
-          priority: number | null
-          processed_at: string | null
-          queue_type: string
-          retry_count: number | null
-          status: string
-        }
-        Insert: {
-          chat_id?: number | null
-          correlation_id?: string | null
-          created_at?: string | null
-          data?: Json
-          error_message?: string | null
-          id?: string
-          max_retries?: number | null
-          message_id?: number | null
-          message_media_data?: Json
-          priority?: number | null
-          processed_at?: string | null
-          queue_type: string
-          retry_count?: number | null
-          status?: string
-        }
-        Update: {
-          chat_id?: number | null
-          correlation_id?: string | null
-          created_at?: string | null
-          data?: Json
-          error_message?: string | null
-          id?: string
-          max_retries?: number | null
-          message_id?: number | null
-          message_media_data?: Json
-          priority?: number | null
-          processed_at?: string | null
-          queue_type?: string
-          retry_count?: number | null
-          status?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "unified_processing_queue_correlation_id_fkey"
-            columns: ["correlation_id"]
-            isOneToOne: false
-            referencedRelation: "messages"
-            referencedColumns: ["correlation_id"]
           },
         ]
       }
