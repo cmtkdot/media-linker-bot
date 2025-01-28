@@ -25,6 +25,8 @@ serve(async (req) => {
   }
 
   try {
+    console.log('Starting queue processing');
+
     // Fetch pending queue items
     const { data: queueItems, error: queueError } = await supabase
       .from('unified_processing_queue')
@@ -34,7 +36,10 @@ serve(async (req) => {
       .order('created_at', { ascending: true })
       .limit(10);
 
-    if (queueError) throw queueError;
+    if (queueError) {
+      console.error('Error fetching queue items:', queueError);
+      throw queueError;
+    }
 
     if (!queueItems?.length) {
       return new Response(
@@ -61,8 +66,12 @@ serve(async (req) => {
       }
     });
 
+    console.log(`Found ${mediaGroups.size} media groups and ${individualItems.length} individual items`);
+
     // Process media groups
     for (const [groupId, groupItems] of mediaGroups) {
+      console.log(`Processing media group ${groupId} with ${groupItems.length} items`);
+      
       const isComplete = await isMediaGroupComplete(supabase, groupId);
       if (!isComplete) {
         console.log(`Skipping incomplete media group ${groupId}`);
@@ -74,6 +83,7 @@ serve(async (req) => {
 
     // Process individual items
     for (const item of individualItems) {
+      console.log(`Processing individual item ${item.id}`);
       await processMediaItem(supabase, item, botToken);
     }
 
@@ -83,13 +93,20 @@ serve(async (req) => {
       .map(item => item.id);
 
     if (processedIds.length > 0) {
-      await supabase
+      console.log(`Marking ${processedIds.length} items as processed`);
+      
+      const { error: updateError } = await supabase
         .from('unified_processing_queue')
         .update({
           status: 'processed',
           processed_at: new Date().toISOString()
         })
         .in('id', processedIds);
+
+      if (updateError) {
+        console.error('Error updating queue items:', updateError);
+        throw updateError;
+      }
     }
 
     return new Response(
