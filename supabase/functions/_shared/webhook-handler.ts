@@ -29,35 +29,6 @@ export async function handleWebhookUpdate(
     const chatId = message.chat.id.toString();
     const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
 
-    // Analyze caption if present
-    let analyzedContent = null;
-    if (message.caption) {
-      try {
-        const { data: analysisResult } = await supabase.functions.invoke('analyze-caption', {
-          body: {
-            caption: message.caption,
-            messageId: message.message_id,
-            chatId: message.chat.id,
-            mediaGroupId: message.media_group_id
-          }
-        });
-
-        if (analysisResult?.data?.analyzed_content) {
-          analyzedContent = analysisResult.data.analyzed_content;
-          console.log('Caption analysis result:', {
-            message_id: message.message_id,
-            analyzed_content: analyzedContent
-          });
-        }
-      } catch (analysisError) {
-        console.error('Error analyzing caption:', {
-          error: analysisError,
-          message_id: message.message_id,
-          caption: message.caption
-        });
-      }
-    }
-
     // Create message media data structure
     const messageMediaData = {
       message: {
@@ -93,35 +64,20 @@ export async function handleWebhookUpdate(
         media_group_id: message.media_group_id,
         message_url: messageUrl,
         status: 'pending',
-        correlation_id: correlationId,
-        analyzed_content: analyzedContent,
-        message_media_data: messageMediaData
+        correlation_id: correlationId
       };
-
-      // Extract product info if available
-      if (analyzedContent?.product_info) {
-        Object.assign(messageData, {
-          product_name: analyzedContent.product_info.product_name,
-          product_code: analyzedContent.product_info.product_code,
-          quantity: analyzedContent.product_info.quantity,
-          vendor_uid: analyzedContent.product_info.vendor_uid,
-          purchase_date: analyzedContent.product_info.purchase_date,
-          notes: analyzedContent.product_info.notes
-        });
-      }
 
       console.log('Creating/updating message record:', {
         message_id: message.message_id,
         chat_id: message.chat.id,
-        correlation_id: correlationId,
-        has_analyzed_content: !!analyzedContent
+        correlation_id: correlationId
       });
 
       const { data: existingMessage } = await supabase
         .from('messages')
         .select('*')
         .eq('message_id', message.message_id)
-        .eq('chat_id', message.chat_id)
+        .eq('chat_id', message.chat.id)
         .maybeSingle();
 
       if (existingMessage) {
@@ -146,7 +102,7 @@ export async function handleWebhookUpdate(
       }
     });
 
-    // Insert into unified_processing_queue
+    // Insert into unified_processing_queue with simplified queue_type
     const queueType = message.photo || message.video || message.document || message.animation 
       ? 'media' 
       : 'webhook';
@@ -155,7 +111,7 @@ export async function handleWebhookUpdate(
       .from('unified_processing_queue')
       .insert({
         queue_type: queueType,
-        message_media_data: messageMediaData,
+        data: messageMediaData,
         status: 'pending',
         correlation_id: correlationId,
         chat_id: message.chat.id,
@@ -170,8 +126,7 @@ export async function handleWebhookUpdate(
     console.log('Message queued successfully:', {
       queue_type: queueType,
       message_id: messageRecord?.id,
-      correlation_id: correlationId,
-      has_analyzed_content: !!analyzedContent
+      correlation_id: correlationId
     });
 
     return {
@@ -179,8 +134,7 @@ export async function handleWebhookUpdate(
       message: 'Update processed successfully',
       messageId: messageRecord?.id,
       correlationId,
-      queueType,
-      analyzedContent
+      queueType
     };
 
   } catch (error) {
