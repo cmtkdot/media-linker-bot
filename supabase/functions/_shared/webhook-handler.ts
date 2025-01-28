@@ -1,8 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { WebhookUpdate, WebhookResponse, WebhookMessageData } from './telegram-types.ts';
-import { validateMediaFile, getMediaType } from './media-validators.ts';
-import { getAndDownloadTelegramFile } from './telegram-service.ts';
-import { uploadMediaToStorage } from './storage-manager.ts';
+import { WebhookUpdate, WebhookResponse } from './telegram-types.ts';
+import { validateMediaFile } from './media-validators.ts';
+import { processMediaFile } from './media-processor.ts';
+import { analyzeCaptionWithAI } from './caption-analyzer.ts';
 
 export async function handleWebhookUpdate(
   update: WebhookUpdate, 
@@ -29,30 +29,6 @@ export async function handleWebhookUpdate(
       media_group_id: message.media_group_id,
       has_caption: !!message.caption
     });
-
-    // Check for existing message
-    const { data: existingMessage } = await supabase
-      .from('messages')
-      .select('id, is_original_caption, analyzed_content')
-      .eq('message_id', message.message_id)
-      .eq('chat_id', message.chat.id)
-      .maybeSingle();
-
-    if (existingMessage) {
-      console.log('Message already exists:', {
-        message_id: message.message_id,
-        existing_id: existingMessage.id
-      });
-      return {
-        success: true,
-        message: 'Message already exists',
-        messageId: existingMessage.id,
-        data: {
-          telegram_data: message,
-          status: 'processed'
-        }
-      };
-    }
 
     // Generate message URL
     const chatId = message.chat.id.toString();
@@ -89,12 +65,14 @@ export async function handleWebhookUpdate(
       
       if (mediaFile) {
         try {
-          // Validate media file
-          await validateMediaFile(mediaFile, mediaType);
-
-          // Download and upload to storage
-          const { buffer, filePath } = await getAndDownloadTelegramFile(mediaFile.file_id, botToken);
-          const { publicUrl } = await uploadMediaToStorage(supabase, buffer, mediaFile.file_unique_id, mediaType);
+          const { publicUrl, storagePath } = await processMediaFile(supabase, {
+            fileId: mediaFile.file_id,
+            fileUniqueId: mediaFile.file_unique_id,
+            fileType: mediaType,
+            messageId: messageRecord.id,
+            botToken,
+            correlationId
+          });
 
           // Create telegram_media record
           const { error: mediaError } = await supabase
@@ -105,6 +83,7 @@ export async function handleWebhookUpdate(
               file_unique_id: mediaFile.file_unique_id,
               file_type: mediaType,
               public_url: publicUrl,
+              storage_path: storagePath,
               telegram_data: message,
               correlation_id: correlationId
             });
@@ -125,6 +104,18 @@ export async function handleWebhookUpdate(
           throw error;
         }
       }
+    }
+
+    // Analyze caption if present
+    if (message.caption) {
+      const analyzedContent = await analyzeCaptionWithAI(message.caption);
+      await supabase
+        .from('messages')
+        .update({
+          analyzed_content: analyzedContent,
+          status: 'processed'
+        })
+        .eq('id', messageRecord.id);
     }
 
     return {
@@ -148,4 +139,12 @@ export async function handleWebhookUpdate(
       }
     };
   }
+}
+
+function getMediaType(message: any): string | null {
+  if (message.photo) return 'photo';
+  if (message.video) return 'video';
+  if (message.document) return 'document';
+  if (message.animation) return 'animation';
+  return null;
 }
