@@ -54,9 +54,8 @@ serve(async (req) => {
 
     // Generate safe filename using file_unique_id
     const fileExt = filePath.split('.').pop() || 'bin';
-    const fileName = `${fileUniqueId}.${fileExt}`;
 
-    console.log('Uploading file to storage:', fileName);
+    console.log('Uploading file to storage:', fileUniqueId);
     
     // Upload to Supabase Storage
     const { publicUrl } = await uploadMediaToStorage(
