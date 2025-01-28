@@ -33,6 +33,10 @@ export interface QueueItem {
       purchase_date?: string;
       notes?: string;
     };
+    sender: {
+      sender_info: Record<string, any>;
+      chat_info: Record<string, any>;
+    };
     telegram_data: Record<string, any>;
   };
   queue_type: 'media' | 'webhook' | 'media_group';

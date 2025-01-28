@@ -481,7 +481,7 @@ export type Database = {
           id: string
           max_retries: number | null
           message_id: number | null
-          message_media_data: Json | null
+          message_media_data: Json
           priority: number | null
           processed_at: string | null
           queue_type: string
@@ -497,7 +497,7 @@ export type Database = {
           id?: string
           max_retries?: number | null
           message_id?: number | null
-          message_media_data?: Json | null
+          message_media_data?: Json
           priority?: number | null
           processed_at?: string | null
           queue_type: string
@@ -513,7 +513,7 @@ export type Database = {
           id?: string
           max_retries?: number | null
           message_id?: number | null
-          message_media_data?: Json | null
+          message_media_data?: Json
           priority?: number | null
           processed_at?: string | null
           queue_type?: string
