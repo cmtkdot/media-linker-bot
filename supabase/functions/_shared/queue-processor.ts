@@ -48,6 +48,7 @@ export async function processMediaGroups(supabase: any, items: QueueItem[]) {
 
 async function processMediaGroup(supabase: any, groupId: string, items: QueueItem[]) {
   try {
+    // Find the original caption holder
     const originalItem = items.find(item => 
       item.message_media_data?.meta?.is_original_caption
     );
@@ -57,12 +58,38 @@ async function processMediaGroup(supabase: any, groupId: string, items: QueueIte
 
     // Process each item in the group
     for (const item of items) {
-      // Update item's analyzed content from original
+      // Update item's analyzed content from original if needed
       if (analyzedContent && !item.message_media_data?.meta?.is_original_caption) {
         item.message_media_data.analysis.analyzed_content = analyzedContent;
       }
+
+      // Process the media file
       await processQueueItem(supabase, item, originalItem);
+
+      // Update telegram_media record with original message reference
+      if (originalItem && originalItem.id !== item.id) {
+        await supabase
+          .from('telegram_media')
+          .update({
+            original_message_id: originalItem.id,
+            is_original_caption: false,
+            analyzed_content: analyzedContent,
+            message_media_data: item.message_media_data
+          })
+          .eq('file_unique_id', item.message_media_data.media.file_unique_id);
+      }
     }
+
+    // Mark items as processed in the queue
+    const itemIds = items.map(item => item.id);
+    await supabase
+      .from('unified_processing_queue')
+      .update({
+        status: 'processed',
+        processed_at: new Date().toISOString()
+      })
+      .in('id', itemIds);
+
   } catch (error) {
     console.error(`Error processing media group ${groupId}:`, error);
     throw error;
@@ -77,6 +104,7 @@ export async function processQueueItem(supabase: any, item: QueueItem, originalI
     const fileUniqueId = item.message_media_data.media.file_unique_id;
     const fileType = item.message_media_data.media.file_type;
 
+    // Check if media already exists
     const { data: existingMedia } = await supabase
       .from('telegram_media')
       .select('*')
@@ -86,12 +114,13 @@ export async function processQueueItem(supabase: any, item: QueueItem, originalI
     if (existingMedia) {
       console.log(`Media ${fileUniqueId} already exists, updating analyzed content`);
       
-      // Update existing media with latest analyzed content
+      // Update existing media with latest analyzed content and original message reference
       const { error: updateError } = await supabase
         .from('telegram_media')
         .update({
           analyzed_content: item.message_media_data.analysis.analyzed_content,
-          original_message_id: originalItem?.message_media_data?.meta?.original_message_id,
+          original_message_id: originalItem?.id,
+          is_original_caption: item.message_media_data.meta.is_original_caption,
           message_media_data: item.message_media_data
         })
         .eq('id', existingMedia.id);
@@ -100,11 +129,13 @@ export async function processQueueItem(supabase: any, item: QueueItem, originalI
       return;
     }
 
+    // Process new media file
     await validateMediaFile(item.message_media_data.media, fileType);
     
     const botToken = Deno.env.get('TELEGRAM_BOT_TOKEN');
     if (!botToken) throw new Error('Bot token not configured');
 
+    // Download and upload file
     const { buffer, filePath } = await getAndDownloadTelegramFile(fileId, botToken);
     const fileExt = filePath.split('.').pop() || '';
     
@@ -115,6 +146,7 @@ export async function processQueueItem(supabase: any, item: QueueItem, originalI
       fileExt
     );
 
+    // Create media record
     const mediaData = {
       file_id: fileId,
       file_unique_id: fileUniqueId,
@@ -128,7 +160,7 @@ export async function processQueueItem(supabase: any, item: QueueItem, originalI
         }
       },
       is_original_caption: item.message_media_data.meta.is_original_caption,
-      original_message_id: originalItem?.message_media_data?.meta?.original_message_id,
+      original_message_id: originalItem?.id,
       analyzed_content: item.message_media_data.analysis.analyzed_content
     };
 
@@ -138,6 +170,7 @@ export async function processQueueItem(supabase: any, item: QueueItem, originalI
 
     if (insertError) throw insertError;
 
+    // Mark queue item as processed
     await supabase
       .from('unified_processing_queue')
       .update({
