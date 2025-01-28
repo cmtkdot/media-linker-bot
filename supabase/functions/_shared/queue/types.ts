@@ -14,6 +14,7 @@ export interface QueueItem {
       file_unique_id: string;
       file_type: string;
       public_url?: string;
+      storage_path?: string;
     };
     meta: {
       is_original_caption: boolean;

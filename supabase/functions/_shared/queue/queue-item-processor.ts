@@ -5,90 +5,104 @@ import { getAndDownloadTelegramFile } from "../telegram-service.ts";
 
 export async function processQueueItem(
   supabase: any, 
-  item: QueueItem, 
-  originalItem?: QueueItem
+  item: QueueItem
 ): Promise<ProcessingResult> {
   console.log(`Processing queue item for message ${item.message_media_data.message.message_id}`);
 
   try {
-    const fileId = item.message_media_data.media.file_id;
-    const fileUniqueId = item.message_media_data.media.file_unique_id;
-    const fileType = item.message_media_data.media.file_type;
+    const mediaData = item.message_media_data.media;
+    const messageData = item.message_media_data.message;
+    const analysisData = item.message_media_data.analysis;
 
+    // Check if media already exists
     const { data: existingMedia } = await supabase
       .from('telegram_media')
       .select('*')
-      .eq('file_unique_id', fileUniqueId)
+      .eq('file_unique_id', mediaData.file_unique_id)
       .maybeSingle();
 
-    if (existingMedia) {
-      console.log(`Media ${fileUniqueId} already exists, updating analyzed content`);
-      
-      const { error: updateError } = await supabase
-        .from('telegram_media')
-        .update({
-          analyzed_content: item.message_media_data.analysis.analyzed_content,
-          original_message_id: originalItem?.id,
-          is_original_caption: item.message_media_data.meta.is_original_caption,
-          message_media_data: item.message_media_data
-        })
-        .eq('id', existingMedia.id);
-
-      if (updateError) throw updateError;
+    if (existingMedia?.public_url) {
+      console.log(`Media ${mediaData.file_unique_id} already processed`);
       return { success: true, mediaId: existingMedia.id };
     }
 
-    await validateMediaFile(item.message_media_data.media, fileType);
+    // Validate media file
+    await validateMediaFile(mediaData, mediaData.file_type);
     
     const botToken = Deno.env.get('TELEGRAM_BOT_TOKEN');
     if (!botToken) throw new Error('Bot token not configured');
 
-    const { buffer, filePath } = await getAndDownloadTelegramFile(fileId, botToken);
+    // Download and upload file
+    const { buffer, filePath } = await getAndDownloadTelegramFile(mediaData.file_id, botToken);
     const fileExt = filePath.split('.').pop() || '';
     
     const { publicUrl, storagePath } = await uploadMediaToStorage(
       supabase,
       buffer,
-      fileUniqueId,
+      mediaData.file_unique_id,
       fileExt
     );
 
-    const mediaData = {
-      file_id: fileId,
-      file_unique_id: fileUniqueId,
-      file_type: fileType,
+    // Create or update telegram_media record
+    const mediaRecord = {
+      file_id: mediaData.file_id,
+      file_unique_id: mediaData.file_unique_id,
+      file_type: mediaData.file_type,
       public_url: publicUrl,
       storage_path: storagePath,
       message_media_data: {
         ...item.message_media_data,
         media: {
-          ...item.message_media_data.media,
+          ...mediaData,
           public_url: publicUrl,
           storage_path: storagePath
         }
       },
-      is_original_caption: item.message_media_data.meta.is_original_caption,
-      original_message_id: originalItem?.id,
-      analyzed_content: item.message_media_data.analysis.analyzed_content
+      // Extract analyzed content fields
+      product_name: analysisData?.product_name,
+      product_code: analysisData?.product_code,
+      quantity: analysisData?.quantity,
+      vendor_uid: analysisData?.vendor_uid,
+      purchase_date: analysisData?.purchase_date,
+      notes: analysisData?.notes,
+      caption: messageData.caption,
+      message_url: messageData.url,
+      analyzed_content: analysisData?.analyzed_content || {},
+      is_original_caption: item.message_media_data.meta?.is_original_caption,
+      original_message_id: item.message_media_data.meta?.original_message_id
     };
 
     const { data: newMedia, error: insertError } = await supabase
       .from('telegram_media')
-      .insert([mediaData])
+      .insert([mediaRecord])
       .select()
       .single();
 
     if (insertError) throw insertError;
 
+    // Update queue item status
     await supabase
       .from('unified_processing_queue')
       .update({
         status: 'processed',
-        processed_at: new Date().toISOString()
+        processed_at: new Date().toISOString(),
+        message_media_data: {
+          ...item.message_media_data,
+          media: {
+            ...mediaData,
+            public_url: publicUrl,
+            storage_path: storagePath
+          },
+          meta: {
+            ...item.message_media_data.meta,
+            status: 'processed',
+            processed_at: new Date().toISOString()
+          }
+        }
       })
       .eq('id', item.id);
 
-    console.log(`Successfully processed media item ${fileUniqueId}`);
+    console.log(`Successfully processed media item ${mediaData.file_unique_id}`);
     return { success: true, mediaId: newMedia.id };
 
   } catch (error) {
@@ -99,7 +113,16 @@ export async function processQueueItem(
       .update({
         status: 'error',
         error_message: error.message,
-        processed_at: new Date().toISOString()
+        processed_at: new Date().toISOString(),
+        message_media_data: {
+          ...item.message_media_data,
+          meta: {
+            ...item.message_media_data.meta,
+            status: 'error',
+            error: error.message,
+            processed_at: new Date().toISOString()
+          }
+        }
       })
       .eq('id', item.id);
 
