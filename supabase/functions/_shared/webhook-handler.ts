@@ -61,10 +61,9 @@ export async function handleWebhookUpdate(
     if (messageType === 'text') {
       messageData = await processTextMessage(message, messageUrl, messageCorrelationId);
     } else {
-      // Handle media messages (photos, videos, etc.)
-      let isOriginalCaption = false;
       let originalMessageId = null;
       let analyzedContent = null;
+      let isOriginalCaption = false;
 
       // Check for media group and handle caption syncing
       if (message.media_group_id) {
@@ -77,17 +76,17 @@ export async function handleWebhookUpdate(
         // Get all existing messages in the group
         const { data: groupMessages } = await supabase
           .from('messages')
-          .select('id, is_original_caption, analyzed_content, caption')
+          .select('id, is_original_caption, analyzed_content, caption, original_message_id')
           .eq('media_group_id', message.media_group_id)
           .order('created_at', { ascending: true });
 
         const existingCaptionHolder = groupMessages?.find(m => m.is_original_caption);
 
-        // If this message has a caption
         if (message.caption) {
           if (!existingCaptionHolder) {
-            // This becomes the original caption holder
+            // This becomes the original caption holder since there isn't one
             isOriginalCaption = true;
+            originalMessageId = null; // Explicitly set to null since it's the original
             analyzedContent = await analyzeCaptionWithAI(message.caption);
 
             // Update all existing messages in the group with the analyzed content
@@ -103,7 +102,7 @@ export async function handleWebhookUpdate(
                   .update({
                     analyzed_content: analyzedContent,
                     caption: message.caption,
-                    is_original_caption: false,
+                    is_original_caption: false, // Set to false since they're not the original
                     original_message_id: null // Will be updated after current message insert
                   })
                   .eq('id', groupMsg.id);
@@ -111,29 +110,38 @@ export async function handleWebhookUpdate(
             }
           } else {
             // Use existing caption holder's content
+            isOriginalCaption = false; // Not the original since we found one
             originalMessageId = existingCaptionHolder.id;
             analyzedContent = existingCaptionHolder.analyzed_content;
             
             console.log('Using existing caption holder:', {
               original_message_id: originalMessageId,
+              is_original_caption: false,
               has_analyzed_content: !!analyzedContent
             });
           }
-        } else if (groupMessages?.length > 0) {
-          // For non-caption messages in a group, use existing analyzed content
+        } else {
+          // For non-caption messages in a group
           if (existingCaptionHolder) {
+            isOriginalCaption = false;
             originalMessageId = existingCaptionHolder.id;
             analyzedContent = existingCaptionHolder.analyzed_content;
             
             console.log('Using existing group analyzed content:', {
               original_message_id: originalMessageId,
+              is_original_caption: false,
               has_analyzed_content: !!analyzedContent
             });
+          } else {
+            // No caption holder exists yet, this message isn't one either
+            isOriginalCaption = false;
+            originalMessageId = null;
           }
         }
       } else if (message.caption) {
-        // Single media message with caption
+        // Single media message with caption is automatically the original
         isOriginalCaption = true;
+        originalMessageId = null;
         analyzedContent = await analyzeCaptionWithAI(message.caption);
       }
 
@@ -162,7 +170,8 @@ export async function handleWebhookUpdate(
       message_id: messageData.message_id,
       chat_id: messageData.chat_id,
       correlation_id: messageCorrelationId,
-      is_original_caption: messageData.is_original_caption
+      is_original_caption: messageData.is_original_caption,
+      original_message_id: messageData.original_message_id
     });
 
     // Insert message record
@@ -184,7 +193,9 @@ export async function handleWebhookUpdate(
       console.log('Queueing media message for processing:', {
         message_id: message.message_id,
         media_group_id: message.media_group_id,
-        message_type: messageType
+        message_type: messageType,
+        is_original_caption: messageData.is_original_caption,
+        original_message_id: messageData.original_message_id
       });
 
       const { error: queueError } = await supabase
@@ -209,6 +220,7 @@ export async function handleWebhookUpdate(
       message_id: messageRecord.id,
       correlation_id: messageCorrelationId,
       is_original_caption: messageData.is_original_caption,
+      original_message_id: messageData.original_message_id,
       message_type: messageType
     });
 
