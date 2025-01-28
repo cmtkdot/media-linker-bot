@@ -23,6 +23,32 @@ export async function processWebhookUpdate(
       correlation_id: correlationId
     });
 
+    // Check if message already exists
+    const { data: existingMessage } = await supabase
+      .from('messages')
+      .select('id, message_id, chat_id')
+      .eq('message_id', message.message_id)
+      .eq('chat_id', message.chat.id)
+      .maybeSingle();
+
+    if (existingMessage) {
+      console.log('Message already exists:', {
+        message_id: message.message_id,
+        chat_id: message.chat.id,
+        id: existingMessage.id
+      });
+      
+      return {
+        success: true,
+        message: 'Message already processed',
+        messageId: existingMessage.id,
+        data: {
+          telegram_data: message,
+          status: 'processed'
+        }
+      };
+    }
+
     // Build message data
     const messageUrl = `https://t.me/c/${Math.abs(message.chat.id)}/${message.message_id}`;
     
