@@ -29,6 +29,15 @@ export const getProductInfo = (media: MediaItem) => {
     quantity: analysis.quantity || media.quantity || 0,
     vendor: analysis.vendor_uid || media.vendor_uid || '',
     purchaseDate: analysis.purchase_date || media.purchase_date || null,
-    notes: analysis.notes || media.notes || ''
+    notes: analysis.notes || media.notes || '',
+    status: media.message_media_data?.meta?.status || 'pending'
   };
+};
+
+export const getStoragePath = (fileUniqueId: string, fileType: string): string => {
+  return `${fileUniqueId}${
+    fileType === 'photo' ? '.jpg' :
+    fileType === 'video' ? '.mp4' :
+    '.bin'
+  }`;
 };
