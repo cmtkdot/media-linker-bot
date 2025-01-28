@@ -2,14 +2,12 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { handleWebhookUpdate } from "../_shared/webhook-handler.ts";
-import { withDatabaseRetry } from "../_shared/database-retry.ts";
 
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN') || '';
 const TELEGRAM_WEBHOOK_SECRET = Deno.env.get('TELEGRAM_WEBHOOK_SECRET') || '';
 
 serve(async (req) => {
   try {
-    // Handle CORS
     if (req.method === 'OPTIONS') {
       return new Response('ok', { headers: corsHeaders });
     }
@@ -24,7 +22,6 @@ serve(async (req) => {
       );
     }
 
-    // Initialize Supabase client with retry wrapper
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -40,47 +37,18 @@ serve(async (req) => {
       correlation_id: correlationId
     });
 
-    // Process webhook update with retry logic
-    const result = await withDatabaseRetry(
-      async () => handleWebhookUpdate(update, supabaseClient, correlationId),
-      0,
-      'webhook_handler'
-    );
-
-    console.log('Webhook processing completed:', {
-      success: result.success,
-      message_id: result.messageId,
-      correlation_id: correlationId
-    });
+    const result = await handleWebhookUpdate(update, supabaseClient, correlationId, TELEGRAM_BOT_TOKEN);
 
     return new Response(
       JSON.stringify(result),
-      { 
-        headers: { 
-          ...corsHeaders, 
-          'Content-Type': 'application/json' 
-        } 
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    console.error('Error in webhook handler:', {
-      error: error.message,
-      stack: error.stack
-    });
-
+    console.error('Error in webhook handler:', error);
     return new Response(
-      JSON.stringify({ 
-        error: error.message,
-        details: error.stack
-      }),
-      { 
-        headers: { 
-          ...corsHeaders, 
-          'Content-Type': 'application/json' 
-        }, 
-        status: 500 
-      }
+      JSON.stringify({ error: error.message }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }
 });
