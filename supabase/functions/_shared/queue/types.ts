@@ -33,6 +33,7 @@ export interface QueueItem {
       purchase_date?: string;
       notes?: string;
     };
+    telegram_data: Record<string, any>;
   };
   queue_type: 'media' | 'webhook' | 'media_group';
   status: 'pending' | 'processing' | 'completed' | 'failed';
