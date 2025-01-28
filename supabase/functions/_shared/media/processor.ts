@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { MediaFile } from './types.ts';
 import { uploadMediaToStorage } from './storage-handler.ts';
 import { handleMediaError } from './error-handler.ts';
+import { validateMediaProcessing, validateMessageMediaData } from './validators.ts';
 
 export async function processMediaMessage(
   supabase: ReturnType<typeof createClient>,
@@ -10,10 +11,14 @@ export async function processMediaMessage(
 ): Promise<void> {
   const messageId = message.id;
   const correlationId = message.correlation_id;
+  const isMediaGroup = !!message.media_group_id;
   
-  console.log('Processing media message:', { messageId, correlationId });
+  console.log('Processing media message:', { messageId, correlationId, isMediaGroup });
 
   try {
+    // Validate message media data first
+    validateMessageMediaData(message.message_media_data);
+
     // Extract media file data
     const mediaFile = extractMediaFile(message);
     if (!mediaFile) {
@@ -61,6 +66,12 @@ export async function processMediaMessage(
         correlation_id: correlationId
       }
     };
+
+    // Validate the complete message before marking as processed
+    validateMediaProcessing(
+      { ...message, message_media_data: updatedMediaData },
+      isMediaGroup
+    );
 
     // Update messages table
     const { error: messageError } = await supabase
