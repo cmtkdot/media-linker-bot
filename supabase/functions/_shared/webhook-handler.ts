@@ -33,33 +33,31 @@ export async function handleWebhookUpdate(
 
     // Handle media group caption logic
     if (message.media_group_id) {
-      // Check for existing messages in the group
-      const { data: existingMessages } = await supabase
+      // First, check if we already have a message with original caption in this group
+      const { data: existingOriginal } = await supabase
         .from('messages')
-        .select('id, is_original_caption, analyzed_content, caption')
+        .select('id, analyzed_content')
         .eq('media_group_id', message.media_group_id)
-        .order('created_at', { ascending: true });
-
-      // Find existing caption holder if any
-      const existingCaptionHolder = existingMessages?.find(m => m.is_original_caption);
+        .eq('is_original_caption', true)
+        .single();
 
       if (message.caption) {
-        if (!existingCaptionHolder) {
+        if (!existingOriginal) {
           // This is the first message with a caption in the group
           console.log('Setting as original caption holder:', message.message_id);
           isOriginalCaption = true;
           analyzedContent = await analyzeCaptionWithAI(message.caption);
         } else {
           // Use existing caption holder's content
-          console.log('Using existing caption holder:', existingCaptionHolder.id);
-          originalMessageId = existingCaptionHolder.id;
-          analyzedContent = existingCaptionHolder.analyzed_content;
+          console.log('Using existing caption holder:', existingOriginal.id);
+          originalMessageId = existingOriginal.id;
+          analyzedContent = existingOriginal.analyzed_content;
         }
-      } else if (existingCaptionHolder) {
+      } else if (existingOriginal) {
         // For non-caption messages in group, reference the caption holder
-        console.log('Referencing existing caption holder:', existingCaptionHolder.id);
-        originalMessageId = existingCaptionHolder.id;
-        analyzedContent = existingCaptionHolder.analyzed_content;
+        console.log('Referencing existing caption holder:', existingOriginal.id);
+        originalMessageId = existingOriginal.id;
+        analyzedContent = existingOriginal.analyzed_content;
       }
     } else if (message.caption) {
       // Single message with caption is always original
@@ -68,7 +66,7 @@ export async function handleWebhookUpdate(
       analyzedContent = await analyzeCaptionWithAI(message.caption);
     }
 
-    // Create message media data structure with simplified analysis section
+    // Create message media data structure
     const messageMediaData = {
       message: {
         url: messageUrl,
@@ -92,8 +90,7 @@ export async function handleWebhookUpdate(
         error: null,
         correlation_id: correlationId,
         is_original_caption: isOriginalCaption,
-        original_message_id: originalMessageId,
-        retry_count: 0
+        original_message_id: originalMessageId
       }
     };
 
@@ -115,6 +112,11 @@ export async function handleWebhookUpdate(
       caption: message.caption
     };
 
+    // If this is a non-original message in a media group, wait briefly to ensure original exists
+    if (message.media_group_id && !isOriginalCaption && originalMessageId) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
     // Insert/update message record
     const { data: messageRecord, error: messageError } = await withDatabaseRetry(async () => {
       return await supabase
@@ -126,7 +128,7 @@ export async function handleWebhookUpdate(
 
     if (messageError) throw messageError;
 
-    // Queue for processing
+    // Queue for processing only if not already queued
     const { error: queueError } = await supabase
       .from('unified_processing_queue')
       .insert({
@@ -137,9 +139,13 @@ export async function handleWebhookUpdate(
         chat_id: message.chat.id,
         message_id: message.message_id,
         message_media_data: messageMediaData
-      });
+      })
+      .onConflict(['correlation_id', 'message_id', 'chat_id'])
+      .ignore();
 
-    if (queueError) throw queueError;
+    if (queueError) {
+      console.error('Error queueing message:', queueError);
+    }
 
     return {
       success: true,
