@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { processMediaItem } from "../../_shared/unified-media-processor.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -18,6 +17,10 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    const botToken = Deno.env.get('TELEGRAM_BOT_TOKEN');
+    if (!botToken) throw new Error('Bot token not configured');
+
+    // Fetch pending queue items
     const { data: queueItems, error } = await supabaseClient
       .from('unified_processing_queue')
       .select('*')
@@ -26,9 +29,7 @@ serve(async (req) => {
       .order('created_at', { ascending: true })
       .limit(10);
 
-    if (error) {
-      throw error;
-    }
+    if (error) throw error;
 
     if (!queueItems?.length) {
       return new Response(
@@ -38,84 +39,77 @@ serve(async (req) => {
     }
 
     console.log(`Processing ${queueItems.length} queue items`);
-
-    // Group items by media_group_id
-    const mediaGroups = new Map();
-    const singleItems = [];
+    const processed = [];
+    const errors = [];
 
     for (const item of queueItems) {
-      const mediaGroupId = item.message_media_data?.message?.media_group_id;
-      
-      if (mediaGroupId && item.queue_type === 'media_group') {
-        if (!mediaGroups.has(mediaGroupId)) {
-          mediaGroups.set(mediaGroupId, []);
-        }
-        mediaGroups.get(mediaGroupId).push(item);
-      } else {
-        singleItems.push(item);
-      }
-    }
-
-    const botToken = Deno.env.get('TELEGRAM_BOT_TOKEN');
-    if (!botToken) throw new Error('Bot token not configured');
-
-    // Process media groups
-    for (const [groupId, items] of mediaGroups) {
-      console.log(`Processing media group ${groupId} with ${items.length} items`);
-      
       try {
-        // Check if group is complete
-        const { data: messages } = await supabaseClient
-          .from('messages')
-          .select('id, media_group_size')
-          .eq('media_group_id', groupId)
-          .limit(1);
-
-        if (!messages?.length) {
-          console.log(`No messages found for group ${groupId}`);
+        const mediaData = item.message_media_data?.media;
+        if (!mediaData?.file_id) {
+          console.log(`Skipping item ${item.id} - missing media data`);
           continue;
         }
 
-        const expectedSize = messages[0].media_group_size;
-        if (items.length < expectedSize) {
-          console.log(`Media group ${groupId} not complete yet. Has ${items.length}/${expectedSize} items`);
-          continue;
+        // Download file from Telegram
+        console.log(`Downloading file ${mediaData.file_id}`);
+        const fileInfoResponse = await fetch(
+          `https://api.telegram.org/bot${botToken}/getFile?file_id=${mediaData.file_id}`
+        );
+        const fileInfo = await fileInfoResponse.json();
+        
+        if (!fileInfo.ok || !fileInfo.result.file_path) {
+          throw new Error('Failed to get file info from Telegram');
         }
 
-        // Process each item in the group
-        for (const item of items) {
-          await processMediaItem(supabaseClient, item, botToken);
-        }
+        const fileResponse = await fetch(
+          `https://api.telegram.org/file/bot${botToken}/${fileInfo.result.file_path}`
+        );
+        const fileBuffer = await fileResponse.arrayBuffer();
 
-        // Update all items in group as processed
-        await supabaseClient
-          .from('unified_processing_queue')
-          .update({
-            status: 'processed',
-            processed_at: new Date().toISOString()
-          })
-          .eq('message_media_data->message->media_group_id', groupId);
+        // Generate storage path
+        const storagePath = `${mediaData.file_unique_id}${
+          mediaData.file_type === 'photo' ? '.jpg' :
+          mediaData.file_type === 'video' ? '.mp4' :
+          mediaData.file_type === 'document' ? '.pdf' :
+          '.bin'
+        }`;
 
-      } catch (error) {
-        console.error(`Error processing media group ${groupId}:`, error);
-        
-        // Update error status for the group
-        await supabaseClient
-          .from('unified_processing_queue')
-          .update({
-            status: 'failed',
-            error_message: error.message,
-            retry_count: items[0].retry_count + 1
-          })
-          .eq('message_media_data->message->media_group_id', groupId);
-      }
-    }
+        // Upload to storage
+        const { error: uploadError } = await supabaseClient.storage
+          .from('media')
+          .upload(storagePath, fileBuffer, {
+            contentType: mediaData.file_type === 'photo' ? 'image/jpeg' :
+                        mediaData.file_type === 'video' ? 'video/mp4' :
+                        mediaData.file_type === 'document' ? 'application/pdf' :
+                        'application/octet-stream',
+            upsert: true
+          });
 
-    // Process single items
-    for (const item of singleItems) {
-      try {
-        await processMediaItem(supabaseClient, item, botToken);
-        
+        if (uploadError) throw uploadError;
+
+        // Get public URL
+        const { data: { publicUrl } } = await supabaseClient.storage
+          .from('media')
+          .getPublicUrl(storagePath);
+
+        // Update telegram_media record
+        const { error: mediaError } = await supabaseClient
+          .from('telegram_media')
+          .upsert({
+            file_id: mediaData.file_id,
+            file_unique_id: mediaData.file_unique_id,
+            file_type: mediaData.file_type,
+            public_url: publicUrl,
+            storage_path: storagePath,
+            message_media_data: item.message_media_data,
+            correlation_id: item.correlation_id,
+            message_id: item.id,
+            processed: true
+          });
+
+        if (mediaError) throw mediaError;
+
+        // Update queue status
         await supabaseClient
           .from('unified_processing_queue')
           .update({
@@ -124,15 +118,19 @@ serve(async (req) => {
           })
           .eq('id', item.id);
 
+        processed.push(item.id);
+        console.log(`Successfully processed item ${item.id}`);
+
       } catch (error) {
         console.error(`Error processing item ${item.id}:`, error);
+        errors.push({ id: item.id, error: error.message });
         
         await supabaseClient
           .from('unified_processing_queue')
           .update({
-            status: 'failed',
+            status: 'error',
             error_message: error.message,
-            retry_count: item.retry_count + 1
+            retry_count: (item.retry_count || 0) + 1
           })
           .eq('id', item.id);
       }
@@ -140,10 +138,9 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ 
-        processed: {
-          groups: mediaGroups.size,
-          single: singleItems.length
-        }
+        processed: processed.length,
+        errors: errors.length,
+        details: { processed, errors }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

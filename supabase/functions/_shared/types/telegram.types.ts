@@ -3,30 +3,51 @@ export interface TelegramMessage {
   chat: {
     id: number;
     type: string;
-    [key: string]: any;
+    title?: string;
+    username?: string;
   };
-  from?: Record<string, any>;
-  sender_chat?: Record<string, any>;
+  from?: {
+    id: number;
+    is_bot: boolean;
+    first_name: string;
+    last_name?: string;
+    username?: string;
+  };
   date: number;
-  text?: string;
-  caption?: string;
-  photo?: Array<{
-    file_id: string;
-    file_unique_id: string;
-    width: number;
-    height: number;
-    file_size?: number;
-  }>;
-  video?: {
-    file_id: string;
-    file_unique_id: string;
-    width: number;
-    height: number;
-    duration: number;
-    file_size?: number;
-  };
   media_group_id?: string;
-  [key: string]: any;
+  caption?: string;
+  photo?: TelegramPhotoSize[];
+  video?: TelegramVideo;
+  document?: TelegramDocument;
+}
+
+export interface TelegramPhotoSize {
+  file_id: string;
+  file_unique_id: string;
+  width: number;
+  height: number;
+  file_size?: number;
+}
+
+export interface TelegramVideo {
+  file_id: string;
+  file_unique_id: string;
+  width: number;
+  height: number;
+  duration: number;
+  thumb?: TelegramPhotoSize;
+  file_name?: string;
+  mime_type?: string;
+  file_size?: number;
+}
+
+export interface TelegramDocument {
+  file_id: string;
+  file_unique_id: string;
+  thumb?: TelegramPhotoSize;
+  file_name?: string;
+  mime_type?: string;
+  file_size?: number;
 }
 
 export interface WebhookUpdate {
@@ -35,21 +56,37 @@ export interface WebhookUpdate {
   channel_post?: TelegramMessage;
 }
 
-export interface WebhookResponse {
-  success: boolean;
-  message: string;
-  messageId?: string;
-  data?: {
-    analyzed_content?: Record<string, any>;
-    telegram_data: TelegramMessage;
-    status: 'pending' | 'processed' | 'failed';
+export interface MessageMediaData {
+  message: {
+    url: string;
+    media_group_id?: string;
+    caption?: string;
+    message_id: number;
+    chat_id: number;
+    date: number;
   };
-}
-
-export interface WebhookError {
-  error: string;
-  message_id?: number;
-  chat_id?: number;
-  status: 'pending' | 'processed' | 'failed';
-  retry_count: number;
+  sender: {
+    sender_info: Record<string, any>;
+    chat_info: Record<string, any>;
+  };
+  analysis: {
+    analyzed_content: Record<string, any>;
+  };
+  meta: {
+    created_at: string;
+    updated_at: string;
+    status: string;
+    error: string | null;
+    is_original_caption: boolean;
+    original_message_id: string | null;
+    correlation_id?: string;
+  };
+  media?: {
+    file_id: string;
+    file_unique_id: string;
+    file_type: string;
+    public_url?: string;
+    storage_path?: string;
+    mime_type?: string;
+  };
 }
