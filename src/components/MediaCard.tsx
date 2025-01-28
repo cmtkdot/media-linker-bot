@@ -52,6 +52,10 @@ const MediaCard = ({ item, onPreview, onEdit, relatedMedia = [] }: MediaCardProp
     setCurrentIndex((prev) => (prev - 1 + allMedia.length) % allMedia.length);
   };
 
+  // Find the original caption holder in the media group
+  const originalCaptionHolder = allMedia.find(m => m.is_original_caption) || currentItem;
+  const caption = getMediaCaption(originalCaptionHolder);
+
   return (
     <Card 
       className="group relative overflow-hidden"
@@ -88,7 +92,7 @@ const MediaCard = ({ item, onPreview, onEdit, relatedMedia = [] }: MediaCardProp
             ) : (
               <img
                 src={getDisplayUrl(currentItem)}
-                alt={getMediaCaption(currentItem)}
+                alt={caption || ''}
                 className="w-full h-full object-cover"
                 loading="lazy"
                 onError={(e) => {
@@ -164,6 +168,13 @@ const MediaCard = ({ item, onPreview, onEdit, relatedMedia = [] }: MediaCardProp
             </div>
           )}
 
+          {/* Original caption indicator */}
+          {currentItem.is_original_caption && (
+            <div className="absolute top-2 left-2 bg-green-500 text-white px-2 py-1 rounded-full text-xs">
+              Original Caption
+            </div>
+          )}
+
           {/* Hover overlay with actions */}
           <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity">
             <div className="absolute inset-0 flex items-center justify-center gap-2">
@@ -171,10 +182,13 @@ const MediaCard = ({ item, onPreview, onEdit, relatedMedia = [] }: MediaCardProp
                 <Eye className="w-4 h-4 mr-1" />
                 View
               </Button>
-              <Button size="sm" variant="secondary" onClick={() => onEdit(currentItem)}>
-                <Edit className="w-4 h-4 mr-1" />
-                Edit
-              </Button>
+              {/* Only show edit button for original caption holder or single media items */}
+              {(currentItem.is_original_caption || !currentItem.message_media_data?.message?.media_group_id) && (
+                <Button size="sm" variant="secondary" onClick={() => onEdit(currentItem)}>
+                  <Edit className="w-4 h-4 mr-1" />
+                  Edit
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -182,7 +196,7 @@ const MediaCard = ({ item, onPreview, onEdit, relatedMedia = [] }: MediaCardProp
         {/* Media info */}
         <div className="p-3">
           <p className="text-sm font-medium truncate">
-            {getMediaCaption(currentItem)}
+            {caption}
           </p>
           <p className="text-xs text-muted-foreground">
             {currentItem.file_type.charAt(0).toUpperCase() + currentItem.file_type.slice(1)}

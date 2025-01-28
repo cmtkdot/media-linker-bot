@@ -99,6 +99,12 @@ const MediaEditDialog = ({ editItem, onClose, onSave, onItemChange, formatDate }
     }
   };
 
+  // Don't allow editing if not original caption holder and part of a media group
+  const isEditable = editItem && (
+    editItem.is_original_caption || 
+    !editItem.message_media_data?.message?.media_group_id
+  );
+
   if (!editItem) return null;
 
   return (
@@ -106,31 +112,43 @@ const MediaEditDialog = ({ editItem, onClose, onSave, onItemChange, formatDate }
       <Dialog open={!!editItem} onOpenChange={() => onClose()}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Edit Media</DialogTitle>
+            <DialogTitle>
+              {isEditable ? "Edit Media" : "View Media"}
+              {editItem.is_original_caption && (
+                <span className="ml-2 text-xs bg-green-500 text-white px-2 py-1 rounded-full">
+                  Original Caption
+                </span>
+              )}
+            </DialogTitle>
           </DialogHeader>
           
           <MediaEditForm 
             editItem={editItem}
             onItemChange={onItemChange}
             formatDate={formatDate}
+            disabled={!isEditable}
           />
 
           <div className="flex justify-between">
-            <Button
-              variant="destructive"
-              onClick={() => setShowDeleteAlert(true)}
-              className="bg-red-500 hover:bg-red-600 text-white"
-            >
-              <Trash className="w-4 h-4 mr-2" />
-              Delete
-            </Button>
+            {isEditable && (
+              <Button
+                variant="destructive"
+                onClick={() => setShowDeleteAlert(true)}
+                className="bg-red-500 hover:bg-red-600 text-white"
+              >
+                <Trash className="w-4 h-4 mr-2" />
+                Delete
+              </Button>
+            )}
             <div className="space-x-2">
               <Button variant="outline" onClick={onClose}>
                 Cancel
               </Button>
-              <Button onClick={handleSave}>
-                Save changes
-              </Button>
+              {isEditable && (
+                <Button onClick={handleSave}>
+                  Save changes
+                </Button>
+              )}
             </div>
           </div>
         </DialogContent>
