@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { MediaFile } from './types.ts';
 import { uploadMediaToStorage } from './storage.ts';
+import { processMediaQueue } from './queue-processor.ts';
 
 export async function processMediaMessage(
   supabase: ReturnType<typeof createClient>,
@@ -57,7 +58,16 @@ export async function processMediaMessage(
       })
       .eq('id', messageId);
 
-    // The telegram_media table will be automatically updated via triggers
+    // Process media queue
+    await processMediaQueue(supabase, {
+      messageId,
+      correlationId,
+      messageMediaData: updatedMediaData,
+      telegramData: message.telegram_data,
+      isOriginalCaption: message.is_original_caption,
+      originalMessageId: message.original_message_id
+    });
+
     console.log('Media processing completed successfully');
 
   } catch (error) {
