@@ -13,12 +13,42 @@ INPUT FORMAT:
 Product entries follow pattern: "[Product Name] #[Vendor_UID][Date] x [Quantity] ([Notes])"
 
 EXTRACTION RULES:
-1. Product Name: Text before '#' or 'x', required
-2. Product Code: Starts with '#', includes vendor UID and date
-3. Vendor UID: 1-4 uppercase letters after '#' (e.g., CARL, FISH)
-4. Purchase Date: After vendor UID, format YYYY-MM-DD
-5. Quantity: Number after 'x'
-6. Notes: Text in parentheses or unmatched info
+1. Product Name: 
+- Extract all text before '#' or 'x' if no '#' exists
+- Remove trailing/leading whitespace
+- Required field
+
+2. Product Code:
+- Must start with '#'
+- Includes vendor UID and purchase date
+- Format: #[VENDOR_UID][DATE]
+- Nullable if not present
+
+3. Vendor UID:
+- 1-4 uppercase letters following '#'
+- Examples: CARL, FISH, SHR, Z
+- Nullable if no product code
+
+4. Purchase Date:
+- Follows vendor UID
+- Convert to format: YYYY-MM-DD
+- Handle two formats:
+  * 5 digits (mDDyy): First digit is month (pad with 0)
+  * 6 digits (mmDDyy): First two digits are month
+- Assume 2024 for year if only 2 digits
+- Nullable if no date
+
+5. Quantity:
+- Number following 'x'
+- Remove whitespace
+- Convert to integer
+- Nullable if not present
+
+6. Notes:
+- Any text within parentheses ()
+- Multiple notes should be joined with semicolon
+- Include any text that doesn't fit other fields
+- Nullable if no extra information
 
 Handle special cases:
 - Missing hashtag
