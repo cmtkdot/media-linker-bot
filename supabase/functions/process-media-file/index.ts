@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { withRetry, MediaProcessingError } from "../_shared/error-handler.ts";
 import { uploadMediaToStorage } from "../_shared/storage-manager.ts";
-import { validateMediaFile } from "../_shared/media-validators.ts";
+import { validateMediaFile } from "../_shared/media-handler.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',

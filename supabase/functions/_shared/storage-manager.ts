@@ -1,4 +1,4 @@
-import { generateSafeFileName, validateMediaFile, getMimeType } from './media-validators.ts';
+import { generateSafeFileName, validateMediaFile, getMimeType } from './media-handler.ts';
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const MAX_RETRIES = 3;
