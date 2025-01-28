@@ -12,12 +12,58 @@ function determineMessageType(message: any): string {
   return 'unknown';
 }
 
-// Add delay function for media group processing
+async function getOriginalCaptionData(supabase: any, mediaGroupId: string) {
+  const { data: originalMessage, error } = await supabase
+    .from('messages')
+    .select('*')
+    .eq('media_group_id', mediaGroupId)
+    .eq('is_original_caption', true)
+    .single();
+
+  if (error) {
+    console.error('Error fetching original caption:', error);
+    return null;
+  }
+
+  return originalMessage;
+}
+
+async function syncMessageMediaData(supabase: any, messageId: string, originalData: any) {
+  if (!originalData || !originalData.message_media_data) return;
+
+  const { error } = await supabase
+    .from('messages')
+    .update({
+      message_media_data: {
+        ...originalData.message_media_data,
+        meta: {
+          ...originalData.message_media_data.meta,
+          is_original_caption: false,
+          original_message_id: originalData.id
+        }
+      },
+      analyzed_content: originalData.analyzed_content,
+      product_name: originalData.product_name,
+      product_code: originalData.product_code,
+      quantity: originalData.quantity,
+      vendor_uid: originalData.vendor_uid,
+      purchase_date: originalData.purchase_date,
+      notes: originalData.notes,
+      caption: originalData.caption,
+      original_message_id: originalData.id,
+      is_original_caption: false
+    })
+    .eq('id', messageId);
+
+  if (error) {
+    console.error('Error syncing message media data:', error);
+  }
+}
+
 async function waitForMediaGroupCompletion(supabase: any, mediaGroupId: string, maxAttempts = 5): Promise<boolean> {
   console.log(`Waiting for media group ${mediaGroupId} to complete...`);
   
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    // Check if all media in the group is present
     const { data: messages, error } = await supabase
       .from('messages')
       .select('id, message_type, media_group_size')
@@ -36,13 +82,11 @@ async function waitForMediaGroupCompletion(supabase: any, mediaGroupId: string, 
 
     if (currentSize >= expectedSize) {
       if (hasVideo) {
-        // Add extra delay for video processing
         await new Promise(resolve => setTimeout(resolve, 3000));
       }
       return true;
     }
 
-    // Wait before next check
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
 
@@ -67,8 +111,7 @@ export async function handleWebhookUpdate(
       message_id: message.message_id,
       chat_id: message.chat.id,
       media_group_id: message.media_group_id,
-      has_caption: !!message.caption,
-      message_type: determineMessageType(message)
+      has_caption: !!message.caption
     });
 
     // Check for existing message
@@ -82,8 +125,7 @@ export async function handleWebhookUpdate(
     if (existingMessage) {
       console.log('Message already exists:', {
         message_id: message.message_id,
-        existing_id: existingMessage.id,
-        has_analyzed_content: !!existingMessage.analyzed_content
+        existing_id: existingMessage.id
       });
       return {
         success: true,
@@ -92,53 +134,60 @@ export async function handleWebhookUpdate(
       };
     }
 
-    // Get existing group messages if part of media group
-    let existingGroupMessages;
     let mediaGroupSize = 0;
+    let originalCaptionData = null;
     
     if (message.media_group_id) {
+      // Get original caption data if it exists
+      originalCaptionData = await getOriginalCaptionData(supabase, message.media_group_id);
+      
       const { data: groupMessages } = await supabase
         .from('messages')
         .select('id, is_original_caption, analyzed_content, message_type, media_group_size')
         .eq('media_group_id', message.media_group_id)
         .order('created_at', { ascending: true });
       
-      existingGroupMessages = groupMessages;
+      mediaGroupSize = groupMessages?.[0]?.media_group_size || 1;
       
-      // Calculate media group size
-      if (groupMessages?.[0]?.media_group_size) {
-        mediaGroupSize = groupMessages[0].media_group_size;
-      } else {
-        // Count media items in the message
-        if (message.photo) mediaGroupSize += 1;
-        if (message.video) mediaGroupSize += 1;
-        if (message.document) mediaGroupSize += 1;
-        if (message.animation) mediaGroupSize += 1;
+      // Calculate media group size if not already set
+      if (!mediaGroupSize) {
+        mediaGroupSize = message.photo ? 1 : 0;
+        mediaGroupSize += message.video ? 1 : 0;
+        mediaGroupSize += message.document ? 1 : 0;
+        mediaGroupSize += message.animation ? 1 : 0;
         mediaGroupSize = Math.max(mediaGroupSize, 1);
       }
 
-      // Wait for media group completion if this is a photo and there might be videos
       const messageType = determineMessageType(message);
       if (messageType === 'photo' && mediaGroupSize > 1) {
         const isComplete = await waitForMediaGroupCompletion(supabase, message.media_group_id);
         if (!isComplete) {
-          console.log('Media group not complete, continuing anyway but caption sync might be delayed');
+          console.log('Media group not complete, continuing anyway');
         }
       }
     }
 
-    // Generate message URL
     const chatId = message.chat.id.toString();
     const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
     
-    // Analyze message content
     const messageType = determineMessageType(message);
-    const analyzedContent = await analyzeWebhookMessage(message, existingGroupMessages);
+    const analyzedContent = await analyzeWebhookMessage(message, originalCaptionData);
     
-    // Build message data structure
-    const messageData = buildWebhookMessageData(message, messageUrl, analyzedContent);
+    let messageData = buildWebhookMessageData(message, messageUrl, analyzedContent);
 
-    // Create message record
+    // If we have original caption data, merge it with the current message data
+    if (originalCaptionData && !analyzedContent.is_original_caption) {
+      messageData = {
+        ...messageData,
+        analysis: originalCaptionData.message_media_data.analysis,
+        meta: {
+          ...messageData.meta,
+          is_original_caption: false,
+          original_message_id: originalCaptionData.id
+        }
+      };
+    }
+
     const { data: messageRecord, error: messageError } = await supabase
       .from('messages')
       .insert({
@@ -149,14 +198,14 @@ export async function handleWebhookUpdate(
         telegram_data: message,
         message_url: messageUrl,
         correlation_id: correlationId,
-        caption: message.caption,
+        caption: message.caption || originalCaptionData?.caption,
         text: message.text,
         media_group_id: message.media_group_id,
         media_group_size: mediaGroupSize,
         status: 'pending',
         is_original_caption: analyzedContent.is_original_caption,
-        original_message_id: analyzedContent.original_message_id,
-        analyzed_content: analyzedContent.analyzed_content,
+        original_message_id: originalCaptionData?.id,
+        analyzed_content: analyzedContent.analyzed_content || originalCaptionData?.analyzed_content,
         message_media_data: messageData,
         last_group_message_at: new Date().toISOString()
       })
@@ -168,13 +217,18 @@ export async function handleWebhookUpdate(
       throw messageError;
     }
 
+    // If this is part of a media group and not the original caption,
+    // sync with the original caption data
+    if (message.media_group_id && originalCaptionData && !analyzedContent.is_original_caption) {
+      await syncMessageMediaData(supabase, messageRecord.id, originalCaptionData);
+    }
+
     // Queue for processing if media type
     if (messageType === 'photo' || messageType === 'video') {
       let shouldQueue = true;
       let shouldMarkProcessed = false;
 
       if (message.media_group_id) {
-        // Count current group messages
         const { count } = await supabase
           .from('messages')
           .select('id', { count: 'exact' })
@@ -216,12 +270,6 @@ export async function handleWebhookUpdate(
           items_count: message.media_group_id ? mediaGroupSize : 1
         });
         await queueWebhookMessage(supabase, messageData, correlationId, messageType);
-      } else {
-        console.log('Waiting for more media group items before queueing:', {
-          media_group_id: message.media_group_id,
-          current_count: count,
-          expected_size: mediaGroupSize
-        });
       }
     }
 
