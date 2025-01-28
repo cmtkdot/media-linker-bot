@@ -1,104 +1,92 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { analyzeWebhookMessage } from './webhook-message-analyzer.ts';
-import { buildWebhookMessageData } from './webhook-message-builder.ts';
-import { queueWebhookMessage } from './webhook-queue-manager.ts';
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
+import { withDatabaseRetry } from "../_shared/database-retry.ts";
+import { analyzeWebhookMessage } from "../_shared/webhook-message-analyzer.ts";
+import { buildWebhookMessageData } from "../_shared/webhook-message-builder.ts";
 
-function determineMessageType(message: any): string {
-  if (message.text && !message.photo && !message.video && !message.document && !message.animation) return 'text';
-  if (message.photo && message.photo.length > 0) return 'photo';
-  if (message.video) return 'video';
-  if (message.document) return 'document';
-  if (message.animation) return 'animation';
-  return 'unknown';
-}
+const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN') || '';
+const TELEGRAM_WEBHOOK_SECRET = Deno.env.get('TELEGRAM_WEBHOOK_SECRET') || '';
 
-async function getOriginalCaptionData(supabase: any, mediaGroupId: string) {
-  const { data: originalMessage, error } = await supabase
-    .from('messages')
-    .select('*')
-    .eq('media_group_id', mediaGroupId)
-    .eq('is_original_caption', true)
-    .single();
-
-  if (error) {
-    console.error('Error fetching original caption:', error);
-    return null;
-  }
-
-  return originalMessage;
-}
-
-async function syncMessageMediaData(supabase: any, messageId: string, originalData: any) {
-  if (!originalData || !originalData.message_media_data) return;
-
-  const { error } = await supabase
-    .from('messages')
-    .update({
-      message_media_data: {
-        ...originalData.message_media_data,
-        meta: {
-          ...originalData.message_media_data.meta,
-          is_original_caption: false,
-          original_message_id: originalData.id
-        }
-      },
-      analyzed_content: originalData.analyzed_content,
-      product_name: originalData.product_name,
-      product_code: originalData.product_code,
-      quantity: originalData.quantity,
-      vendor_uid: originalData.vendor_uid,
-      purchase_date: originalData.purchase_date,
-      notes: originalData.notes,
-      caption: originalData.caption,
-      original_message_id: originalData.id,
-      is_original_caption: false
-    })
-    .eq('id', messageId);
-
-  if (error) {
-    console.error('Error syncing message media data:', error);
-  }
-}
-
-async function waitForMediaGroupCompletion(supabase: any, mediaGroupId: string, maxAttempts = 5): Promise<boolean> {
-  console.log(`Waiting for media group ${mediaGroupId} to complete...`);
-  
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const { data: messages, error } = await supabase
-      .from('messages')
-      .select('id, message_type, media_group_size')
-      .eq('media_group_id', mediaGroupId);
-
-    if (error) {
-      console.error('Error checking media group:', error);
-      continue;
+serve(async (req) => {
+  try {
+    // Handle CORS
+    if (req.method === 'OPTIONS') {
+      return new Response('ok', { headers: corsHeaders });
     }
 
-    const hasVideo = messages.some(m => m.message_type === 'video');
-    const expectedSize = messages[0]?.media_group_size || 0;
-    const currentSize = messages.length;
+    // Validate webhook secret
+    const secretHeader = req.headers.get('X-Telegram-Bot-Api-Secret-Token');
+    if (!secretHeader || secretHeader !== TELEGRAM_WEBHOOK_SECRET) {
+      console.error('Invalid webhook secret');
+      return new Response(
+        JSON.stringify({ error: 'Invalid webhook secret' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+      );
+    }
 
-    console.log(`Media group status: ${currentSize}/${expectedSize} messages, has video: ${hasVideo}`);
+    // Initialize Supabase client with retry wrapper
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
 
-    if (currentSize >= expectedSize) {
-      if (hasVideo) {
-        await new Promise(resolve => setTimeout(resolve, 3000));
+    const update = await req.json();
+    const correlationId = crypto.randomUUID();
+
+    console.log('Received webhook update:', {
+      update_id: update.update_id,
+      has_message: !!update.message,
+      has_channel_post: !!update.channel_post,
+      correlation_id: correlationId
+    });
+
+    // Process webhook update with retry logic
+    const result = await withDatabaseRetry(
+      async () => handleWebhookUpdate(update, supabaseClient, correlationId),
+      0,
+      'webhook_handler'
+    );
+
+    console.log('Webhook processing completed:', {
+      success: result.success,
+      message_id: result.messageId,
+      correlation_id: correlationId
+    });
+
+    return new Response(
+      JSON.stringify(result),
+      { 
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json' 
+        } 
       }
-      return true;
-    }
+    );
 
-    await new Promise(resolve => setTimeout(resolve, 1000));
+  } catch (error) {
+    console.error('Error in webhook handler:', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    return new Response(
+      JSON.stringify({ 
+        error: error.message,
+        details: error.stack
+      }),
+      { 
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json' 
+        }, 
+        status: 500 
+      }
+    );
   }
+});
 
-  console.log(`Media group ${mediaGroupId} incomplete after ${maxAttempts} attempts`);
-  return false;
-}
-
-export async function handleWebhookUpdate(
-  update: any, 
-  supabase: any,
-  correlationId: string
-) {
+async function handleWebhookUpdate(update: any, supabase: any, correlationId: string) {
   const message = update.message || update.channel_post;
   if (!message) {
     console.log('No message in update');
@@ -139,8 +127,6 @@ export async function handleWebhookUpdate(
     
     if (message.media_group_id) {
       // Get original caption data if it exists
-      originalCaptionData = await getOriginalCaptionData(supabase, message.media_group_id);
-      
       const { data: groupMessages } = await supabase
         .from('messages')
         .select('id, is_original_caption, analyzed_content, message_type, media_group_size')
@@ -157,36 +143,18 @@ export async function handleWebhookUpdate(
         mediaGroupSize += message.animation ? 1 : 0;
         mediaGroupSize = Math.max(mediaGroupSize, 1);
       }
-
-      const messageType = determineMessageType(message);
-      if (messageType === 'photo' && mediaGroupSize > 1) {
-        const isComplete = await waitForMediaGroupCompletion(supabase, message.media_group_id);
-        if (!isComplete) {
-          console.log('Media group not complete, continuing anyway');
-        }
-      }
     }
 
     const chatId = message.chat.id.toString();
     const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
     
-    const messageType = determineMessageType(message);
-    const analyzedContent = await analyzeWebhookMessage(message, originalCaptionData);
-    
-    let messageData = buildWebhookMessageData(message, messageUrl, analyzedContent);
+    const messageType = message.photo ? 'photo' : 
+                       message.video ? 'video' : 
+                       message.document ? 'document' : 
+                       message.animation ? 'animation' : 'text';
 
-    // If we have original caption data, merge it with the current message data
-    if (originalCaptionData && !analyzedContent.is_original_caption) {
-      messageData = {
-        ...messageData,
-        analysis: originalCaptionData.message_media_data.analysis,
-        meta: {
-          ...messageData.meta,
-          is_original_caption: false,
-          original_message_id: originalCaptionData.id
-        }
-      };
-    }
+    const analyzedContent = await analyzeWebhookMessage(message, originalCaptionData);
+    const messageData = buildWebhookMessageData(message, messageUrl, analyzedContent);
 
     const { data: messageRecord, error: messageError } = await supabase
       .from('messages')
@@ -206,8 +174,7 @@ export async function handleWebhookUpdate(
         is_original_caption: analyzedContent.is_original_caption,
         original_message_id: originalCaptionData?.id,
         analyzed_content: analyzedContent.analyzed_content || originalCaptionData?.analyzed_content,
-        message_media_data: messageData,
-        last_group_message_at: new Date().toISOString()
+        message_media_data: messageData
       })
       .select()
       .single();
@@ -215,62 +182,6 @@ export async function handleWebhookUpdate(
     if (messageError) {
       console.error('Error creating message record:', messageError);
       throw messageError;
-    }
-
-    // If this is part of a media group and not the original caption,
-    // sync with the original caption data
-    if (message.media_group_id && originalCaptionData && !analyzedContent.is_original_caption) {
-      await syncMessageMediaData(supabase, messageRecord.id, originalCaptionData);
-    }
-
-    // Queue for processing if media type
-    if (messageType === 'photo' || messageType === 'video') {
-      let shouldQueue = true;
-      let shouldMarkProcessed = false;
-
-      if (message.media_group_id) {
-        const { count } = await supabase
-          .from('messages')
-          .select('id', { count: 'exact' })
-          .eq('media_group_id', message.media_group_id);
-
-        shouldQueue = count >= mediaGroupSize;
-        shouldMarkProcessed = shouldQueue;
-      } else {
-        shouldMarkProcessed = true;
-      }
-
-      if (shouldMarkProcessed) {
-        const updateQuery = message.media_group_id
-          ? supabase
-              .from('messages')
-              .update({
-                status: 'processed',
-                processed_at: new Date().toISOString()
-              })
-              .eq('media_group_id', message.media_group_id)
-          : supabase
-              .from('messages')
-              .update({
-                status: 'processed',
-                processed_at: new Date().toISOString()
-              })
-              .eq('id', messageRecord.id);
-
-        const { error: updateError } = await updateQuery;
-        if (updateError) {
-          console.error('Error updating message status:', updateError);
-        }
-      }
-
-      if (shouldQueue) {
-        console.log('Queueing for processing:', {
-          message_id: message.message_id,
-          media_group_id: message.media_group_id,
-          items_count: message.media_group_id ? mediaGroupSize : 1
-        });
-        await queueWebhookMessage(supabase, messageData, correlationId, messageType);
-      }
     }
 
     return {

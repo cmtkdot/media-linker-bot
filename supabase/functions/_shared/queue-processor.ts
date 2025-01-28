@@ -7,8 +7,8 @@ interface QueueItem {
   id: string;
   message_media_data: {
     message: {
-      media_group_id?: string;
       message_id: number;
+      media_group_id?: string;
     };
     media: {
       file_id: string;
@@ -36,7 +36,6 @@ async function isMediaGroupComplete(supabase: any, mediaGroupId: string): Promis
     return false;
   }
 
-  // Group is complete if all messages have analyzed_content
   return messages.every(msg => msg.analyzed_content !== null);
 }
 
@@ -51,7 +50,6 @@ async function waitForMediaGroupCompletion(supabase: any, mediaGroupId: string, 
       return true;
     }
 
-    // Wait for 2 seconds before next check
     await new Promise(resolve => setTimeout(resolve, 2000));
   }
 
@@ -62,7 +60,6 @@ async function waitForMediaGroupCompletion(supabase: any, mediaGroupId: string, 
 export async function processMediaGroups(supabase: any, items: QueueItem[]) {
   const mediaGroups = new Map<string, QueueItem[]>();
   
-  // Group items by media_group_id
   items.forEach(item => {
     const groupId = item.message_media_data?.message?.media_group_id;
     if (groupId) {
@@ -76,23 +73,13 @@ export async function processMediaGroups(supabase: any, items: QueueItem[]) {
   console.log(`Processing ${mediaGroups.size} media groups`);
 
   for (const [groupId, groupItems] of mediaGroups) {
-    console.log(`Checking media group ${groupId} with ${groupItems.length} items`);
-    
-    // Wait for group completion before processing
-    const isComplete = await waitForMediaGroupCompletion(supabase, groupId);
-    
-    if (!isComplete) {
-      console.log(`Skipping incomplete media group ${groupId}`);
-      continue;
-    }
-
+    console.log(`Processing media group ${groupId} with ${groupItems.length} items`);
     await processMediaGroup(supabase, groupId, groupItems);
   }
 }
 
 async function processMediaGroup(supabase: any, groupId: string, items: QueueItem[]) {
   try {
-    // Find the original caption holder
     const originalItem = items.find(item => 
       item.message_media_data?.meta?.is_original_caption
     );
@@ -106,7 +93,6 @@ async function processMediaGroup(supabase: any, groupId: string, items: QueueIte
       has_analyzed_content: !!analyzedContent
     });
 
-    // Process each item in the group
     for (const item of items) {
       if (analyzedContent && !item.message_media_data?.meta?.is_original_caption) {
         item.message_media_data.analysis.analyzed_content = analyzedContent;
@@ -114,16 +100,6 @@ async function processMediaGroup(supabase: any, groupId: string, items: QueueIte
 
       await processQueueItem(supabase, item, originalItem);
     }
-
-    // Mark items as processed
-    const itemIds = items.map(item => item.id);
-    await supabase
-      .from('unified_processing_queue')
-      .update({
-        status: 'processed',
-        processed_at: new Date().toISOString()
-      })
-      .in('id', itemIds);
 
   } catch (error) {
     console.error(`Error processing media group ${groupId}:`, error);
@@ -149,7 +125,6 @@ export async function processQueueItem(supabase: any, item: QueueItem, originalI
     if (existingMedia) {
       console.log(`Media ${fileUniqueId} already exists, updating analyzed content`);
       
-      // Update existing media with latest analyzed content and original message reference
       const { error: updateError } = await supabase
         .from('telegram_media')
         .update({
@@ -205,28 +180,9 @@ export async function processQueueItem(supabase: any, item: QueueItem, originalI
 
     if (insertError) throw insertError;
 
-    // Mark queue item as processed
-    await supabase
-      .from('unified_processing_queue')
-      .update({
-        status: 'processed',
-        processed_at: new Date().toISOString()
-      })
-      .eq('id', item.id);
-
     console.log(`Successfully processed media item ${fileUniqueId}`);
   } catch (error) {
     console.error(`Error processing queue item:`, error);
-    
-    await supabase
-      .from('unified_processing_queue')
-      .update({
-        status: 'error',
-        error_message: error.message,
-        processed_at: new Date().toISOString()
-      })
-      .eq('id', item.id);
-
     throw error;
   }
 }

@@ -546,10 +546,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      cleanup_processed_queue_items: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
       create_glide_sync_table: {
         Args: {
           p_table_name: string
@@ -567,10 +563,6 @@ export type Database = {
           media_group_id: string
         }
         Returns: string
-      }
-      handle_retry_logic: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
       }
       search_telegram_media: {
         Args: {
