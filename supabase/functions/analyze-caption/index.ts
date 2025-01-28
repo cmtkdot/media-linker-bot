@@ -11,34 +11,57 @@ const KNOWN_VENDORS = [
   'BRC', 'BCHO'
 ];
 
-function parseProductCode(text: string): { product_code: string | null; vendor_uid: string | null; purchase_date: string | null } {
-  const codeMatch = text.match(/#([A-Z]+)(\d{5,6})/);
-  if (!codeMatch) return { product_code: null, vendor_uid: null, purchase_date: null };
+function parseProductCode(text: string): { product_code: string | null; vendor_uid: string | null; purchase_date: string | null; validation_errors: string[] } {
+  const errors: string[] = [];
+  const codeMatch = text.match(/#([A-Z]+)(\d*)/);
+  
+  if (!codeMatch) {
+    return { 
+      product_code: null, 
+      vendor_uid: null, 
+      purchase_date: null,
+      validation_errors: []
+    };
+  }
 
   const [fullMatch, vendorPart, datePart] = codeMatch;
-  const vendor = KNOWN_VENDORS.find(v => vendorPart.startsWith(v)) || null;
+  const vendor = KNOWN_VENDORS.find(v => vendorPart.startsWith(v));
   
+  if (!vendor) {
+    errors.push(`Unknown vendor code: ${vendorPart}`);
+  }
+
   let purchaseDate: string | null = null;
+  let formattedCode = fullMatch;
+
   if (datePart) {
     const dateLen = datePart.length;
-    const month = dateLen === 5 ? `0${datePart[0]}` : datePart.substring(0, 2);
-    const day = dateLen === 5 ? datePart.substring(1, 3) : datePart.substring(2, 4);
-    const year = `20${datePart.slice(-2)}`;
-    
-    try {
-      const date = new Date(`${year}-${month}-${day}`);
-      if (!isNaN(date.getTime())) {
-        purchaseDate = date.toISOString().split('T')[0];
+    if (dateLen === 5 || dateLen === 6) {
+      try {
+        const month = dateLen === 5 ? `0${datePart[0]}` : datePart.substring(0, 2);
+        const day = dateLen === 5 ? datePart.substring(1, 3) : datePart.substring(2, 4);
+        const year = `20${datePart.slice(-2)}`;
+        
+        const date = new Date(`${year}-${month}-${day}`);
+        if (!isNaN(date.getTime())) {
+          purchaseDate = date.toISOString().split('T')[0];
+        } else {
+          errors.push(`Invalid date format in code: ${datePart}`);
+        }
+      } catch {
+        errors.push(`Failed to parse date from code: ${datePart}`);
       }
-    } catch {
-      purchaseDate = null;
+    } else if (datePart.length > 0) {
+      formattedCode = `${vendorPart}-${datePart}`;
+      errors.push(`Invalid date length in code: ${datePart}`);
     }
   }
 
   return {
-    product_code: fullMatch,
-    vendor_uid: vendor,
-    purchase_date: purchaseDate
+    product_code: formattedCode,
+    vendor_uid: vendor || null,
+    purchase_date: purchaseDate,
+    validation_errors: errors
   };
 }
 
@@ -47,12 +70,31 @@ function parseQuantity(text: string): number | null {
   return quantityMatch ? parseInt(quantityMatch[1]) : null;
 }
 
-function parseNotes(text: string): string | null {
+function parseNotes(text: string, validationErrors: string[]): string | null {
   const notes: string[] = [];
+  
+  // Get parenthetical content
   const noteMatches = text.matchAll(/\((.*?)\)/g);
   for (const match of noteMatches) {
     if (match[1]) notes.push(match[1].trim());
   }
+
+  // Add validation errors as notes
+  if (validationErrors.length > 0) {
+    notes.push(`Validation errors: ${validationErrors.join('; ')}`);
+  }
+
+  // Get remaining text that's not part of other fields
+  const remainingText = text
+    .replace(/#[A-Z]+\d*\s*/g, '') // Remove product code
+    .replace(/x\s*\d+/g, '') // Remove quantity
+    .replace(/\(.*?\)/g, '') // Remove parenthetical content
+    .trim();
+
+  if (remainingText && !remainingText.match(/^[A-Za-z\s]+$/)) {
+    notes.push(`Additional content: ${remainingText}`);
+  }
+
   return notes.length > 0 ? notes.join('; ') : null;
 }
 
@@ -83,8 +125,8 @@ serve(async (req) => {
     const systemPrompt = `You are a product data extractor. Extract ONLY the product name from the given text.
     Exclude any product codes (starting with #), quantities (x followed by numbers), or notes (in parentheses).
     If no clear product name is found, return null.
-    Example input: "Blue Cookies #WOO12324 x2 (sample)"
-    Example output: "Blue Cookies"`;
+    Example input: "Blue Dream #CHAD120523 x2 (sample)"
+    Example output: "Blue Dream"`;
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
@@ -98,10 +140,10 @@ serve(async (req) => {
 
     const productName = completion.choices[0].message.content.trim();
     
-    // Parse additional fields manually
-    const { product_code, vendor_uid, purchase_date } = parseProductCode(caption);
+    // Parse additional fields with validation
+    const { product_code, vendor_uid, purchase_date, validation_errors } = parseProductCode(caption);
     const quantity = parseQuantity(caption);
-    const notes = parseNotes(caption);
+    const notes = parseNotes(caption, validation_errors);
 
     const analyzedContent = {
       raw_text: caption,
