@@ -33,37 +33,6 @@ function generateFileName(fileUniqueId: string, fileType: string): string {
   return `${safeId}.${extension}`;
 }
 
-// Helper function to get highest quality photo
-async function getHighestQualityPhoto(fileId: string, botToken: string): Promise<ArrayBuffer> {
-  console.log('Getting file info for:', fileId);
-  
-  // Get file info from Telegram
-  const response = await fetch(
-    `https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`
-  );
-
-  if (!response.ok) {
-    throw new Error(`Failed to get file info: ${response.statusText}`);
-  }
-
-  const data = await response.json();
-  
-  if (!data.ok || !data.result.file_path) {
-    throw new Error('Failed to get file path from Telegram');
-  }
-
-  // Download the actual file
-  const downloadUrl = `https://api.telegram.org/file/bot${botToken}/${data.result.file_path}`;
-  console.log('Downloading from:', downloadUrl);
-  
-  const fileResponse = await fetch(downloadUrl);
-  if (!fileResponse.ok) {
-    throw new Error(`Failed to download file: ${fileResponse.statusText}`);
-  }
-
-  return await fileResponse.arrayBuffer();
-}
-
 export async function uploadMediaToStorage(
   supabase: any,
   buffer: ArrayBuffer,
@@ -114,11 +83,32 @@ export async function uploadMediaToStorage(
       }
     }
 
-    // For photos, get the highest quality version from Telegram
+    // For photos, use the provided file_id directly since Telegram already gives us the best quality
     let uploadBuffer = buffer;
     if (fileType === "photo" && botToken && fileId) {
-      console.log("Getting highest quality photo from Telegram");
-      uploadBuffer = await getHighestQualityPhoto(fileId, botToken);
+      console.log("Getting photo from Telegram");
+      const response = await fetch(
+        `https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to get file info: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      if (!data.ok || !data.result.file_path) {
+        throw new Error('Failed to get file path from Telegram');
+      }
+
+      const downloadUrl = `https://api.telegram.org/file/bot${botToken}/${data.result.file_path}`;
+      const fileResponse = await fetch(downloadUrl);
+      
+      if (!fileResponse.ok) {
+        throw new Error(`Failed to download file: ${fileResponse.statusText}`);
+      }
+
+      uploadBuffer = await fileResponse.arrayBuffer();
     }
 
     console.log("Uploading new file to storage:", {
