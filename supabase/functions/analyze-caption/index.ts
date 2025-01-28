@@ -11,23 +11,6 @@ const KNOWN_VENDORS = [
   'BRC', 'BCHO'
 ];
 
-interface ProductInfo {
-  product_name: string | null;
-  product_code: string | null;
-  quantity: number | null;
-  vendor_uid: string | null;
-  purchase_date: string | null;
-  notes: string | null;
-}
-
-interface AnalyzedContent {
-  raw_text: string;
-  extracted_data: ProductInfo;
-  confidence: number;
-  timestamp: string;
-  model_version: string;
-}
-
 function parseProductCode(text: string): { product_code: string | null; vendor_uid: string | null; purchase_date: string | null } {
   const codeMatch = text.match(/#([A-Z]+)(\d{5,6})/);
   if (!codeMatch) return { product_code: null, vendor_uid: null, purchase_date: null };
@@ -35,7 +18,6 @@ function parseProductCode(text: string): { product_code: string | null; vendor_u
   const [fullMatch, vendorPart, datePart] = codeMatch;
   const vendor = KNOWN_VENDORS.find(v => vendorPart.startsWith(v)) || null;
   
-  // Parse date
   let purchaseDate: string | null = null;
   if (datePart) {
     const dateLen = datePart.length;
@@ -98,9 +80,11 @@ serve(async (req) => {
       apiKey: Deno.env.get('OPENAI_API_KEY')
     });
 
-    const systemPrompt = `You are a product data extractor. Extract the product name from the given text.
-    Return ONLY the product name, excluding any codes, quantities, or notes.
-    If no clear product name is found, return null.`;
+    const systemPrompt = `You are a product data extractor. Extract ONLY the product name from the given text.
+    Exclude any product codes (starting with #), quantities (x followed by numbers), or notes (in parentheses).
+    If no clear product name is found, return null.
+    Example input: "Blue Cookies #WOO12324 x2 (sample)"
+    Example output: "Blue Cookies"`;
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
@@ -119,7 +103,7 @@ serve(async (req) => {
     const quantity = parseQuantity(caption);
     const notes = parseNotes(caption);
 
-    const analyzedContent: AnalyzedContent = {
+    const analyzedContent = {
       raw_text: caption,
       extracted_data: {
         product_name: productName === "null" ? null : productName,
