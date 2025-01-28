@@ -56,17 +56,34 @@ export async function handleWebhookUpdate(
 
     // Get existing group messages if part of media group
     let existingGroupMessages;
+    let mediaGroupSize = null;
+    
     if (message.media_group_id) {
       const { data: groupMessages } = await supabase
         .from('messages')
-        .select('id, is_original_caption, analyzed_content, message_type')
+        .select('id, is_original_caption, analyzed_content, message_type, media_group_size')
         .eq('media_group_id', message.media_group_id)
         .order('created_at', { ascending: true });
       
       existingGroupMessages = groupMessages;
+      
+      // Try to determine media group size
+      if (message.media_group_size) {
+        mediaGroupSize = message.media_group_size;
+      } else if (groupMessages?.[0]?.media_group_size) {
+        mediaGroupSize = groupMessages[0].media_group_size;
+      } else {
+        // Estimate size from Telegram's media array
+        mediaGroupSize = message.photo?.length || 
+                        (message.video ? 1 : 0) || 
+                        (message.document ? 1 : 0) || 
+                        1;
+      }
+
       console.log('Found existing group messages:', {
         media_group_id: message.media_group_id,
         message_count: groupMessages?.length,
+        media_group_size: mediaGroupSize,
         messages: groupMessages?.map(m => ({
           id: m.id,
           is_original_caption: m.is_original_caption,
@@ -85,7 +102,8 @@ export async function handleWebhookUpdate(
     console.log('Analyzing message content:', {
       message_type: messageType,
       has_caption: !!message.caption,
-      media_group_id: message.media_group_id
+      media_group_id: message.media_group_id,
+      media_group_size: mediaGroupSize
     });
 
     const analyzedContent = await analyzeWebhookMessage(message, existingGroupMessages);
@@ -118,11 +136,13 @@ export async function handleWebhookUpdate(
         caption: message.caption,
         text: message.text,
         media_group_id: message.media_group_id,
-        status: 'pending',
+        media_group_size: mediaGroupSize,
+        status: 'pending',  // Changed from processed to pending
         is_original_caption: analyzedContent.is_original_caption,
         original_message_id: analyzedContent.original_message_id,
         analyzed_content: analyzedContent.analyzed_content,
-        message_media_data: messageData
+        message_media_data: messageData,
+        last_group_message_at: new Date().toISOString()  // Add timestamp for group tracking
       })
       .select()
       .single();
@@ -136,7 +156,8 @@ export async function handleWebhookUpdate(
       id: messageRecord.id,
       message_type: messageRecord.message_type,
       is_original_caption: messageRecord.is_original_caption,
-      has_analyzed_content: !!messageRecord.analyzed_content
+      has_analyzed_content: !!messageRecord.analyzed_content,
+      media_group_size: messageRecord.media_group_size
     });
 
     // Queue message for processing if it's a media message
@@ -145,7 +166,9 @@ export async function handleWebhookUpdate(
       console.log('Queued message for processing:', {
         message_id: message.message_id,
         message_type: messageType,
-        correlation_id: correlationId
+        correlation_id: correlationId,
+        media_group_id: message.media_group_id,
+        media_group_size: mediaGroupSize
       });
     }
 
