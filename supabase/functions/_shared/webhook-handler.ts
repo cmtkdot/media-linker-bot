@@ -29,7 +29,8 @@ export async function handleWebhookUpdate(
       message_id: message.message_id,
       chat_id: message.chat.id,
       media_group_id: message.media_group_id,
-      has_caption: !!message.caption
+      has_caption: !!message.caption,
+      message_type: determineMessageType(message)
     });
 
     // Check for existing message
@@ -43,7 +44,8 @@ export async function handleWebhookUpdate(
     if (existingMessage) {
       console.log('Message already exists:', {
         message_id: message.message_id,
-        existing_id: existingMessage.id
+        existing_id: existingMessage.id,
+        has_analyzed_content: !!existingMessage.analyzed_content
       });
       return {
         success: true,
@@ -57,11 +59,21 @@ export async function handleWebhookUpdate(
     if (message.media_group_id) {
       const { data: groupMessages } = await supabase
         .from('messages')
-        .select('id, is_original_caption, analyzed_content')
+        .select('id, is_original_caption, analyzed_content, message_type')
         .eq('media_group_id', message.media_group_id)
         .order('created_at', { ascending: true });
       
       existingGroupMessages = groupMessages;
+      console.log('Found existing group messages:', {
+        media_group_id: message.media_group_id,
+        message_count: groupMessages?.length,
+        messages: groupMessages?.map(m => ({
+          id: m.id,
+          is_original_caption: m.is_original_caption,
+          has_analyzed_content: !!m.analyzed_content,
+          message_type: m.message_type
+        }))
+      });
     }
 
     // Generate message URL
@@ -70,10 +82,27 @@ export async function handleWebhookUpdate(
     
     // Analyze message content
     const messageType = determineMessageType(message);
+    console.log('Analyzing message content:', {
+      message_type: messageType,
+      has_caption: !!message.caption,
+      media_group_id: message.media_group_id
+    });
+
     const analyzedContent = await analyzeWebhookMessage(message, existingGroupMessages);
+    console.log('Analysis result:', {
+      is_original_caption: analyzedContent.is_original_caption,
+      has_analyzed_content: !!analyzedContent.analyzed_content,
+      original_message_id: analyzedContent.original_message_id
+    });
     
     // Build message data structure
     const messageData = buildWebhookMessageData(message, messageUrl, analyzedContent);
+    console.log('Built message data:', {
+      message_id: messageData.message.message_id,
+      has_caption: !!messageData.message.caption,
+      has_analysis: !!messageData.analysis.analyzed_content,
+      meta: messageData.meta
+    });
 
     // Create message record
     const { data: messageRecord, error: messageError } = await supabase
@@ -98,11 +127,26 @@ export async function handleWebhookUpdate(
       .select()
       .single();
 
-    if (messageError) throw messageError;
+    if (messageError) {
+      console.error('Error creating message record:', messageError);
+      throw messageError;
+    }
+
+    console.log('Created message record:', {
+      id: messageRecord.id,
+      message_type: messageRecord.message_type,
+      is_original_caption: messageRecord.is_original_caption,
+      has_analyzed_content: !!messageRecord.analyzed_content
+    });
 
     // Queue message for processing if it's a media message
     if (messageType === 'photo' || messageType === 'video') {
       await queueWebhookMessage(supabase, messageData, correlationId, messageType);
+      console.log('Queued message for processing:', {
+        message_id: message.message_id,
+        message_type: messageType,
+        correlation_id: correlationId
+      });
     }
 
     return {

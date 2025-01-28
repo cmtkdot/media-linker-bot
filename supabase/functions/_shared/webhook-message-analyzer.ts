@@ -15,7 +15,8 @@ export async function analyzeWebhookMessage(
     message_id: message.message_id,
     has_caption: !!message.caption,
     media_group_id: message.media_group_id,
-    message_type: message.photo ? 'photo' : message.video ? 'video' : 'other'
+    message_type: message.photo ? 'photo' : message.video ? 'video' : 'other',
+    existing_messages_count: existingGroupMessages?.length
   });
 
   // If message is part of a media group
@@ -25,7 +26,8 @@ export async function analyzeWebhookMessage(
     if (existingCaptionHolder) {
       console.log('Using existing caption holder:', {
         original_message_id: existingCaptionHolder.id,
-        has_analyzed_content: !!existingCaptionHolder.analyzed_content
+        has_analyzed_content: !!existingCaptionHolder.analyzed_content,
+        message_type: existingCaptionHolder.message_type
       });
       
       return {
@@ -38,7 +40,17 @@ export async function analyzeWebhookMessage(
 
   // This message will be the caption holder if it has a caption
   if (message.caption) {
+    console.log('Analyzing new caption:', {
+      caption: message.caption,
+      message_type: message.photo ? 'photo' : message.video ? 'video' : 'other'
+    });
+
     const analyzed_content = await analyzeCaptionWithAI(message.caption);
+    console.log('Caption analysis result:', {
+      has_analyzed_content: !!analyzed_content,
+      extracted_data: analyzed_content?.analyzed_content?.extracted_data
+    });
+
     return {
       analyzed_content,
       is_original_caption: true,
