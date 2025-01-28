@@ -75,23 +75,67 @@ async function analyzeWithAI(input: string): Promise<AnalyzedContent | null> {
       apiKey: Deno.env.get('OPENAI_API_KEY'),
     });
 
-    const prompt = `Analyze this cannabis product information and extract structured data:
-    "${input}"
-    
-    Format the response as JSON with these fields:
-    - product_name: The product name (before # or x)
-    - product_code: The full code after # (if present)
-    - vendor_uid: Letters after # (if present)
-    - purchase_date: Date in YYYY-MM-DD format (if present)
-    - quantity: Number after x (if present)
-    - notes: Any text in parentheses (if present)`;
+    const prompt = `Analyze this cannabis product information and extract structured data following these exact rules:
+
+Input Format: Product entries follow the pattern "[Product Name] #[Vendor_UID][Date] x [Quantity] ([Notes])"
+
+Extraction Rules:
+
+1. Product Name:
+- Extract all text before '#' or 'x' if no '#' exists
+- Remove trailing/leading whitespace
+- Required field
+
+2. Product Code:
+- Must start with '#'
+- Includes vendor UID and purchase date
+- Format: #[VENDOR_UID][DATE]
+- Null if not present
+
+3. Vendor UID:
+- 1-4 uppercase letters following '#'
+- Examples: CARL, FISH, SHR, Z
+- Null if no product code
+
+4. Purchase Date:
+- Follows vendor UID
+- Convert to format: YYYY-MM-DD
+- Handle two formats:
+  * 5 digits (mDDyy): First digit is month (pad with 0)
+  * 6 digits (mmDDyy): First two digits are month
+- Assume 2024 for year if only 2 digits
+- Null if no date
+
+5. Quantity:
+- Number following 'x'
+- Remove whitespace
+- Convert to integer
+- Null if not present
+
+6. Notes:
+- Any text within parentheses ()
+- Multiple notes joined with semicolon
+- Include any text that doesn't fit other fields
+- Null if no extra information
+
+Analyze this input: "${input}"
+
+Return ONLY a JSON object with this exact structure:
+{
+  "product_name": string or null,
+  "product_code": string or null,
+  "vendor_uid": string or null,
+  "purchase_date": string or null (YYYY-MM-DD format),
+  "quantity": number or null,
+  "notes": string or null
+}`;
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
         {
           role: "system",
-          content: "You are a precise data extraction assistant. Extract product information and return it in the exact format requested."
+          content: "You are a precise data extraction assistant. Extract cannabis product information and return it in the exact format requested. Always follow the date format rules exactly."
         },
         {
           role: "user",
