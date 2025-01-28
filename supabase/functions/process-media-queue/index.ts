@@ -47,12 +47,14 @@ serve(async (req) => {
         // Extract media info from message_media_data structure
         const mediaData = item.message_media_data?.media;
         const messageData = item.message_media_data?.message;
+        const metaData = item.message_media_data?.meta;
         
         console.log('Processing media data:', {
           file_id: mediaData?.file_id,
           file_type: mediaData?.file_type,
           message_id: messageData?.message_id,
-          media_group_id: messageData?.media_group_id
+          media_group_id: messageData?.media_group_id,
+          correlation_id: metaData?.correlation_id
         });
 
         if (!mediaData?.file_id) {
@@ -82,7 +84,7 @@ serve(async (req) => {
           '.bin'
         }`;
 
-        // Upload to storage
+        // Upload to storage with proper content type
         const { error: uploadError } = await supabaseClient.storage
           .from('media')
           .upload(storagePath, fileBuffer, {
@@ -100,7 +102,7 @@ serve(async (req) => {
           .from('media')
           .getPublicUrl(storagePath);
 
-        // Update telegram_media record
+        // Update telegram_media record with complete data structure
         const { error: mediaError } = await supabaseClient
           .from('telegram_media')
           .upsert({
@@ -115,14 +117,19 @@ serve(async (req) => {
                 ...mediaData,
                 public_url: publicUrl,
                 storage_path: storagePath
+              },
+              meta: {
+                ...metaData,
+                status: 'processed',
+                processed_at: new Date().toISOString()
               }
             },
-            message_id: item.message_media_data?.message?.message_id,
-            correlation_id: item.correlation_id,
+            message_id: messageData?.message_id,
+            correlation_id: metaData?.correlation_id,
             processed: true,
             caption: messageData?.caption,
-            is_original_caption: item.message_media_data?.meta?.is_original_caption,
-            original_message_id: item.message_media_data?.meta?.original_message_id
+            is_original_caption: metaData?.is_original_caption,
+            original_message_id: metaData?.original_message_id
           });
 
         if (mediaError) throw mediaError;
@@ -141,7 +148,7 @@ serve(async (req) => {
                 storage_path: storagePath
               },
               meta: {
-                ...item.message_media_data?.meta,
+                ...metaData,
                 status: 'processed',
                 processed_at: new Date().toISOString()
               }
