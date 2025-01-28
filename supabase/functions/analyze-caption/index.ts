@@ -2,17 +2,9 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import OpenAI from "https://esm.sh/openai@4.28.0";
 import { corsHeaders } from "../_shared/cors.ts";
 
-const KNOWN_VENDORS = [
-  'WOO', 'CARL', 'ENC', 'DNY', 'HEFF', 'EST', 'CUS', 'HIP', 'BNC', 'QB', 
-  'KV', 'FISH', 'Q', 'BRAV', 'P', 'JWD', 'BO', 'LOTO', 'OM', 'CMTK', 
-  'MRW', 'FT', 'CHAD', 'SHR', 'CBN', 'SPOB', 'PEPE', 'TURK', 'M', 'PBA',
-  'DBRO', 'Z', 'CHO', 'RB', 'KPEE', 'DINO', 'KC', 'PRM', 'ANT', 'KNG',
-  'TOM', 'FAKE', 'FAKEVEN', 'ERN', 'COO', 'BCH', 'JM', 'WITE', 'ANDY',
-  'BRC', 'BCHO'
-];
-
 function parseProductCode(text: string): { product_code: string | null; vendor_uid: string | null; purchase_date: string | null; validation_errors: string[] } {
   const errors: string[] = [];
+  // Updated regex to capture any uppercase letters before numbers
   const codeMatch = text.match(/#([A-Z]+)(\d*)/);
   
   if (!codeMatch) {
@@ -25,12 +17,6 @@ function parseProductCode(text: string): { product_code: string | null; vendor_u
   }
 
   const [fullMatch, vendorPart, datePart] = codeMatch;
-  const vendor = KNOWN_VENDORS.find(v => vendorPart.startsWith(v));
-  
-  if (!vendor) {
-    errors.push(`Unknown vendor code: ${vendorPart}`);
-  }
-
   let purchaseDate: string | null = null;
   let formattedCode = fullMatch;
 
@@ -59,7 +45,7 @@ function parseProductCode(text: string): { product_code: string | null; vendor_u
 
   return {
     product_code: formattedCode,
-    vendor_uid: vendor || null,
+    vendor_uid: vendorPart, // Simply use all letters found before the date
     purchase_date: purchaseDate,
     validation_errors: errors
   };
