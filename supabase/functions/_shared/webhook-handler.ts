@@ -55,7 +55,6 @@ export async function handleWebhookUpdate(
       };
     }
 
-    // Handle new message creation
     let messageData;
     
     if (messageType === 'text') {
@@ -84,62 +83,40 @@ export async function handleWebhookUpdate(
 
         if (message.caption) {
           if (!existingCaptionHolder) {
-            // This becomes the original caption holder since there isn't one
             isOriginalCaption = true;
-            originalMessageId = null; // Explicitly set to null since it's the original
+            originalMessageId = null;
             analyzedContent = await analyzeCaptionWithAI(message.caption);
 
-            // Update all existing messages in the group with the analyzed content
+            // Update all existing messages in the group
             if (groupMessages?.length > 0) {
-              console.log('Updating existing group messages with analyzed content:', {
-                media_group_id: message.media_group_id,
-                message_count: groupMessages.length
-              });
-
-              await Promise.all(groupMessages.map(async (groupMsg: any) => {
+              await Promise.all(groupMessages.map(async (groupMsg) => {
                 await supabase
                   .from('messages')
                   .update({
                     analyzed_content: analyzedContent,
                     caption: message.caption,
-                    is_original_caption: false, // Set to false since they're not the original
-                    original_message_id: null // Will be updated after current message insert
+                    is_original_caption: false,
+                    original_message_id: null
                   })
                   .eq('id', groupMsg.id);
               }));
             }
           } else {
-            // Use existing caption holder's content
-            isOriginalCaption = false; // Not the original since we found one
+            isOriginalCaption = false;
             originalMessageId = existingCaptionHolder.id;
             analyzedContent = existingCaptionHolder.analyzed_content;
-            
-            console.log('Using existing caption holder:', {
-              original_message_id: originalMessageId,
-              is_original_caption: false,
-              has_analyzed_content: !!analyzedContent
-            });
           }
         } else {
-          // For non-caption messages in a group
           if (existingCaptionHolder) {
             isOriginalCaption = false;
             originalMessageId = existingCaptionHolder.id;
             analyzedContent = existingCaptionHolder.analyzed_content;
-            
-            console.log('Using existing group analyzed content:', {
-              original_message_id: originalMessageId,
-              is_original_caption: false,
-              has_analyzed_content: !!analyzedContent
-            });
           } else {
-            // No caption holder exists yet, this message isn't one either
             isOriginalCaption = false;
             originalMessageId = null;
           }
         }
       } else if (message.caption) {
-        // Single media message with caption is automatically the original
         isOriginalCaption = true;
         originalMessageId = null;
         analyzedContent = await analyzeCaptionWithAI(message.caption);
@@ -163,8 +140,35 @@ export async function handleWebhookUpdate(
       };
     }
 
-    // Create message_media_data structure
-    messageData.message_media_data = await createMessageMediaData(messageData);
+    // Create message_media_data structure with simplified analysis
+    messageData.message_media_data = {
+      message: {
+        url: messageUrl,
+        media_group_id: message.media_group_id,
+        caption: message.caption,
+        message_id: message.message_id,
+        chat_id: message.chat.id,
+        date: message.date
+      },
+      sender: {
+        sender_info: message.from || message.sender_chat || {},
+        chat_info: message.chat
+      },
+      analysis: {
+        analyzed_content: messageData.analyzed_content
+      },
+      meta: {
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        status: messageData.status,
+        error: null,
+        is_original_caption: messageData.is_original_caption,
+        original_message_id: messageData.original_message_id,
+        processed_at: null,
+        last_retry_at: null,
+        retry_count: 0
+      }
+    };
 
     console.log('Inserting message:', {
       message_id: messageData.message_id,
@@ -183,10 +187,7 @@ export async function handleWebhookUpdate(
         .single();
     });
 
-    if (messageError) {
-      console.error('Error creating message:', messageError);
-      throw messageError;
-    }
+    if (messageError) throw messageError;
 
     // Queue media messages for processing
     if (messageType === 'photo' || messageType === 'video') {
@@ -210,26 +211,16 @@ export async function handleWebhookUpdate(
           message_media_data: messageData.message_media_data
         });
 
-      if (queueError) {
-        console.error('Error queueing message:', queueError);
-        throw queueError;
-      }
+      if (queueError) throw queueError;
     }
-
-    console.log('Successfully processed message:', {
-      message_id: messageRecord.id,
-      correlation_id: messageCorrelationId,
-      is_original_caption: messageData.is_original_caption,
-      original_message_id: messageData.original_message_id,
-      message_type: messageType
-    });
 
     return {
       success: true,
       message: 'Update processed successfully',
       messageId: messageRecord.id,
       correlationId: messageCorrelationId,
-      isOriginalCaption: messageData.is_original_caption
+      isOriginalCaption: messageData.is_original_caption,
+      originalMessageId: messageData.original_message_id
     };
 
   } catch (error) {
