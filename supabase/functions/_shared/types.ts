@@ -1,4 +1,4 @@
-import { SupabaseClient } from "@supabase/supabase-js";
+import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // Database type for Supabase client
 export type Database = {
