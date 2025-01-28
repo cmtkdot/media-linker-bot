@@ -1,4 +1,5 @@
-import { QueueItem } from '../../types/queue.types';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { QueueItem, ProcessingResult } from '../../types/queue.types';
 import { uploadMediaToStorage } from '../storage/storage-service';
 import { downloadTelegramFile } from '../telegram/telegram-service';
 import { validateMediaFile } from '../../utils/media-validator';
@@ -6,7 +7,7 @@ import { validateMediaFile } from '../../utils/media-validator';
 export async function processMediaItem(
   supabase: any,
   item: QueueItem
-): Promise<{ success: boolean; mediaId?: string; error?: string }> {
+): Promise<ProcessingResult> {
   try {
     const { message_media_data } = item;
     const mediaData = message_media_data.media;
@@ -21,7 +22,7 @@ export async function processMediaItem(
     // Download from Telegram
     const fileData = await downloadTelegramFile(mediaData.file_id, botToken);
     
-    // Upload to storage
+    // Upload to storage immediately without waiting for group processing
     const { publicUrl, storagePath } = await uploadMediaToStorage(
       supabase,
       fileData.buffer,
@@ -39,8 +40,7 @@ export async function processMediaItem(
         public_url: publicUrl,
         storage_path: storagePath,
         message_media_data: message_media_data,
-        correlation_id: item.correlation_id,
-        message_id: item.id
+        correlation_id: item.correlation_id
       })
       .select()
       .single();

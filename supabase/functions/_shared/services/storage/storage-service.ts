@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { MediaProcessingResult } from '../../types/media.types';
 import { generateSafeFileName, getMimeType } from '../../utils/storage-utils';
 
 export async function uploadMediaToStorage(
@@ -6,7 +7,7 @@ export async function uploadMediaToStorage(
   buffer: ArrayBuffer,
   fileUniqueId: string,
   fileType: string
-): Promise<{ publicUrl: string; storagePath: string }> {
+): Promise<MediaProcessingResult> {
   try {
     const storagePath = generateSafeFileName(fileUniqueId, fileType);
     const mimeType = getMimeType(fileType);
@@ -39,9 +40,9 @@ export async function uploadMediaToStorage(
       storage_path: storagePath
     });
 
-    return { publicUrl, storagePath };
+    return { success: true, publicUrl, storagePath };
   } catch (error) {
     console.error('Error uploading media to storage:', error);
-    throw error;
+    return { success: false, error: error.message };
   }
 }
