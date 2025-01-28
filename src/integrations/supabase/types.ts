@@ -356,6 +356,7 @@ export type Database = {
         Row: {
           analyzed_content: Json | null
           caption: string | null
+          correlation_id: string | null
           created_at: string
           file_id: string
           file_type: string
@@ -392,6 +393,7 @@ export type Database = {
         Insert: {
           analyzed_content?: Json | null
           caption?: string | null
+          correlation_id?: string | null
           created_at?: string
           file_id: string
           file_type: string
@@ -428,6 +430,7 @@ export type Database = {
         Update: {
           analyzed_content?: Json | null
           caption?: string | null
+          correlation_id?: string | null
           created_at?: string
           file_id?: string
           file_type?: string
@@ -463,6 +466,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "telegram_media_correlation_id_fkey"
+            columns: ["correlation_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["correlation_id"]
+          },
+          {
             foreignKeyName: "telegram_media_message_id_fkey"
             columns: ["message_id"]
             isOneToOne: true
@@ -481,7 +491,7 @@ export type Database = {
           id: string
           max_retries: number | null
           message_id: number | null
-          message_media_data: Json | null
+          message_media_data: Json
           priority: number | null
           processed_at: string | null
           queue_type: string
@@ -497,7 +507,7 @@ export type Database = {
           id?: string
           max_retries?: number | null
           message_id?: number | null
-          message_media_data?: Json | null
+          message_media_data?: Json
           priority?: number | null
           processed_at?: string | null
           queue_type: string
@@ -513,7 +523,7 @@ export type Database = {
           id?: string
           max_retries?: number | null
           message_id?: number | null
-          message_media_data?: Json | null
+          message_media_data?: Json
           priority?: number | null
           processed_at?: string | null
           queue_type?: string
@@ -568,6 +578,7 @@ export type Database = {
         Returns: {
           analyzed_content: Json | null
           caption: string | null
+          correlation_id: string | null
           created_at: string
           file_id: string
           file_type: string
