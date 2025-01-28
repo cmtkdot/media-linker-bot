@@ -1,40 +1,121 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { MediaProcessingError } from './types.ts';
 
-export async function handleProcessingError(
-  supabase: any,
+export class MediaProcessingError extends Error {
+  constructor(
+    message: string,
+    public code: string,
+    public details?: any,
+    public retryable: boolean = true
+  ) {
+    super(message);
+    this.name = 'MediaProcessingError';
+  }
+}
+
+export async function handleMediaError(
+  supabase: ReturnType<typeof createClient>,
   error: any,
-  messageRecord: any,
-  retryCount: number,
-  isFinalAttempt: boolean
-): Promise<{ shouldContinue: boolean }> {
-  console.error('Processing error:', {
+  messageId: string,
+  correlationId: string,
+  context: string,
+  retryCount: number = 0
+): Promise<{ shouldRetry: boolean; error: MediaProcessingError }> {
+  console.error(`Error in ${context}:`, {
     error: error.message,
-    stack: error.stack,
-    message_id: messageRecord?.id,
-    retry_count: retryCount
+    code: error.code,
+    messageId,
+    correlationId,
+    retryCount
   });
 
-  try {
-    // Update the message record with error information
-    if (messageRecord) {
-      const { error: updateError } = await supabase
-        .from('messages')
-        .update({
-          processing_error: error.message,
-          retry_count: retryCount,
-          last_retry_at: new Date().toISOString(),
-          status: isFinalAttempt ? 'failed' : 'pending'
-        })
-        .eq('id', messageRecord.id);
+  // Determine if error is retryable
+  const isRetryable = 
+    error instanceof MediaProcessingError ? error.retryable :
+    error.code === '23505' ? false : // Unique constraint violation
+    error.code === '23503' ? false : // Foreign key violation
+    true;
 
-      if (updateError) {
-        console.error('Error updating message record:', updateError);
-      }
+  // Create standardized error
+  const processingError = error instanceof MediaProcessingError ? error :
+    new MediaProcessingError(
+      error.message || 'Unknown error occurred',
+      error.code || 'UNKNOWN_ERROR',
+      error.details,
+      isRetryable
+    );
+
+  try {
+    // Update message status
+    await supabase
+      .from('messages')
+      .update({
+        status: isRetryable ? 'pending' : 'failed',
+        processing_error: processingError.message,
+        retry_count: retryCount,
+        last_retry_at: new Date().toISOString()
+      })
+      .eq('id', messageId);
+
+    // Log error
+    await supabase
+      .from('media_processing_logs')
+      .insert({
+        message_id: messageId,
+        correlation_id: correlationId,
+        error_message: processingError.message,
+        status: isRetryable ? 'pending' : 'failed',
+        retry_count: retryCount
+      });
+
+    return {
+      shouldRetry: isRetryable && retryCount < 3,
+      error: processingError
+    };
+  } catch (loggingError) {
+    console.error('Error logging media processing error:', loggingError);
+    return {
+      shouldRetry: isRetryable && retryCount < 3,
+      error: processingError
+    };
+  }
+}
+
+export async function withRetry<T>(
+  operation: () => Promise<T>,
+  context: string,
+  messageId: string,
+  correlationId: string,
+  supabase: ReturnType<typeof createClient>,
+  maxRetries: number = 3,
+  retryCount: number = 0
+): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    const { shouldRetry, error: processedError } = await handleMediaError(
+      supabase,
+      error,
+      messageId,
+      correlationId,
+      context,
+      retryCount
+    );
+
+    if (shouldRetry && retryCount < maxRetries) {
+      const delay = Math.min(1000 * Math.pow(2, retryCount), 10000);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return withRetry(
+        operation,
+        context,
+        messageId,
+        correlationId,
+        supabase,
+        maxRetries,
+        retryCount + 1
+      );
     }
 
-    return { shouldContinue: !isFinalAttempt };
-  } catch (handlingError) {
-    console.error('Error in error handler:', handlingError);
-    return { shouldContinue: !isFinalAttempt };
+    throw processedError;
   }
 }

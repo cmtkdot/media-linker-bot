@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { withRetry, MediaProcessingError } from "../_shared/error-handler.ts";
 import { uploadMediaToStorage } from "../_shared/storage-manager.ts";
 import { validateMediaFile } from "../_shared/media-validators.ts";
 
@@ -13,17 +14,28 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  let supabase;
-  let messageId;
-  let correlationId;
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  );
 
   try {
-    const { fileId, fileUniqueId, fileType, messageId: msgId, botToken, correlationId: corrId } = await req.json();
-    messageId = msgId;
-    correlationId = corrId;
+    const { 
+      fileId, 
+      fileUniqueId, 
+      fileType, 
+      messageId, 
+      botToken, 
+      correlationId 
+    } = await req.json();
 
     if (!fileId || !fileUniqueId || !fileType || !messageId || !botToken) {
-      throw new Error('Missing required parameters');
+      throw new MediaProcessingError(
+        'Missing required parameters',
+        'INVALID_PARAMETERS',
+        { fileId, fileType, messageId },
+        false
+      );
     }
 
     console.log('Processing media file:', {
@@ -33,117 +45,117 @@ serve(async (req) => {
       correlation_id: correlationId
     });
 
-    supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
-
-    // Update status to processing
-    await supabase
-      .from('messages')
-      .update({
-        status: 'processing',
-        message_media_data: {
-          meta: { status: 'processing', updated_at: new Date().toISOString() }
-        }
-      })
-      .eq('id', messageId);
-
     // Get file from Telegram
-    const response = await fetch(
-      `https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`
-    );
-
-    if (!response.ok) {
-      throw new Error(`Failed to get file info: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    
-    if (!data.ok || !data.result.file_path) {
-      throw new Error('Failed to get file path from Telegram');
-    }
-
-    const filePath = data.result.file_path;
-    
-    // Download file from Telegram
-    const downloadUrl = `https://api.telegram.org/file/bot${botToken}/${filePath}`;
-    const fileResponse = await fetch(downloadUrl);
-
-    if (!fileResponse.ok) {
-      throw new Error(`Failed to download file: ${fileResponse.statusText}`);
-    }
-
-    const buffer = await fileResponse.arrayBuffer();
-
-    console.log('File downloaded successfully, uploading to storage...');
-
-    // Upload to Supabase Storage with verification
-    const { publicUrl, storagePath } = await uploadMediaToStorage(
-      supabase,
-      buffer,
-      fileUniqueId,
-      fileType
-    );
-
-    console.log('File uploaded successfully:', {
-      public_url: publicUrl,
-      storage_path: storagePath
-    });
-
-    // Get message data for updating
-    const { data: message } = await supabase
-      .from('messages')
-      .select('message_media_data, correlation_id')
-      .eq('id', messageId)
-      .single();
-
-    if (!message) {
-      throw new Error('Message not found');
-    }
-
-    // Update message_media_data with new file information
-    const updatedMessageMediaData = {
-      ...message.message_media_data,
-      media: {
-        ...message.message_media_data.media,
-        file_id: fileId,
-        file_unique_id: fileUniqueId,
-        file_type: fileType,
-        public_url: publicUrl,
-        storage_path: storagePath
+    const fileInfo = await withRetry(
+      async () => {
+        const response = await fetch(
+          `https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`
+        );
+        if (!response.ok) {
+          throw new MediaProcessingError(
+            'Failed to get file info from Telegram',
+            'TELEGRAM_API_ERROR',
+            { status: response.status }
+          );
+        }
+        return response.json();
       },
-      meta: {
-        ...message.message_media_data.meta,
-        status: 'processed',
-        processed_at: new Date().toISOString()
-      }
-    };
+      'get_file_info',
+      messageId,
+      correlationId,
+      supabase
+    );
 
-    // Begin transaction to update both tables
-    const { error: updateError } = await supabase.rpc('update_media_records', {
-      p_message_id: messageId,
-      p_public_url: publicUrl,
-      p_storage_path: storagePath,
-      p_message_media_data: updatedMessageMediaData
-    });
-
-    if (updateError) {
-      throw updateError;
+    if (!fileInfo.ok || !fileInfo.result.file_path) {
+      throw new MediaProcessingError(
+        'Invalid file info from Telegram',
+        'INVALID_FILE_INFO',
+        fileInfo,
+        false
+      );
     }
 
-    // Log successful processing
-    await supabase
-      .from('media_processing_logs')
-      .insert({
-        message_id: messageId,
-        file_id: fileId,
-        file_type: fileType,
-        status: 'processed',
-        storage_path: storagePath,
-        correlation_id: correlationId,
-        processed_at: new Date().toISOString()
-      });
+    // Download file
+    const fileBuffer = await withRetry(
+      async () => {
+        const downloadUrl = `https://api.telegram.org/file/bot${botToken}/${fileInfo.result.file_path}`;
+        const fileResponse = await fetch(downloadUrl);
+        if (!fileResponse.ok) {
+          throw new MediaProcessingError(
+            'Failed to download file from Telegram',
+            'DOWNLOAD_ERROR',
+            { status: fileResponse.status }
+          );
+        }
+        return fileResponse.arrayBuffer();
+      },
+      'download_file',
+      messageId,
+      correlationId,
+      supabase
+    );
+
+    // Upload to storage
+    const { publicUrl, storagePath } = await withRetry(
+      async () => uploadMediaToStorage(
+        supabase,
+        fileBuffer,
+        fileUniqueId,
+        fileType
+      ),
+      'upload_to_storage',
+      messageId,
+      correlationId,
+      supabase
+    );
+
+    // Update database records
+    await withRetry(
+      async () => {
+        const { data: message } = await supabase
+          .from('messages')
+          .select('message_media_data')
+          .eq('id', messageId)
+          .single();
+
+        if (!message) {
+          throw new MediaProcessingError(
+            'Message not found',
+            'NOT_FOUND',
+            { messageId },
+            false
+          );
+        }
+
+        const updatedMessageMediaData = {
+          ...message.message_media_data,
+          media: {
+            ...message.message_media_data.media,
+            file_id: fileId,
+            file_unique_id: fileUniqueId,
+            file_type: fileType,
+            public_url: publicUrl,
+            storage_path: storagePath
+          },
+          meta: {
+            ...message.message_media_data.meta,
+            status: 'processed',
+            processed_at: new Date().toISOString()
+          }
+        };
+
+        await supabase.rpc('update_media_records', {
+          p_message_id: messageId,
+          p_public_url: publicUrl,
+          p_storage_path: storagePath,
+          p_message_media_data: updatedMessageMediaData
+        });
+      },
+      'update_records',
+      messageId,
+      correlationId,
+      supabase
+    );
 
     return new Response(
       JSON.stringify({ 
@@ -157,39 +169,20 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error processing media:', error);
     
-    // Update message status to error
-    if (supabase && messageId) {
-      await supabase
-        .from('messages')
-        .update({
-          status: 'error',
-          processing_error: error.message,
-          message_media_data: {
-            meta: { 
-              status: 'error', 
-              error: error.message,
-              updated_at: new Date().toISOString()
-            }
-          }
-        })
-        .eq('id', messageId);
-
-      // Log error
-      await supabase
-        .from('media_processing_logs')
-        .insert({
-          message_id: messageId,
-          file_id: fileId,
-          file_type: fileType,
-          error_message: error.message,
-          status: 'error',
-          correlation_id: correlationId
-        });
-    }
+    const errorResponse = {
+      error: error instanceof MediaProcessingError 
+        ? error.message 
+        : 'An unexpected error occurred',
+      code: error instanceof MediaProcessingError ? error.code : 'UNKNOWN_ERROR',
+      details: error instanceof MediaProcessingError ? error.details : undefined
+    };
 
     return new Response(
-      JSON.stringify({ error: error.message }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      JSON.stringify(errorResponse),
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, 
+        status: 500 
+      }
     );
   }
 });
