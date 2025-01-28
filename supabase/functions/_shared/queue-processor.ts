@@ -19,6 +19,9 @@ interface QueueItem {
       is_original_caption: boolean;
       original_message_id?: string;
     };
+    analysis: {
+      analyzed_content: any;
+    };
   };
 }
 
@@ -49,7 +52,15 @@ async function processMediaGroup(supabase: any, groupId: string, items: QueueIte
       item.message_media_data?.meta?.is_original_caption
     );
 
+    // Get analyzed content from original item
+    const analyzedContent = originalItem?.message_media_data?.analysis?.analyzed_content;
+
+    // Process each item in the group
     for (const item of items) {
+      // Update item's analyzed content from original
+      if (analyzedContent && !item.message_media_data?.meta?.is_original_caption) {
+        item.message_media_data.analysis.analyzed_content = analyzedContent;
+      }
       await processQueueItem(supabase, item, originalItem);
     }
   } catch (error) {
@@ -73,7 +84,19 @@ export async function processQueueItem(supabase: any, item: QueueItem, originalI
       .maybeSingle();
 
     if (existingMedia) {
-      console.log(`Media ${fileUniqueId} already exists, skipping processing`);
+      console.log(`Media ${fileUniqueId} already exists, updating analyzed content`);
+      
+      // Update existing media with latest analyzed content
+      const { error: updateError } = await supabase
+        .from('telegram_media')
+        .update({
+          analyzed_content: item.message_media_data.analysis.analyzed_content,
+          original_message_id: originalItem?.message_media_data?.meta?.original_message_id,
+          message_media_data: item.message_media_data
+        })
+        .eq('id', existingMedia.id);
+
+      if (updateError) throw updateError;
       return;
     }
 
@@ -105,7 +128,8 @@ export async function processQueueItem(supabase: any, item: QueueItem, originalI
         }
       },
       is_original_caption: item.message_media_data.meta.is_original_caption,
-      original_message_id: originalItem?.message_media_data.meta.original_message_id
+      original_message_id: originalItem?.message_media_data?.meta?.original_message_id,
+      analyzed_content: item.message_media_data.analysis.analyzed_content
     };
 
     const { error: insertError } = await supabase

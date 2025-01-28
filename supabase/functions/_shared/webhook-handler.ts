@@ -24,30 +24,47 @@ export async function handleWebhookUpdate(
       correlation_id: correlationId
     });
 
-    // Generate message URL
     const chatId = message.chat.id.toString();
     const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
 
-    // Handle caption and media group logic
     let isOriginalCaption = false;
     let originalMessageId = null;
     let analyzedContent = null;
+    let shouldSyncGroup = false;
 
-    if (message.media_group_id && message.caption) {
-      const { data: existingHolder } = await supabase
+    // Handle media group caption logic
+    if (message.media_group_id) {
+      const { data: existingMessages } = await supabase
         .from('messages')
-        .select('id')
+        .select('id, is_original_caption, analyzed_content')
         .eq('media_group_id', message.media_group_id)
-        .eq('is_original_caption', true)
-        .maybeSingle();
+        .order('created_at', { ascending: true });
 
-      isOriginalCaption = !existingHolder;
-      originalMessageId = existingHolder?.id;
+      if (message.caption) {
+        // If this is the first message with caption in the group
+        const existingCaptionHolder = existingMessages?.find(m => m.is_original_caption);
+        if (!existingCaptionHolder) {
+          isOriginalCaption = true;
+          shouldSyncGroup = true;
+        } else {
+          originalMessageId = existingCaptionHolder.id;
+          analyzedContent = existingCaptionHolder.analyzed_content;
+        }
+      } else if (existingMessages?.length > 0) {
+        // For non-caption messages in group, use existing analyzed content
+        const existingCaptionHolder = existingMessages.find(m => m.is_original_caption);
+        if (existingCaptionHolder) {
+          originalMessageId = existingCaptionHolder.id;
+          analyzedContent = existingCaptionHolder.analyzed_content;
+        }
+      }
     } else if (message.caption) {
       isOriginalCaption = true;
+      shouldSyncGroup = true;
     }
 
-    if (message.caption && isOriginalCaption) {
+    // Analyze caption if needed
+    if (shouldSyncGroup && message.caption) {
       try {
         analyzedContent = await analyzeCaptionWithAI(message.caption);
         console.log('Caption analyzed:', { 
@@ -90,11 +107,12 @@ export async function handleWebhookUpdate(
         error: null,
         correlation_id: correlationId,
         is_original_caption: isOriginalCaption,
-        original_message_id: originalMessageId
+        original_message_id: originalMessageId,
+        retry_count: 0
       }
     };
 
-    // Create or update message record
+    // Create message record
     const messageData = {
       message_id: message.message_id,
       chat_id: message.chat.id,
@@ -108,9 +126,11 @@ export async function handleWebhookUpdate(
       original_message_id: originalMessageId,
       message_media_data: messageMediaData,
       analyzed_content: analyzedContent,
-      status: 'pending'
+      status: 'pending',
+      caption: message.caption
     };
 
+    // Insert/update message record
     const { data: messageRecord, error: messageError } = await withDatabaseRetry(async () => {
       return await supabase
         .from('messages')
@@ -121,11 +141,32 @@ export async function handleWebhookUpdate(
 
     if (messageError) throw messageError;
 
-    console.log('Message record created/updated:', {
-      message_id: messageRecord.id,
-      correlation_id: correlationId,
-      is_original_caption: isOriginalCaption
-    });
+    // If this is part of a media group and has analyzed content, sync it to other messages
+    if (message.media_group_id && analyzedContent) {
+      await supabase
+        .from('messages')
+        .update({
+          analyzed_content: analyzedContent,
+          original_message_id: isOriginalCaption ? messageRecord.id : originalMessageId
+        })
+        .eq('media_group_id', message.media_group_id)
+        .neq('id', messageRecord.id);
+    }
+
+    // Queue for processing
+    const { error: queueError } = await supabase
+      .from('unified_processing_queue')
+      .insert({
+        queue_type: message.media_group_id ? 'media_group' : 'media',
+        data: messageMediaData,
+        status: 'pending',
+        correlation_id: correlationId,
+        chat_id: message.chat.id,
+        message_id: message.message_id,
+        message_media_data: messageMediaData
+      });
+
+    if (queueError) throw queueError;
 
     return {
       success: true,
