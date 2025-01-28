@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { WebhookUpdate, WebhookResponse } from '../../types/webhook.types';
+import { WebhookUpdate, WebhookResponse } from '../../types/telegram.types';
 import { analyzeCaption } from '../caption/caption-analyzer';
 import { buildMessageData } from './message-builder';
 import { queueMessage } from '../queue/queue-manager';
