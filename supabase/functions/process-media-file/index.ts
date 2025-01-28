@@ -1,7 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { processMediaMessage } from "../_shared/media/processor.ts";
-import { handleMediaError } from "../_shared/media/error-handler.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 
 serve(async (req) => {
@@ -38,13 +36,86 @@ serve(async (req) => {
       throw new Error('No media data found in message');
     }
 
-    await processMediaMessage(supabase, message, botToken);
+    // Get file from Telegram
+    const fileId = message.message_media_data.media.file_id;
+    console.log('Getting file info from Telegram:', fileId);
+
+    const fileResponse = await fetch(
+      `https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`
+    );
+
+    if (!fileResponse.ok) {
+      throw new Error(`Failed to get file info: ${fileResponse.statusText}`);
+    }
+
+    const fileData = await fileResponse.json();
+    if (!fileData.ok || !fileData.result.file_path) {
+      throw new Error('Failed to get file path from Telegram');
+    }
+
+    // Download file
+    const downloadUrl = `https://api.telegram.org/file/bot${botToken}/${fileData.result.file_path}`;
+    const fileDownload = await fetch(downloadUrl);
+    if (!fileDownload.ok) {
+      throw new Error(`Failed to download file: ${fileDownload.statusText}`);
+    }
+
+    const fileBuffer = await fileDownload.arrayBuffer();
+    const fileName = `${message.message_media_data.media.file_unique_id}.${fileData.result.file_path.split('.').pop()}`;
+
+    console.log('Uploading file to storage:', fileName);
+
+    // Upload to storage
+    const { error: uploadError } = await supabase.storage
+      .from('media')
+      .upload(fileName, fileBuffer, {
+        contentType: fileDownload.headers.get('content-type') || 'application/octet-stream',
+        upsert: true
+      });
+
+    if (uploadError) throw uploadError;
+
+    // Get public URL
+    const { data: { publicUrl } } = await supabase.storage
+      .from('media')
+      .getPublicUrl(fileName);
+
+    console.log('File uploaded successfully:', { publicUrl, fileName });
+
+    // Update message_media_data with storage info
+    const updatedMediaData = {
+      ...message.message_media_data,
+      media: {
+        ...message.message_media_data.media,
+        public_url: publicUrl,
+        storage_path: fileName
+      },
+      meta: {
+        ...message.message_media_data.meta,
+        status: 'processed',
+        processed_at: new Date().toISOString()
+      }
+    };
+
+    // Update message status and media data
+    const { error: updateError } = await supabase
+      .from('messages')
+      .update({
+        status: 'processed',
+        processed_at: new Date().toISOString(),
+        message_media_data: updatedMediaData
+      })
+      .eq('id', messageId);
+
+    if (updateError) throw updateError;
 
     return new Response(
       JSON.stringify({ 
         message: 'Media processing completed successfully',
         messageId,
-        correlationId
+        correlationId,
+        publicUrl,
+        fileName
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
