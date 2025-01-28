@@ -67,17 +67,19 @@ export async function handleWebhookUpdate(
       
       existingGroupMessages = groupMessages;
       
-      // Try to determine media group size
-      if (message.media_group_size) {
-        mediaGroupSize = message.media_group_size;
-      } else if (groupMessages?.[0]?.media_group_size) {
+      // Calculate media group size
+      if (groupMessages?.[0]?.media_group_size) {
         mediaGroupSize = groupMessages[0].media_group_size;
       } else {
-        // Estimate size from Telegram's media array
-        mediaGroupSize = message.photo?.length || 
-                        (message.video ? 1 : 0) || 
-                        (message.document ? 1 : 0) || 
-                        1;
+        // For new groups, count media items in the message
+        mediaGroupSize = 0;
+        if (message.photo) mediaGroupSize += 1;
+        if (message.video) mediaGroupSize += 1;
+        if (message.document) mediaGroupSize += 1;
+        if (message.animation) mediaGroupSize += 1;
+        
+        // If no media found, set to 1 as minimum
+        mediaGroupSize = Math.max(mediaGroupSize, 1);
       }
 
       console.log('Found existing group messages:', {
@@ -137,12 +139,12 @@ export async function handleWebhookUpdate(
         text: message.text,
         media_group_id: message.media_group_id,
         media_group_size: mediaGroupSize,
-        status: 'pending',  // Changed from processed to pending
+        status: 'pending',
         is_original_caption: analyzedContent.is_original_caption,
         original_message_id: analyzedContent.original_message_id,
         analyzed_content: analyzedContent.analyzed_content,
         message_media_data: messageData,
-        last_group_message_at: new Date().toISOString()  // Add timestamp for group tracking
+        last_group_message_at: new Date().toISOString()
       })
       .select()
       .single();
