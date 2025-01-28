@@ -1,7 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { processWebhookUpdate } from "../_shared/services/webhook/webhook-service.ts";
-import { corsHeaders } from "../_shared/cors.ts";
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -22,7 +26,11 @@ serve(async (req) => {
       correlation_id: correlationId,
       message_id: update.message?.message_id || update.channel_post?.message_id,
       chat_id: update.message?.chat?.id || update.channel_post?.chat?.id,
-      media_group_id: update.message?.media_group_id || update.channel_post?.media_group_id
+      media_group_id: update.message?.media_group_id || update.channel_post?.media_group_id,
+      has_photo: !!(update.message?.photo || update.channel_post?.photo),
+      has_video: !!(update.message?.video || update.channel_post?.video),
+      has_document: !!(update.message?.document || update.channel_post?.document),
+      caption: update.message?.caption || update.channel_post?.caption
     });
 
     const result = await processWebhookUpdate(supabase, update, correlationId);

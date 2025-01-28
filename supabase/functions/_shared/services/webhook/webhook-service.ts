@@ -20,34 +20,12 @@ export async function processWebhookUpdate(
       message_id: message.message_id,
       chat_id: message.chat.id,
       media_group_id: message.media_group_id,
-      correlation_id: correlationId
+      correlation_id: correlationId,
+      has_photo: !!message.photo,
+      has_video: !!message.video,
+      has_document: !!message.document,
+      caption: message.caption
     });
-
-    // Check if message already exists
-    const { data: existingMessage } = await supabase
-      .from('messages')
-      .select('id, message_id, chat_id')
-      .eq('message_id', message.message_id)
-      .eq('chat_id', message.chat.id)
-      .maybeSingle();
-
-    if (existingMessage) {
-      console.log('Message already exists:', {
-        message_id: message.message_id,
-        chat_id: message.chat.id,
-        id: existingMessage.id
-      });
-      
-      return {
-        success: true,
-        message: 'Message already processed',
-        messageId: existingMessage.id,
-        data: {
-          telegram_data: message,
-          status: 'processed'
-        }
-      };
-    }
 
     // Build message data
     const messageUrl = `https://t.me/c/${Math.abs(message.chat.id)}/${message.message_id}`;
@@ -105,6 +83,14 @@ export async function processWebhookUpdate(
       telegram_data: message
     };
 
+    console.log('Inserting message with data:', {
+      message_id: message.message_id,
+      chat_id: message.chat.id,
+      message_type: message.photo ? 'photo' : message.video ? 'video' : message.document ? 'document' : 'text',
+      media_group_id: message.media_group_id,
+      correlation_id: correlationId
+    });
+
     // Insert into messages table
     const { data: messageRecord, error } = await supabase
       .from('messages')
@@ -119,6 +105,8 @@ export async function processWebhookUpdate(
         correlation_id: correlationId,
         message_media_data: messageMediaData,
         status: 'pending',
+        caption: message.caption,
+        text: message.text,
         media_group_size: message.media_group_id ? 1 : null,
         last_group_message_at: message.media_group_id ? new Date().toISOString() : null
       })
@@ -151,6 +139,7 @@ export async function processWebhookUpdate(
       messageId: messageRecord.id,
       data: {
         telegram_data: messageRecord.telegram_data,
+        message_media_data: messageMediaData,
         status: messageRecord.status
       }
     };
