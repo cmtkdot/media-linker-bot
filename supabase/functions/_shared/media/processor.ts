@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { MediaFile } from './types.ts';
 import { uploadMediaToStorage } from './storage.ts';
 import { processMediaQueue } from './queue-processor.ts';
+import { handleMediaError } from '../error-handler.ts';
 
 export async function processMediaMessage(
   supabase: ReturnType<typeof createClient>,
@@ -25,7 +26,7 @@ export async function processMediaMessage(
     // Upload to storage and get URLs
     const { publicUrl, storagePath } = await uploadMediaToStorage(
       supabase,
-      new ArrayBuffer(0),
+      new ArrayBuffer(0), // Will be replaced with actual file in uploadMediaToStorage
       mediaFile.file_unique_id,
       mediaFile.file_type,
       botToken,
@@ -44,12 +45,13 @@ export async function processMediaMessage(
       meta: {
         ...message.message_media_data?.meta,
         status: 'processed',
-        processed_at: new Date().toISOString()
+        processed_at: new Date().toISOString(),
+        correlation_id: correlationId
       }
     };
 
     // Update messages table
-    await supabase
+    const { error: messageError } = await supabase
       .from('messages')
       .update({
         message_media_data: updatedMediaData,
@@ -58,7 +60,34 @@ export async function processMediaMessage(
       })
       .eq('id', messageId);
 
-    // Process media queue
+    if (messageError) {
+      throw messageError;
+    }
+
+    // Create/Update telegram_media record
+    const { error: mediaError } = await supabase
+      .from('telegram_media')
+      .upsert({
+        message_id: messageId,
+        file_id: mediaFile.file_id,
+        file_unique_id: mediaFile.file_unique_id,
+        file_type: mediaFile.file_type,
+        public_url: publicUrl,
+        storage_path: storagePath,
+        message_media_data: updatedMediaData,
+        correlation_id: correlationId,
+        telegram_data: message.telegram_data,
+        is_original_caption: message.is_original_caption,
+        original_message_id: message.original_message_id,
+        processed: true,
+        updated_at: new Date().toISOString()
+      });
+
+    if (mediaError) {
+      throw mediaError;
+    }
+
+    // Process media queue for additional updates
     await processMediaQueue(supabase, {
       messageId,
       correlationId,
@@ -73,14 +102,14 @@ export async function processMediaMessage(
   } catch (error) {
     console.error('Media processing error:', error);
     
-    // Update message with error
-    await supabase
-      .from('messages')
-      .update({
-        status: 'error',
-        processing_error: error.message
-      })
-      .eq('id', messageId);
+    await handleMediaError(
+      supabase,
+      error,
+      messageId,
+      correlationId,
+      'processMediaMessage',
+      message.retry_count || 0
+    );
 
     throw error;
   }

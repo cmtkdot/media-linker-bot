@@ -1,5 +1,4 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { MediaFile } from './types.ts';
 
 interface QueueProcessorOptions {
   messageId: string;
@@ -18,7 +17,6 @@ export async function processMediaQueue(
     messageId,
     correlationId,
     messageMediaData,
-    telegramData,
     isOriginalCaption,
     originalMessageId
   } = options;
@@ -30,31 +28,6 @@ export async function processMediaQueue(
     const mediaInfo = messageMediaData?.media;
     if (!mediaInfo?.file_id) {
       throw new Error('Invalid media information');
-    }
-
-    // Update telegram_media record
-    const { error: mediaError } = await supabase
-      .from('telegram_media')
-      .upsert({
-        message_id: messageId,
-        file_id: mediaInfo.file_id,
-        file_unique_id: mediaInfo.file_unique_id,
-        file_type: mediaInfo.file_type,
-        public_url: mediaInfo.public_url,
-        storage_path: mediaInfo.storage_path,
-        message_media_data: messageMediaData,
-        correlation_id: correlationId,
-        telegram_data: telegramData,
-        is_original_caption: isOriginalCaption,
-        original_message_id: originalMessageId,
-        processed: true,
-        updated_at: new Date().toISOString()
-      }, {
-        onConflict: 'message_id'
-      });
-
-    if (mediaError) {
-      throw mediaError;
     }
 
     // Create processing log
@@ -72,6 +45,30 @@ export async function processMediaQueue(
 
     if (logError) {
       console.error('Error creating processing log:', logError);
+      throw logError;
+    }
+
+    // If this is part of a media group and has original caption,
+    // update other messages in the group
+    if (messageMediaData.message?.media_group_id && isOriginalCaption) {
+      const { error: groupError } = await supabase
+        .from('messages')
+        .update({
+          message_media_data: {
+            ...messageMediaData,
+            meta: {
+              ...messageMediaData.meta,
+              is_original_caption: false,
+              original_message_id: originalMessageId
+            }
+          }
+        })
+        .eq('media_group_id', messageMediaData.message.media_group_id)
+        .neq('id', messageId);
+
+      if (groupError) {
+        console.error('Error updating media group:', groupError);
+      }
     }
 
     console.log('Media queue processing completed successfully');
