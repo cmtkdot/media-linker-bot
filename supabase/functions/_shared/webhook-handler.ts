@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { TelegramUpdate, TelegramMessage } from './telegram-types.ts';
 import { validateMediaFile } from './media-validators.ts';
-import { processMediaFile } from './media-processor.ts';
+import { uploadMediaToStorage } from './storage-manager.ts';
 import { analyzeWebhookMessage } from './webhook-message-analyzer.ts';
 import { buildWebhookMessageData } from './webhook-message-builder.ts';
 
@@ -91,23 +91,64 @@ export async function handleWebhookUpdate(
           // Validate media file
           await validateMediaFile(mediaFile, mediaType);
 
-          // Create telegram_media record
-          const { error: mediaError } = await supabase
-            .from('telegram_media')
-            .insert({
+          // Download and upload to storage
+          const fileResponse = await fetch(
+            `https://api.telegram.org/bot${botToken}/getFile?file_id=${mediaFile.file_id}`
+          );
+          const fileData = await fileResponse.json();
+          
+          if (!fileData.ok || !fileData.result.file_path) {
+            throw new Error('Failed to get file path from Telegram');
+          }
+
+          const downloadUrl = `https://api.telegram.org/file/bot${botToken}/${fileData.result.file_path}`;
+          const downloadResponse = await fetch(downloadUrl);
+          const buffer = await downloadResponse.arrayBuffer();
+
+          // Upload to storage with retry logic
+          const { publicUrl, storagePath, isExisting } = await uploadMediaToStorage(
+            supabase,
+            buffer,
+            mediaFile.file_unique_id,
+            mediaType
+          );
+
+          // Update or insert telegram_media record
+          try {
+            const mediaData = {
               message_id: messageRecord.id,
               file_id: mediaFile.file_id,
               file_unique_id: mediaFile.file_unique_id,
               file_type: mediaType,
+              public_url: publicUrl,
+              storage_path: storagePath,
               telegram_data: message,
               correlation_id: correlationId,
               is_original_caption: analyzedMessageContent.is_original_caption,
               original_message_id: analyzedMessageContent.original_message_id,
-              message_media_data: messageData
-            });
+              message_media_data: messageData,
+              processed: true
+            };
 
-          if (mediaError) {
-            throw mediaError;
+            const { error: mediaError } = await supabase
+              .from('telegram_media')
+              .upsert(mediaData, {
+                onConflict: 'file_unique_id',
+                returning: true
+              });
+
+            if (mediaError) {
+              throw mediaError;
+            }
+
+            console.log('Successfully processed media:', {
+              file_unique_id: mediaFile.file_unique_id,
+              public_url: publicUrl,
+              is_existing: isExisting
+            });
+          } catch (error) {
+            console.error('Error updating telegram_media:', error);
+            throw error;
           }
         } catch (error) {
           console.error('Error processing media:', error);
@@ -118,6 +159,18 @@ export async function handleWebhookUpdate(
               status: 'error'
             })
             .eq('id', messageRecord.id);
+
+          // Log error to media_processing_logs
+          await supabase
+            .from('media_processing_logs')
+            .insert({
+              message_id: messageRecord.id,
+              file_id: mediaFile.file_id,
+              file_type: mediaType,
+              error_message: error.message,
+              correlation_id: correlationId,
+              status: 'error'
+            });
 
           throw error;
         }
