@@ -295,13 +295,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "media_processing_logs_correlation_id_fkey"
-            columns: ["correlation_id"]
-            isOneToOne: false
-            referencedRelation: "messages"
-            referencedColumns: ["correlation_id"]
-          },
-          {
             foreignKeyName: "media_processing_logs_message_id_fkey"
             columns: ["message_id"]
             isOneToOne: false
@@ -315,7 +308,6 @@ export type Database = {
           analyzed_content: Json | null
           caption: string | null
           chat_id: number
-          correlation_id: string | null
           created_at: string
           id: string
           is_original_caption: boolean | null
@@ -348,7 +340,6 @@ export type Database = {
           analyzed_content?: Json | null
           caption?: string | null
           chat_id: number
-          correlation_id?: string | null
           created_at?: string
           id?: string
           is_original_caption?: boolean | null
@@ -381,7 +372,6 @@ export type Database = {
           analyzed_content?: Json | null
           caption?: string | null
           chat_id?: number
-          correlation_id?: string | null
           created_at?: string
           id?: string
           is_original_caption?: boolean | null
@@ -416,7 +406,6 @@ export type Database = {
         Row: {
           analyzed_content: Json | null
           caption: string | null
-          correlation_id: string | null
           created_at: string
           duration: number | null
           file_id: string | null
@@ -458,7 +447,6 @@ export type Database = {
         Insert: {
           analyzed_content?: Json | null
           caption?: string | null
-          correlation_id?: string | null
           created_at?: string
           duration?: number | null
           file_id?: string | null
@@ -500,7 +488,6 @@ export type Database = {
         Update: {
           analyzed_content?: Json | null
           caption?: string | null
-          correlation_id?: string | null
           created_at?: string
           duration?: number | null
           file_id?: string | null
@@ -541,13 +528,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "telegram_media_correlation_id_fkey"
-            columns: ["correlation_id"]
-            isOneToOne: false
-            referencedRelation: "messages"
-            referencedColumns: ["correlation_id"]
-          },
-          {
             foreignKeyName: "telegram_media_message_id_fkey"
             columns: ["message_id"]
             isOneToOne: true
@@ -561,6 +541,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      check_media_sync_status: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          total_messages: number
+          messages_with_media: number
+          total_telegram_media: number
+          unsynced_records: number
+        }[]
+      }
       cleanup_old_messages: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -593,6 +582,20 @@ export type Database = {
         }
         Returns: string
       }
+      get_unique_media_group: {
+        Args: {
+          p_group_id: string
+        }
+        Returns: {
+          message_id: string
+          message_url: string
+          public_url: string
+          caption: string
+          analyzed_content: Json
+          is_original_caption: boolean
+          message_date: string
+        }[]
+      }
       maintenance_cleanup: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -604,7 +607,6 @@ export type Database = {
         Returns: {
           analyzed_content: Json | null
           caption: string | null
-          correlation_id: string | null
           created_at: string
           duration: number | null
           file_id: string | null
@@ -643,6 +645,10 @@ export type Database = {
           vendor_uid: string | null
           width: number | null
         }[]
+      }
+      sync_telegram_media_with_messages: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
       update_media_records: {
         Args: {
