@@ -121,26 +121,7 @@ export async function handleWebhookUpdate(
       throw messageError;
     }
 
-    // Sync analyzed content across media group if this message has analyzed content
-    if (message.media_group_id && analyzedContent.analyzed_content) {
-      console.log('Syncing analyzed content to media group:', message.media_group_id);
-      
-      const { error: syncError } = await supabase
-        .from('messages')
-        .update({
-          analyzed_content: analyzedContent.analyzed_content,
-          message_media_data: messageData,
-          updated_at: new Date().toISOString()
-        })
-        .eq('media_group_id', message.media_group_id)
-        .neq('id', messageRecord.id);
-
-      if (syncError) {
-        console.error('Error syncing analyzed content to group:', syncError);
-      }
-    }
-
-    // Check if we should queue for processing
+    // Queue for processing if media type
     if (messageType === 'photo' || messageType === 'video') {
       let shouldQueue = true;
       let shouldMarkProcessed = false;
@@ -153,14 +134,12 @@ export async function handleWebhookUpdate(
           .eq('media_group_id', message.media_group_id);
 
         shouldQueue = count >= mediaGroupSize;
-        shouldMarkProcessed = shouldQueue; // Mark as processed if all group items are present
+        shouldMarkProcessed = shouldQueue;
       } else {
-        // Single media item can be marked as processed immediately
         shouldMarkProcessed = true;
       }
 
       if (shouldMarkProcessed) {
-        // Update status to processed for this message and its group
         const updateQuery = message.media_group_id
           ? supabase
               .from('messages')

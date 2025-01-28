@@ -28,6 +28,7 @@ export interface WebhookMessageData {
     last_retry_at: string | null;
     retry_count: number;
   };
+  telegram_data: Record<string, any>;
 }
 
 export function buildWebhookMessageData(
@@ -36,9 +37,6 @@ export function buildWebhookMessageData(
   analyzedContent: AnalyzedMessageContent
 ): WebhookMessageData {
   const now = new Date().toISOString();
-  
-  // Extract analyzed data if available
-  const extractedData = analyzedContent.analyzed_content?.analyzed_content?.extracted_data || {};
   
   return {
     message: {
@@ -66,6 +64,7 @@ export function buildWebhookMessageData(
       processed_at: null,
       last_retry_at: null,
       retry_count: 0
-    }
+    },
+    telegram_data: message
   };
 }
