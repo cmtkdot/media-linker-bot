@@ -106,28 +106,7 @@ export async function handleWebhookUpdate(
             message_id: messageRecord.id
           });
 
-          // Create telegram_media record first
-          const { data: telegramMedia, error: mediaError } = await supabase
-            .from("telegram_media")
-            .insert({
-              file_id: mediaFile.file_id,
-              file_unique_id: mediaFile.file_unique_id,
-              file_type: mediaType,
-              message_id: messageRecord.id,
-              telegram_data: message,
-              message_media_data: messageData,
-              correlation_id: correlationId
-            })
-            .select()
-            .single();
-
-          if (mediaError) {
-            throw mediaError;
-          }
-
-          console.log("Created telegram_media record:", telegramMedia.id);
-
-          // Process media file and upload to storage
+          // Process media file and upload to storage first
           const processingParams: MediaProcessingParams = {
             fileId: mediaFile.file_id,
             fileUniqueId: mediaFile.file_unique_id,
@@ -144,6 +123,26 @@ export async function handleWebhookUpdate(
 
           if (!result.success) {
             throw new Error(result.error);
+          }
+
+          // Only create telegram_media record after successful upload
+          const { error: mediaError } = await supabase
+            .from("telegram_media")
+            .insert({
+              file_id: mediaFile.file_id,
+              file_unique_id: mediaFile.file_unique_id,
+              file_type: mediaType,
+              message_id: messageRecord.id,
+              telegram_data: message,
+              message_media_data: messageData,
+              correlation_id: correlationId,
+              public_url: result.publicUrl,
+              storage_path: result.storagePath,
+              processed: true
+            });
+
+          if (mediaError) {
+            throw mediaError;
           }
 
           console.log("Successfully processed media:", {
