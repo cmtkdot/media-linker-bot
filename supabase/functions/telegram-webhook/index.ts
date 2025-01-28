@@ -1,8 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { handleWebhookUpdate } from "../_shared/webhook-handler.ts";
-import { withDatabaseRetry } from "../_shared/database-retry.ts";
+import { processWebhookMessage } from "../_shared/webhook-message-processor.ts";
+import { WebhookUpdate } from "../_shared/webhook-types.ts";
 
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN') || '';
 const TELEGRAM_WEBHOOK_SECRET = Deno.env.get('TELEGRAM_WEBHOOK_SECRET') || '';
@@ -24,13 +24,13 @@ serve(async (req) => {
       );
     }
 
-    // Initialize Supabase client with retry wrapper
+    // Initialize Supabase client
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const update = await req.json();
+    const update = await req.json() as WebhookUpdate;
     const correlationId = crypto.randomUUID();
 
     console.log('Received webhook update:', {
@@ -40,12 +40,8 @@ serve(async (req) => {
       correlation_id: correlationId
     });
 
-    // Process webhook update with retry logic
-    const result = await withDatabaseRetry(
-      async () => handleWebhookUpdate(update, supabaseClient, correlationId),
-      0,
-      'webhook_handler'
-    );
+    // Process webhook message
+    const result = await processWebhookMessage(update, supabaseClient, correlationId);
 
     console.log('Webhook processing completed:', {
       success: result.success,
@@ -55,30 +51,18 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify(result),
-      { 
-        headers: { 
-          ...corsHeaders, 
-          'Content-Type': 'application/json' 
-        } 
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    console.error('Error in webhook handler:', {
-      error: error.message,
-      stack: error.stack
-    });
-
+    console.error('Error in webhook handler:', error);
     return new Response(
       JSON.stringify({ 
         error: error.message,
         details: error.stack
       }),
       { 
-        headers: { 
-          ...corsHeaders, 
-          'Content-Type': 'application/json' 
-        }, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 500 
       }
     );
