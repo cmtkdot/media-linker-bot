@@ -15,6 +15,10 @@ interface QueueItem {
       file_unique_id: string;
       file_type: string;
     };
+    meta: {
+      is_original_caption: boolean;
+      original_message_id?: string;
+    };
   };
 }
 
@@ -42,9 +46,14 @@ export async function processMediaGroups(supabase: any, items: QueueItem[]) {
 
 async function processMediaGroup(supabase: any, groupId: string, items: QueueItem[]) {
   try {
+    // Find the original caption holder
+    const originalItem = items.find(item => 
+      item.message_media_data?.meta?.is_original_caption
+    );
+
     // Process all items in the group
     for (const item of items) {
-      await processQueueItem(supabase, item);
+      await processQueueItem(supabase, item, originalItem);
     }
   } catch (error) {
     console.error(`Error processing media group ${groupId}:`, error);
@@ -52,7 +61,7 @@ async function processMediaGroup(supabase: any, groupId: string, items: QueueIte
   }
 }
 
-export async function processQueueItem(supabase: any, item: QueueItem) {
+export async function processQueueItem(supabase: any, item: QueueItem, originalItem?: QueueItem) {
   console.log(`Processing queue item for message ${item.message_media_data.message.message_id}`);
 
   try {
@@ -68,7 +77,8 @@ export async function processQueueItem(supabase: any, item: QueueItem) {
       .maybeSingle();
 
     if (existingMedia) {
-      return await handleExistingMedia(supabase, existingMedia, item);
+      console.log(`Media ${fileUniqueId} already exists, skipping processing`);
+      return;
     }
 
     // Process new media
@@ -87,61 +97,11 @@ export async function processQueueItem(supabase: any, item: QueueItem) {
       fileExt
     );
 
-    // Create new telegram_media record
-    await createTelegramMediaRecord(supabase, item, publicUrl);
-    
-    // Mark queue item as processed
-    await markQueueItemProcessed(supabase, item.id);
-
-    return { status: 'processed', file_unique_id: fileUniqueId };
-  } catch (error) {
-    console.error(`Error processing queue item:`, error);
-    await handleProcessingError(supabase, item.id, error);
-    throw error;
-  }
-}
-
-async function handleExistingMedia(supabase: any, existingMedia: any, item: QueueItem) {
-  console.log(`Found existing media for ${item.message_media_data.media.file_unique_id}`);
-  
-  const hasChanges = compareMediaData(existingMedia.message_media_data, item.message_media_data);
-  
-  if (hasChanges) {
-    console.log(`Updating existing media record with new data`);
-    await updateExistingMedia(supabase, existingMedia.id, item);
-  }
-
-  await markQueueItemProcessed(supabase, item.id);
-  return { status: 'updated', file_unique_id: item.message_media_data.media.file_unique_id };
-}
-
-function compareMediaData(existing: any, updated: any): boolean {
-  const fieldsToCompare = [
-    'message.caption',
-    'analysis.analyzed_content',
-    'meta.is_original_caption'
-  ];
-  
-  for (const field of fieldsToCompare) {
-    const parts = field.split('.');
-    const existingValue = parts.reduce((obj, key) => obj?.[key], existing);
-    const updatedValue = parts.reduce((obj, key) => obj?.[key], updated);
-    
-    if (JSON.stringify(existingValue) !== JSON.stringify(updatedValue)) {
-      return true;
-    }
-  }
-  
-  return false;
-}
-
-async function createTelegramMediaRecord(supabase: any, item: QueueItem, publicUrl: string) {
-  const { error: insertError } = await supabase
-    .from('telegram_media')
-    .insert({
-      file_id: item.message_media_data.media.file_id,
-      file_unique_id: item.message_media_data.media.file_unique_id,
-      file_type: item.message_media_data.media.file_type,
+    // Create telegram_media record with original caption info if available
+    const mediaData = {
+      file_id: fileId,
+      file_unique_id: fileUniqueId,
+      file_type: fileType,
       public_url: publicUrl,
       message_media_data: {
         ...item.message_media_data,
@@ -149,47 +109,40 @@ async function createTelegramMediaRecord(supabase: any, item: QueueItem, publicU
           ...item.message_media_data.media,
           public_url: publicUrl
         }
-      }
-    });
+      },
+      is_original_caption: item.message_media_data.meta.is_original_caption,
+      original_message_id: originalItem?.message_media_data.meta.original_message_id
+    };
 
-  if (insertError) throw insertError;
-}
+    const { error: insertError } = await supabase
+      .from('telegram_media')
+      .insert([mediaData]);
 
-async function updateExistingMedia(supabase: any, id: string, item: QueueItem) {
-  const { error: updateError } = await supabase
-    .from('telegram_media')
-    .update({
-      message_media_data: item.message_media_data,
-      updated_at: new Date().toISOString()
-    })
-    .eq('id', id);
+    if (insertError) throw insertError;
 
-  if (updateError) throw updateError;
-}
+    // Mark queue item as processed
+    await supabase
+      .from('unified_processing_queue')
+      .update({
+        status: 'processed',
+        processed_at: new Date().toISOString()
+      })
+      .eq('id', item.id);
 
-async function markQueueItemProcessed(supabase: any, itemId: string) {
-  const { error } = await supabase
-    .from('unified_processing_queue')
-    .update({
-      status: 'processed',
-      processed_at: new Date().toISOString()
-    })
-    .eq('id', itemId);
+    console.log(`Successfully processed media item ${fileUniqueId}`);
+  } catch (error) {
+    console.error(`Error processing queue item:`, error);
+    
+    // Update queue item with error
+    await supabase
+      .from('unified_processing_queue')
+      .update({
+        status: 'error',
+        error_message: error.message,
+        processed_at: new Date().toISOString()
+      })
+      .eq('id', item.id);
 
-  if (error) throw error;
-}
-
-async function handleProcessingError(supabase: any, itemId: string, error: any) {
-  const { error: updateError } = await supabase
-    .from('unified_processing_queue')
-    .update({
-      status: 'error',
-      error_message: error.message,
-      processed_at: new Date().toISOString()
-    })
-    .eq('id', itemId);
-
-  if (updateError) {
-    console.error('Error updating queue item status:', updateError);
+    throw error;
   }
 }
