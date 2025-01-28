@@ -187,7 +187,8 @@ const MediaCard = ({ item, onPreview, onEdit, relatedMedia = [] }: MediaCardProp
           <p className="text-xs text-muted-foreground">
             {currentItem.file_type.charAt(0).toUpperCase() + currentItem.file_type.slice(1)}
             {allMedia.length > 1 && ` • ${currentIndex + 1}/${allMedia.length}`}
-            {currentItem.message_media_data?.meta?.retry_count > 0 && 
+            {currentItem.message_media_data?.meta?.retry_count !== undefined && 
+              currentItem.message_media_data.meta.retry_count > 0 && 
               ` • Retries: ${currentItem.message_media_data.meta.retry_count}`}
           </p>
         </div>

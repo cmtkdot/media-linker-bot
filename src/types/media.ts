@@ -19,10 +19,11 @@ export interface MessageMediaData {
   meta: {
     created_at: string;
     updated_at: string;
-    status: 'pending' | 'processed' | 'error';
+    status: 'pending' | 'processed' | 'error' | 'processing';
     error: string | null;
     is_original_caption?: boolean;
     original_message_id?: string;
+    retry_count?: number;
   };
   media: {
     file_id: string;
