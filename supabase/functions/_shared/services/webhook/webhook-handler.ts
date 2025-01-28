@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { WebhookUpdate, TelegramMessage } from "../../types/telegram.types.ts";
+import { WebhookUpdate, TelegramMessage } from "../../types/telegram-types.ts";
 import { analyzeWebhookMessage } from "../../webhook-message-analyzer.ts";
 import { buildWebhookMessageData } from "../../webhook-message-builder.ts";
 
