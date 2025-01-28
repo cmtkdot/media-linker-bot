@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { processWebhookUpdate } from "../_shared/services/webhook/webhook.service.ts";
-import { corsHeaders } from "../_shared/utils/cors-utils.ts";
+import { processWebhookUpdate } from "../_shared/services/webhook/webhook-service.ts";
+import { corsHeaders } from "../_shared/cors.ts";
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -17,22 +17,40 @@ serve(async (req) => {
     const update = await req.json();
     const correlationId = crypto.randomUUID();
 
-    console.log('Processing webhook update:', {
+    console.log('Received webhook update:', {
       update_id: update.update_id,
-      correlation_id: correlationId
+      correlation_id: correlationId,
+      message_id: update.message?.message_id || update.channel_post?.message_id,
+      chat_id: update.message?.chat?.id || update.channel_post?.chat?.id,
+      media_group_id: update.message?.media_group_id || update.channel_post?.media_group_id
     });
 
     const result = await processWebhookUpdate(supabase, update, correlationId);
 
     return new Response(
       JSON.stringify(result),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { 
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json' 
+        } 
+      }
     );
   } catch (error) {
     console.error('Error in webhook handler:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      JSON.stringify({ 
+        error: error.message,
+        success: false,
+        message: 'Error processing webhook update'
+      }),
+      { 
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json' 
+        }, 
+        status: 500 
+      }
     );
   }
 });
