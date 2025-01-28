@@ -66,43 +66,73 @@ export async function handleWebhookUpdate(
       let originalMessageId = null;
       let analyzedContent = null;
 
+      // Check for media group and handle caption syncing
       if (message.media_group_id) {
+        console.log('Processing media group message:', {
+          media_group_id: message.media_group_id,
+          message_type: messageType,
+          has_caption: !!message.caption
+        });
+
+        // Get all existing messages in the group
         const { data: groupMessages } = await supabase
           .from('messages')
           .select('id, is_original_caption, analyzed_content, caption')
           .eq('media_group_id', message.media_group_id)
           .order('created_at', { ascending: true });
 
+        const existingCaptionHolder = groupMessages?.find(m => m.is_original_caption);
+
+        // If this message has a caption
         if (message.caption) {
-          const existingCaptionHolder = groupMessages?.find(m => m.is_original_caption);
-          
           if (!existingCaptionHolder) {
+            // This becomes the original caption holder
             isOriginalCaption = true;
             analyzedContent = await analyzeCaptionWithAI(message.caption);
-            
+
+            // Update all existing messages in the group with the analyzed content
             if (groupMessages?.length > 0) {
+              console.log('Updating existing group messages with analyzed content:', {
+                media_group_id: message.media_group_id,
+                message_count: groupMessages.length
+              });
+
               await Promise.all(groupMessages.map(async (groupMsg: any) => {
                 await supabase
                   .from('messages')
                   .update({
                     analyzed_content: analyzedContent,
-                    caption: message.caption
+                    caption: message.caption,
+                    is_original_caption: false,
+                    original_message_id: null // Will be updated after current message insert
                   })
                   .eq('id', groupMsg.id);
               }));
             }
           } else {
+            // Use existing caption holder's content
             originalMessageId = existingCaptionHolder.id;
             analyzedContent = existingCaptionHolder.analyzed_content;
+            
+            console.log('Using existing caption holder:', {
+              original_message_id: originalMessageId,
+              has_analyzed_content: !!analyzedContent
+            });
           }
         } else if (groupMessages?.length > 0) {
-          const captionHolder = groupMessages.find(m => m.is_original_caption);
-          if (captionHolder) {
-            originalMessageId = captionHolder.id;
-            analyzedContent = captionHolder.analyzed_content;
+          // For non-caption messages in a group, use existing analyzed content
+          if (existingCaptionHolder) {
+            originalMessageId = existingCaptionHolder.id;
+            analyzedContent = existingCaptionHolder.analyzed_content;
+            
+            console.log('Using existing group analyzed content:', {
+              original_message_id: originalMessageId,
+              has_analyzed_content: !!analyzedContent
+            });
           }
         }
       } else if (message.caption) {
+        // Single media message with caption
         isOriginalCaption = true;
         analyzedContent = await analyzeCaptionWithAI(message.caption);
       }
@@ -149,8 +179,14 @@ export async function handleWebhookUpdate(
       throw messageError;
     }
 
-    // Only queue photo and video messages for processing
+    // Queue media messages for processing
     if (messageType === 'photo' || messageType === 'video') {
+      console.log('Queueing media message for processing:', {
+        message_id: message.message_id,
+        media_group_id: message.media_group_id,
+        message_type: messageType
+      });
+
       const { error: queueError } = await supabase
         .from('unified_processing_queue')
         .insert({
