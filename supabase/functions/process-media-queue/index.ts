@@ -44,10 +44,18 @@ serve(async (req) => {
 
     for (const item of queueItems) {
       try {
+        // Ensure we have the correct media data structure
         const mediaData = item.message_media_data?.media;
-        if (!mediaData?.file_id) {
-          console.log(`Skipping item ${item.id} - missing media data`);
-          continue;
+        const messageData = item.message_media_data?.message;
+        
+        console.log('Processing item with media data:', {
+          file_id: mediaData?.file_id,
+          file_unique_id: mediaData?.file_unique_id,
+          file_type: mediaData?.file_type
+        });
+
+        if (!mediaData?.file_id || !mediaData?.file_unique_id || !mediaData?.file_type) {
+          throw new Error('Missing required media data fields');
         }
 
         // Download file from Telegram
@@ -66,7 +74,7 @@ serve(async (req) => {
         );
         const fileBuffer = await fileResponse.arrayBuffer();
 
-        // Generate storage path
+        // Generate storage path using file_unique_id
         const storagePath = `${mediaData.file_unique_id}${
           mediaData.file_type === 'photo' ? '.jpg' :
           mediaData.file_type === 'video' ? '.mp4' :
@@ -92,7 +100,7 @@ serve(async (req) => {
           .from('media')
           .getPublicUrl(storagePath);
 
-        // Update telegram_media record
+        // Update telegram_media record with complete data
         const { error: mediaError } = await supabaseClient
           .from('telegram_media')
           .upsert({
@@ -101,9 +109,16 @@ serve(async (req) => {
             file_type: mediaData.file_type,
             public_url: publicUrl,
             storage_path: storagePath,
-            message_media_data: item.message_media_data,
+            message_media_data: {
+              ...item.message_media_data,
+              media: {
+                ...mediaData,
+                public_url: publicUrl,
+                storage_path: storagePath
+              }
+            },
             correlation_id: item.correlation_id,
-            message_id: item.id,
+            message_id: item.message_id,
             processed: true
           });
 
@@ -114,7 +129,20 @@ serve(async (req) => {
           .from('unified_processing_queue')
           .update({
             status: 'processed',
-            processed_at: new Date().toISOString()
+            processed_at: new Date().toISOString(),
+            message_media_data: {
+              ...item.message_media_data,
+              media: {
+                ...mediaData,
+                public_url: publicUrl,
+                storage_path: storagePath
+              },
+              meta: {
+                ...item.message_media_data.meta,
+                status: 'processed',
+                processed_at: new Date().toISOString()
+              }
+            }
           })
           .eq('id', item.id);
 
@@ -130,7 +158,15 @@ serve(async (req) => {
           .update({
             status: 'error',
             error_message: error.message,
-            retry_count: (item.retry_count || 0) + 1
+            retry_count: (item.retry_count || 0) + 1,
+            message_media_data: {
+              ...item.message_media_data,
+              meta: {
+                ...item.message_media_data?.meta,
+                status: 'error',
+                error: error.message
+              }
+            }
           })
           .eq('id', item.id);
       }
