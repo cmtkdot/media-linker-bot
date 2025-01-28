@@ -25,9 +25,44 @@ interface QueueItem {
   };
 }
 
+async function isMediaGroupComplete(supabase: any, mediaGroupId: string): Promise<boolean> {
+  const { data: messages, error } = await supabase
+    .from('messages')
+    .select('id, analyzed_content')
+    .eq('media_group_id', mediaGroupId);
+
+  if (error) {
+    console.error('Error checking media group completeness:', error);
+    return false;
+  }
+
+  // Group is complete if all messages have analyzed_content
+  return messages.every(msg => msg.analyzed_content !== null);
+}
+
+async function waitForMediaGroupCompletion(supabase: any, mediaGroupId: string, maxAttempts = 5): Promise<boolean> {
+  console.log(`Waiting for media group ${mediaGroupId} to complete...`);
+  
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const isComplete = await isMediaGroupComplete(supabase, mediaGroupId);
+    
+    if (isComplete) {
+      console.log(`Media group ${mediaGroupId} is complete after ${attempt + 1} attempts`);
+      return true;
+    }
+
+    // Wait for 2 seconds before next check
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  }
+
+  console.log(`Media group ${mediaGroupId} incomplete after ${maxAttempts} attempts`);
+  return false;
+}
+
 export async function processMediaGroups(supabase: any, items: QueueItem[]) {
   const mediaGroups = new Map<string, QueueItem[]>();
   
+  // Group items by media_group_id
   items.forEach(item => {
     const groupId = item.message_media_data?.message?.media_group_id;
     if (groupId) {
@@ -41,7 +76,16 @@ export async function processMediaGroups(supabase: any, items: QueueItem[]) {
   console.log(`Processing ${mediaGroups.size} media groups`);
 
   for (const [groupId, groupItems] of mediaGroups) {
-    console.log(`Processing media group ${groupId} with ${groupItems.length} items`);
+    console.log(`Checking media group ${groupId} with ${groupItems.length} items`);
+    
+    // Wait for group completion before processing
+    const isComplete = await waitForMediaGroupCompletion(supabase, groupId);
+    
+    if (!isComplete) {
+      console.log(`Skipping incomplete media group ${groupId}`);
+      continue;
+    }
+
     await processMediaGroup(supabase, groupId, groupItems);
   }
 }
@@ -53,7 +97,6 @@ async function processMediaGroup(supabase: any, groupId: string, items: QueueIte
       item.message_media_data?.meta?.is_original_caption
     );
 
-    // Get analyzed content from original item
     const analyzedContent = originalItem?.message_media_data?.analysis?.analyzed_content;
 
     console.log('Processing media group:', {
@@ -65,29 +108,14 @@ async function processMediaGroup(supabase: any, groupId: string, items: QueueIte
 
     // Process each item in the group
     for (const item of items) {
-      // Update item's analyzed content from original if needed
       if (analyzedContent && !item.message_media_data?.meta?.is_original_caption) {
         item.message_media_data.analysis.analyzed_content = analyzedContent;
       }
 
-      // Process the media file
       await processQueueItem(supabase, item, originalItem);
-
-      // Update telegram_media record with original message reference
-      if (originalItem && originalItem.id !== item.id) {
-        await supabase
-          .from('telegram_media')
-          .update({
-            original_message_id: originalItem.id,
-            is_original_caption: false,
-            analyzed_content: analyzedContent,
-            message_media_data: item.message_media_data
-          })
-          .eq('file_unique_id', item.message_media_data.media.file_unique_id);
-      }
     }
 
-    // Mark items as processed in the queue
+    // Mark items as processed
     const itemIds = items.map(item => item.id);
     await supabase
       .from('unified_processing_queue')
