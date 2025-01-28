@@ -259,8 +259,10 @@ export type Database = {
           created_at: string
           id: string
           is_original_caption: boolean | null
+          last_group_message_at: string | null
           last_retry_at: string | null
           media_group_id: string | null
+          media_group_size: number | null
           message_id: number
           message_media_data: Json | null
           message_type: string
@@ -290,8 +292,10 @@ export type Database = {
           created_at?: string
           id?: string
           is_original_caption?: boolean | null
+          last_group_message_at?: string | null
           last_retry_at?: string | null
           media_group_id?: string | null
+          media_group_size?: number | null
           message_id: number
           message_media_data?: Json | null
           message_type: string
@@ -321,8 +325,10 @@ export type Database = {
           created_at?: string
           id?: string
           is_original_caption?: boolean | null
+          last_group_message_at?: string | null
           last_retry_at?: string | null
           media_group_id?: string | null
+          media_group_size?: number | null
           message_id?: number
           message_media_data?: Json | null
           message_type?: string
