@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { processMediaGroups, processQueueItem } from "../_shared/queue-processor.ts";
+import { processMediaGroups, processQueueItem } from "../_shared/queue/queue-processor.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -18,7 +18,6 @@ serve(async (req) => {
   );
 
   try {
-    // Fetch pending queue items
     const { data: queueItems, error: queueError } = await supabase
       .from('unified_processing_queue')
       .select('*')
@@ -38,7 +37,6 @@ serve(async (req) => {
 
     console.log(`Processing ${queueItems.length} queue items`);
 
-    // Process media groups first
     const groupItems = queueItems.filter(item => 
       item.message_media_data?.message?.media_group_id
     );
@@ -47,7 +45,6 @@ serve(async (req) => {
       await processMediaGroups(supabase, groupItems);
     }
 
-    // Process remaining individual items
     const individualItems = queueItems.filter(item => 
       !item.message_media_data?.message?.media_group_id
     );
@@ -56,7 +53,6 @@ serve(async (req) => {
       await processQueueItem(supabase, item);
     }
 
-    // Cleanup processed items
     await cleanupProcessedItems(supabase);
 
     return new Response(
