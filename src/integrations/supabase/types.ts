@@ -278,6 +278,7 @@ export type Database = {
           sender_info: Json
           status: string | null
           telegram_data: Json
+          text: string | null
           updated_at: string
           vendor_uid: string | null
         }
@@ -308,6 +309,7 @@ export type Database = {
           sender_info?: Json
           status?: string | null
           telegram_data?: Json
+          text?: string | null
           updated_at?: string
           vendor_uid?: string | null
         }
@@ -338,6 +340,7 @@ export type Database = {
           sender_info?: Json
           status?: string | null
           telegram_data?: Json
+          text?: string | null
           updated_at?: string
           vendor_uid?: string | null
         }
