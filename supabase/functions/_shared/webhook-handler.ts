@@ -78,18 +78,6 @@ export async function handleWebhookUpdate(
         if (message.animation) mediaGroupSize += 1;
         mediaGroupSize = Math.max(mediaGroupSize, 1);
       }
-
-      console.log('Found existing group messages:', {
-        media_group_id: message.media_group_id,
-        message_count: groupMessages?.length,
-        media_group_size: mediaGroupSize,
-        messages: groupMessages?.map(m => ({
-          id: m.id,
-          is_original_caption: m.is_original_caption,
-          has_analyzed_content: !!m.analyzed_content,
-          message_type: m.message_type
-        }))
-      });
     }
 
     // Generate message URL
@@ -98,28 +86,10 @@ export async function handleWebhookUpdate(
     
     // Analyze message content
     const messageType = determineMessageType(message);
-    console.log('Analyzing message content:', {
-      message_type: messageType,
-      has_caption: !!message.caption,
-      media_group_id: message.media_group_id,
-      media_group_size: mediaGroupSize
-    });
-
     const analyzedContent = await analyzeWebhookMessage(message, existingGroupMessages);
-    console.log('Analysis result:', {
-      is_original_caption: analyzedContent.is_original_caption,
-      has_analyzed_content: !!analyzedContent.analyzed_content,
-      original_message_id: analyzedContent.original_message_id
-    });
     
     // Build message data structure
     const messageData = buildWebhookMessageData(message, messageUrl, analyzedContent);
-    console.log('Built message data:', {
-      message_id: messageData.message.message_id,
-      has_caption: !!messageData.message.caption,
-      has_analysis: !!messageData.analysis.analyzed_content,
-      meta: messageData.meta
-    });
 
     // Create message record
     const { data: messageRecord, error: messageError } = await supabase
@@ -151,14 +121,6 @@ export async function handleWebhookUpdate(
       throw messageError;
     }
 
-    console.log('Created message record:', {
-      id: messageRecord.id,
-      message_type: messageRecord.message_type,
-      is_original_caption: messageRecord.is_original_caption,
-      has_analyzed_content: !!messageRecord.analyzed_content,
-      media_group_size: messageRecord.media_group_size
-    });
-
     // Sync analyzed content across media group if this message has analyzed content
     if (message.media_group_id && analyzedContent.analyzed_content) {
       console.log('Syncing analyzed content to media group:', message.media_group_id);
@@ -175,36 +137,65 @@ export async function handleWebhookUpdate(
 
       if (syncError) {
         console.error('Error syncing analyzed content to group:', syncError);
-      } else {
-        console.log('Successfully synced analyzed content to media group');
       }
     }
 
-    // Only queue for processing if all media group items are present
+    // Check if we should queue for processing
     if (messageType === 'photo' || messageType === 'video') {
+      let shouldQueue = true;
+      let shouldMarkProcessed = false;
+
       if (message.media_group_id) {
+        // Count current group messages
         const { count } = await supabase
           .from('messages')
           .select('id', { count: 'exact' })
           .eq('media_group_id', message.media_group_id);
 
-        if (count >= mediaGroupSize) {
-          console.log('All media group items present, queueing for processing:', {
-            media_group_id: message.media_group_id,
-            items_count: count,
-            media_group_size: mediaGroupSize
-          });
-          await queueWebhookMessage(supabase, messageData, correlationId, messageType);
-        } else {
-          console.log('Waiting for more media group items before queueing:', {
-            media_group_id: message.media_group_id,
-            current_count: count,
-            expected_size: mediaGroupSize
-          });
-        }
+        shouldQueue = count >= mediaGroupSize;
+        shouldMarkProcessed = shouldQueue; // Mark as processed if all group items are present
       } else {
-        // Single media item, queue immediately
+        // Single media item can be marked as processed immediately
+        shouldMarkProcessed = true;
+      }
+
+      if (shouldMarkProcessed) {
+        // Update status to processed for this message and its group
+        const updateQuery = message.media_group_id
+          ? supabase
+              .from('messages')
+              .update({
+                status: 'processed',
+                processed_at: new Date().toISOString()
+              })
+              .eq('media_group_id', message.media_group_id)
+          : supabase
+              .from('messages')
+              .update({
+                status: 'processed',
+                processed_at: new Date().toISOString()
+              })
+              .eq('id', messageRecord.id);
+
+        const { error: updateError } = await updateQuery;
+        if (updateError) {
+          console.error('Error updating message status:', updateError);
+        }
+      }
+
+      if (shouldQueue) {
+        console.log('Queueing for processing:', {
+          message_id: message.message_id,
+          media_group_id: message.media_group_id,
+          items_count: message.media_group_id ? mediaGroupSize : 1
+        });
         await queueWebhookMessage(supabase, messageData, correlationId, messageType);
+      } else {
+        console.log('Waiting for more media group items before queueing:', {
+          media_group_id: message.media_group_id,
+          current_count: count,
+          expected_size: mediaGroupSize
+        });
       }
     }
 

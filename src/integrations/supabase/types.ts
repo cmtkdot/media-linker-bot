@@ -561,12 +561,6 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
-      is_media_group_synced: {
-        Args: {
-          group_id: string
-        }
-        Returns: boolean
-      }
       search_telegram_media: {
         Args: {
           search_term: string
