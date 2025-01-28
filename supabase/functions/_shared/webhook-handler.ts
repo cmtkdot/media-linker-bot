@@ -3,6 +3,7 @@ import { TelegramMessage, TelegramUpdate } from './telegram-types.ts';
 import { analyzeWebhookMessage } from './webhook-message-analyzer.ts';
 import { buildWebhookMessageData } from './webhook-message-builder.ts';
 import { processMediaMessage } from './media/processor.ts';
+import { handleMediaError } from './media/error-handler.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -111,14 +112,14 @@ export async function handleWebhookUpdate(
         await processMediaMessage(supabase, messageRecord, botToken);
       } catch (error) {
         console.error("Error processing media:", error);
-        await supabase
-          .from("messages")
-          .update({
-            processing_error: error instanceof Error ? error.message : String(error),
-            status: "error",
-          })
-          .eq("id", messageRecord.id);
-
+        await handleMediaError(
+          supabase,
+          error,
+          messageRecord.id,
+          correlationId,
+          'processMediaMessage',
+          0
+        );
         throw error;
       }
     }
