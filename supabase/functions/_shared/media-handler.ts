@@ -1,3 +1,5 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1 second
 
@@ -7,7 +9,7 @@ interface StorageResult {
   isExisting: boolean;
 }
 
-function getMimeType(fileType: string): string {
+export const getMimeType = (fileType: string): string => {
   return fileType === "photo"
     ? "image/jpeg"
     : fileType === "video"
@@ -15,9 +17,9 @@ function getMimeType(fileType: string): string {
     : fileType === "document"
     ? "application/pdf"
     : "application/octet-stream";
-}
+};
 
-function generateFileName(fileUniqueId: string, fileType: string): string {
+export const generateSafeFileName = (fileUniqueId: string, fileType: string): string => {
   const safeId = fileUniqueId
     .replace(/[^\x00-\x7F]/g, "")
     .replace(/[^a-zA-Z0-9]/g, "_");
@@ -31,9 +33,41 @@ function generateFileName(fileUniqueId: string, fileType: string): string {
       : "bin";
 
   return `${safeId}.${extension}`;
-}
+};
 
-export async function uploadMediaToStorage(
+export const validateMediaFile = async (mediaFile: any, mediaType: string) => {
+  if (!mediaFile?.file_id) {
+    throw new Error('Invalid media file: missing file_id');
+  }
+
+  if (mediaFile.file_size && mediaFile.file_size > 100 * 1024 * 1024) {
+    throw new Error('File size exceeds maximum allowed (100MB)');
+  }
+
+  switch (mediaType) {
+    case 'photo':
+      if (!mediaFile.width || !mediaFile.height) {
+        throw new Error('Invalid photo: missing dimensions');
+      }
+      break;
+    case 'video':
+      if (!mediaFile.duration) {
+        throw new Error('Invalid video: missing duration');
+      }
+      break;
+    case 'document':
+      break;
+    case 'animation':
+      if (!mediaFile.duration) {
+        throw new Error('Invalid animation: missing duration');
+      }
+      break;
+    default:
+      throw new Error(`Unsupported media type: ${mediaType}`);
+  }
+};
+
+export const uploadMediaToStorage = async (
   supabase: any,
   buffer: ArrayBuffer,
   fileUniqueId: string,
@@ -41,7 +75,7 @@ export async function uploadMediaToStorage(
   botToken?: string,
   fileId?: string,
   retryCount = 0
-): Promise<StorageResult> {
+): Promise<StorageResult> => {
   console.log("Starting media upload to storage:", {
     fileUniqueId,
     fileType,
@@ -49,7 +83,7 @@ export async function uploadMediaToStorage(
   });
 
   try {
-    const fileName = generateFileName(fileUniqueId, fileType);
+    const fileName = generateSafeFileName(fileUniqueId, fileType);
     const contentType = getMimeType(fileType);
 
     // Check if file already exists
@@ -79,11 +113,10 @@ export async function uploadMediaToStorage(
         throw new Error(`Existing file not accessible: ${response.status}`);
       } catch (error) {
         console.error("Existing file verification failed:", error);
-        // Continue with upload if verification fails
       }
     }
 
-    // For photos, use the provided file_id directly since Telegram already gives us the best quality
+    // For photos, use the provided file_id directly
     let uploadBuffer = buffer;
     if (fileType === "photo" && botToken && fileId) {
       console.log("Getting photo from Telegram");
@@ -172,4 +205,4 @@ export async function uploadMediaToStorage(
     console.error("Error in uploadMediaToStorage:", error);
     throw error;
   }
-}
+};

@@ -1,21 +1,12 @@
-import { MediaProcessingParams, processMediaFile } from "./media-processor.ts";
-import { TelegramMessage, TelegramUpdate, TelegramPhotoSize } from "./telegram-types.ts";
-import { SupabaseClientWithDatabase } from "./types.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { uploadMediaToStorage, validateMediaFile } from "./media-handler.ts";
+import { TelegramMessage, TelegramUpdate } from "./telegram-types.ts";
 import { analyzeWebhookMessage } from "./webhook-message-analyzer.ts";
 import { buildWebhookMessageData } from "./webhook-message-builder.ts";
 
-// Helper function to get highest quality photo
-function getHighestQualityPhoto(photos: TelegramPhotoSize[]): TelegramPhotoSize {
-  return photos.sort((a, b) => {
-    const sizeA = a.file_size || 0;
-    const sizeB = b.file_size || 0;
-    return sizeB - sizeA;
-  })[0];
-}
-
 export async function handleWebhookUpdate(
   update: TelegramUpdate,
-  supabase: SupabaseClientWithDatabase,
+  supabase: any,
   correlationId: string,
   botToken: string
 ) {
@@ -95,7 +86,7 @@ export async function handleWebhookUpdate(
     const mediaType = getMediaType(message);
     if (mediaType) {
       const mediaFile = mediaType === "photo"
-        ? getHighestQualityPhoto(message.photo || [])
+        ? message.photo[0]  // We'll get the highest quality directly from Telegram
         : message.video || message.document || message.animation;
 
       if (mediaFile) {
@@ -106,26 +97,37 @@ export async function handleWebhookUpdate(
             message_id: messageRecord.id
           });
 
-          // Process media file and upload to storage first
-          const processingParams: MediaProcessingParams = {
-            fileId: mediaFile.file_id,
-            fileUniqueId: mediaFile.file_unique_id,
-            fileType: mediaType,
-            messageId: messageRecord.id,
+          // Validate media file
+          await validateMediaFile(mediaFile, mediaType);
+
+          // Get file from Telegram and upload to storage
+          const { publicUrl, storagePath } = await uploadMediaToStorage(
+            supabase,
+            new ArrayBuffer(0), // This will be replaced in uploadMediaToStorage for photos
+            mediaFile.file_unique_id,
+            mediaType,
             botToken,
-            correlationId,
-            caption: message.caption,
-            messageUrl,
-            analyzedContent: analyzedMessageContent.analyzed_content,
+            mediaFile.file_id
+          );
+
+          // Update message_media_data with upload results
+          const updatedMessageMediaData = {
+            ...messageData,
+            media: {
+              file_id: mediaFile.file_id,
+              file_unique_id: mediaFile.file_unique_id,
+              file_type: mediaType,
+              public_url: publicUrl,
+              storage_path: storagePath
+            },
+            meta: {
+              ...messageData.meta,
+              status: 'processed',
+              processed_at: new Date().toISOString()
+            }
           };
 
-          const result = await processMediaFile(supabase, processingParams);
-
-          if (!result.success) {
-            throw new Error(result.error);
-          }
-
-          // Only create telegram_media record after successful upload
+          // Create telegram_media record after successful upload
           const { error: mediaError } = await supabase
             .from("telegram_media")
             .insert({
@@ -134,10 +136,10 @@ export async function handleWebhookUpdate(
               file_type: mediaType,
               message_id: messageRecord.id,
               telegram_data: message,
-              message_media_data: messageData,
+              message_media_data: updatedMessageMediaData,
               correlation_id: correlationId,
-              public_url: result.publicUrl,
-              storage_path: result.storagePath,
+              public_url: publicUrl,
+              storage_path: storagePath,
               processed: true
             });
 
@@ -147,8 +149,8 @@ export async function handleWebhookUpdate(
 
           console.log("Successfully processed media:", {
             file_unique_id: mediaFile.file_unique_id,
-            public_url: result.publicUrl,
-            media_id: result.mediaId,
+            public_url: publicUrl,
+            media_id: messageRecord.id,
           });
         } catch (error) {
           console.error("Error processing media:", error);
