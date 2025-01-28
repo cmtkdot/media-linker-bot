@@ -274,7 +274,6 @@ export type Database = {
           purchase_date: string | null
           purchase_order_uid: string | null
           quantity: number | null
-          raw_text: string | null
           retry_count: number | null
           sender_info: Json
           status: string | null
@@ -305,7 +304,6 @@ export type Database = {
           purchase_date?: string | null
           purchase_order_uid?: string | null
           quantity?: number | null
-          raw_text?: string | null
           retry_count?: number | null
           sender_info?: Json
           status?: string | null
@@ -336,7 +334,6 @@ export type Database = {
           purchase_date?: string | null
           purchase_order_uid?: string | null
           quantity?: number | null
-          raw_text?: string | null
           retry_count?: number | null
           sender_info?: Json
           status?: string | null
