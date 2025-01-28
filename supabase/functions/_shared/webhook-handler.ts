@@ -2,8 +2,6 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { TelegramMessage, TelegramUpdate } from './telegram-types.ts';
 import { analyzeWebhookMessage } from './webhook-message-analyzer.ts';
 import { buildWebhookMessageData } from './webhook-message-builder.ts';
-import { processMediaMessage } from './media/processor.ts';
-import { handleMediaError } from './media/error-handler.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -65,9 +63,9 @@ export async function handleWebhookUpdate(
     );
     console.log("Built message data structure");
 
-    // Extract media type and file info before creating message record
+    // Extract media type and file info
     const mediaType = getMediaType(message);
-    const mediaFile = mediaType ? extractMediaFile(message, mediaType) : null;
+    console.log("Media type:", mediaType);
 
     // Create message record
     const { data: messageRecord, error: messageError } = await supabase
@@ -88,6 +86,8 @@ export async function handleWebhookUpdate(
         original_message_id: analyzedMessageContent.original_message_id,
         message_media_data: messageData,
         status: "pending",
+        media_group_size: message.media_group_id ? existingGroupMessages.length + 1 : null,
+        last_group_message_at: message.media_group_id ? new Date().toISOString() : null
       })
       .select()
       .single();
@@ -99,48 +99,19 @@ export async function handleWebhookUpdate(
 
     console.log("Created message record:", messageRecord.id);
 
-    // Only process media if we have valid media file information
-    if (mediaFile && mediaType) {
-      console.log("Processing media file:", {
-        file_id: mediaFile.file_id,
-        file_type: mediaType,
-        message_id: messageRecord.id,
-      });
-
-      // Create initial telegram_media record
-      const { error: telegramMediaError } = await supabase
-        .from("telegram_media")
+    // Log the initial media processing attempt
+    if (mediaType) {
+      const { error: logError } = await supabase
+        .from("media_processing_logs")
         .insert({
           message_id: messageRecord.id,
-          file_id: mediaFile.file_id,
-          file_unique_id: mediaFile.file_unique_id,
-          file_type: mediaType,
-          message_media_data: messageData,
           correlation_id: correlationId,
-          telegram_data: message,
-          is_original_caption: analyzedMessageContent.is_original_caption,
-          original_message_id: analyzedMessageContent.original_message_id,
+          status: "pending",
+          created_at: new Date().toISOString()
         });
 
-      if (telegramMediaError) {
-        console.error("Error creating telegram_media record:", telegramMediaError);
-        throw telegramMediaError;
-      }
-
-      try {
-        // Process media using the dedicated processor
-        await processMediaMessage(supabase, messageRecord, botToken);
-      } catch (error) {
-        console.error("Error processing media:", error);
-        await handleMediaError(
-          supabase,
-          error,
-          messageRecord.id,
-          correlationId,
-          'processMediaMessage',
-          0
-        );
-        throw error;
+      if (logError) {
+        console.error("Error creating media processing log:", logError);
       }
     }
 
@@ -150,7 +121,7 @@ export async function handleWebhookUpdate(
       messageId: messageRecord.id,
       data: {
         telegram_data: message,
-        status: "processed",
+        status: "pending",
       },
     };
   } catch (error) {
@@ -172,12 +143,4 @@ function getMediaType(message: TelegramMessage): string | null {
   if (message.document) return "document";
   if (message.animation) return "animation";
   return null;
-}
-
-function extractMediaFile(message: TelegramMessage, mediaType: string) {
-  if (mediaType === "photo") {
-    const photos = message.photo || [];
-    return photos[photos.length - 1]; // Get largest photo
-  }
-  return message.video || message.document || message.animation || null;
 }
