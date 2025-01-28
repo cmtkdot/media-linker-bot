@@ -41,6 +41,19 @@ export const getMediaType = (message: any): string | null => {
   return null;
 };
 
+export const generateSafeFileName = (fileUniqueId: string, fileType: string): string => {
+  // Remove non-ASCII characters and special characters
+  const safeId = fileUniqueId.replace(/[^\x00-\x7F]/g, '').replace(/[^a-zA-Z0-9]/g, '_');
+  
+  // Determine file extension based on type
+  const extension = fileType === 'photo' ? 'jpg' 
+    : fileType === 'video' ? 'mp4'
+    : fileType === 'document' ? 'pdf'
+    : 'bin';
+
+  return `${safeId}.${extension}`;
+};
+
 export const getMimeType = (filePath: string, defaultType: string = 'application/octet-stream'): string => {
   const ext = filePath.split('.').pop()?.toLowerCase();
   

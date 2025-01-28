@@ -16,7 +16,7 @@ export const uploadMediaToStorage = async (
 
   try {
     const fileName = generateSafeFileName(fileUniqueId, fileType);
-    const contentType = mimeType || getMimeType(fileType);
+    const contentType = mimeType || getMimeType(fileName);
 
     // Check if file already exists
     const { data: existingFile } = await supabase.storage
