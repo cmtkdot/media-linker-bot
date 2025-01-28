@@ -15,7 +15,7 @@ export async function handleWebhookUpdate(
   }
 
   try {
-    // Generate a new correlation ID for each unique message
+    // Generate a unique correlation ID for this message
     const messageCorrelationId = crypto.randomUUID();
     
     console.log('Processing webhook update:', {
@@ -24,24 +24,17 @@ export async function handleWebhookUpdate(
       chat_id: message.chat.id,
       media_group_id: message.media_group_id,
       has_caption: !!message.caption,
-      has_text: !!message.text,
-      message_type: determineMessageType(message),
-      correlation_id: messageCorrelationId
+      message_type: determineMessageType(message)
     });
 
     // Check if message already exists
     const { data: existingMessage } = await supabase
       .from('messages')
-      .select('id, is_original_caption, analyzed_content, media_group_id')
+      .select('id, is_original_caption, analyzed_content, media_group_id, original_message_id')
       .eq('message_id', message.message_id)
       .eq('chat_id', message.chat.id)
       .maybeSingle();
 
-    const chatId = message.chat.id.toString();
-    const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
-    const messageType = determineMessageType(message);
-
-    // If message exists, return early
     if (existingMessage) {
       console.log('Message already exists:', {
         message_id: message.message_id,
@@ -50,97 +43,86 @@ export async function handleWebhookUpdate(
       return {
         success: true,
         message: 'Message already exists',
-        messageId: existingMessage.id,
-        correlationId: messageCorrelationId
+        messageId: existingMessage.id
       };
     }
 
-    let messageData;
-    
-    if (messageType === 'text') {
-      messageData = await processTextMessage(message, messageUrl, messageCorrelationId);
-    } else {
-      let originalMessageId = null;
-      let analyzedContent = null;
-      let isOriginalCaption = false;
+    const chatId = message.chat.id.toString();
+    const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
+    const messageType = determineMessageType(message);
 
-      // Check for media group and handle caption syncing
-      if (message.media_group_id) {
-        console.log('Processing media group message:', {
-          media_group_id: message.media_group_id,
-          message_type: messageType,
-          has_caption: !!message.caption
-        });
+    let messageData: any = {
+      message_id: message.message_id,
+      chat_id: message.chat.id,
+      sender_info: message.from || message.sender_chat || {},
+      message_type: messageType,
+      telegram_data: message,
+      message_url: messageUrl,
+      correlation_id: messageCorrelationId,
+      caption: message.caption,
+      text: message.text,
+      media_group_id: message.media_group_id,
+      status: 'pending'
+    };
 
-        // Get all existing messages in the group
-        const { data: groupMessages } = await supabase
-          .from('messages')
-          .select('id, is_original_caption, analyzed_content, caption, original_message_id')
-          .eq('media_group_id', message.media_group_id)
-          .order('created_at', { ascending: true });
+    // Handle media group and caption analysis
+    if (message.media_group_id) {
+      console.log('Processing media group message:', {
+        media_group_id: message.media_group_id,
+        message_type: messageType,
+        has_caption: !!message.caption
+      });
 
-        const existingCaptionHolder = groupMessages?.find(m => m.is_original_caption);
+      // Get existing messages in the group
+      const { data: groupMessages } = await supabase
+        .from('messages')
+        .select('id, is_original_caption, analyzed_content, caption, original_message_id')
+        .eq('media_group_id', message.media_group_id)
+        .order('created_at', { ascending: true });
 
-        if (message.caption) {
-          if (!existingCaptionHolder) {
-            isOriginalCaption = true;
-            originalMessageId = null;
-            analyzedContent = await analyzeCaptionWithAI(message.caption);
+      const existingCaptionHolder = groupMessages?.find(m => m.is_original_caption);
 
-            // Update all existing messages in the group
-            if (groupMessages?.length > 0) {
-              await Promise.all(groupMessages.map(async (groupMsg) => {
-                await supabase
-                  .from('messages')
-                  .update({
-                    analyzed_content: analyzedContent,
-                    caption: message.caption,
-                    is_original_caption: false,
-                    original_message_id: null
-                  })
-                  .eq('id', groupMsg.id);
-              }));
-            }
-          } else {
-            isOriginalCaption = false;
-            originalMessageId = existingCaptionHolder.id;
-            analyzedContent = existingCaptionHolder.analyzed_content;
+      if (message.caption) {
+        if (!existingCaptionHolder) {
+          // This is the first message with a caption in the group
+          messageData.is_original_caption = true;
+          messageData.original_message_id = null;
+          messageData.analyzed_content = await analyzeCaptionWithAI(message.caption);
+
+          // Update existing group messages
+          if (groupMessages?.length > 0) {
+            await Promise.all(groupMessages.map(async (groupMsg) => {
+              await supabase
+                .from('messages')
+                .update({
+                  analyzed_content: messageData.analyzed_content,
+                  caption: message.caption,
+                  is_original_caption: false,
+                  original_message_id: null
+                })
+                .eq('id', groupMsg.id);
+            }));
           }
         } else {
-          if (existingCaptionHolder) {
-            isOriginalCaption = false;
-            originalMessageId = existingCaptionHolder.id;
-            analyzedContent = existingCaptionHolder.analyzed_content;
-          } else {
-            isOriginalCaption = false;
-            originalMessageId = null;
-          }
+          // Another message already holds the caption
+          messageData.is_original_caption = false;
+          messageData.original_message_id = existingCaptionHolder.id;
+          messageData.analyzed_content = existingCaptionHolder.analyzed_content;
         }
-      } else if (message.caption) {
-        isOriginalCaption = true;
-        originalMessageId = null;
-        analyzedContent = await analyzeCaptionWithAI(message.caption);
+      } else if (existingCaptionHolder) {
+        // No caption but group has a caption holder
+        messageData.is_original_caption = false;
+        messageData.original_message_id = existingCaptionHolder.id;
+        messageData.analyzed_content = existingCaptionHolder.analyzed_content;
       }
-
-      messageData = {
-        message_id: message.message_id,
-        chat_id: message.chat.id,
-        sender_info: message.from || message.sender_chat || {},
-        message_type: messageType,
-        telegram_data: message,
-        media_group_id: message.media_group_id,
-        message_url: messageUrl,
-        correlation_id: messageCorrelationId,
-        is_original_caption: isOriginalCaption,
-        original_message_id: originalMessageId,
-        analyzed_content: analyzedContent,
-        caption: message.caption,
-        text: message.text,
-        status: messageType === 'text' ? 'processed' : 'pending'
-      };
+    } else if (message.caption) {
+      // Single media message with caption
+      messageData.is_original_caption = true;
+      messageData.original_message_id = null;
+      messageData.analyzed_content = await analyzeCaptionWithAI(message.caption);
     }
 
-    // Create message_media_data structure with simplified analysis
+    // Create simplified message_media_data structure
     messageData.message_media_data = {
       message: {
         url: messageUrl,
@@ -175,7 +157,8 @@ export async function handleWebhookUpdate(
       chat_id: messageData.chat_id,
       correlation_id: messageCorrelationId,
       is_original_caption: messageData.is_original_caption,
-      original_message_id: messageData.original_message_id
+      original_message_id: messageData.original_message_id,
+      message_type: messageType
     });
 
     // Insert message record
@@ -194,9 +177,7 @@ export async function handleWebhookUpdate(
       console.log('Queueing media message for processing:', {
         message_id: message.message_id,
         media_group_id: message.media_group_id,
-        message_type: messageType,
-        is_original_caption: messageData.is_original_caption,
-        original_message_id: messageData.original_message_id
+        message_type: messageType
       });
 
       const { error: queueError } = await supabase
@@ -218,9 +199,7 @@ export async function handleWebhookUpdate(
       success: true,
       message: 'Update processed successfully',
       messageId: messageRecord.id,
-      correlationId: messageCorrelationId,
-      isOriginalCaption: messageData.is_original_caption,
-      originalMessageId: messageData.original_message_id
+      correlationId: messageCorrelationId
     };
 
   } catch (error) {
