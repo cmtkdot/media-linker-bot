@@ -66,6 +66,7 @@ Return ONLY a JSON object with this exact structure:
 }`;
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -73,8 +74,10 @@ serve(async (req) => {
   try {
     const { caption } = await req.json();
     
-    if (!caption) {
-      console.log('No caption provided, returning empty analysis');
+    console.log('Processing caption:', caption);
+
+    if (!caption || typeof caption !== 'string') {
+      console.log('Invalid or missing caption:', caption);
       return new Response(
         JSON.stringify({
           analyzed_content: {
@@ -88,7 +91,10 @@ serve(async (req) => {
             }
           }
         }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200
+        }
       );
     }
 
@@ -96,7 +102,9 @@ serve(async (req) => {
       apiKey: Deno.env.get('OPENAI_API_KEY')
     });
 
-    console.log('Analyzing caption:', caption);
+    if (!openai.apiKey) {
+      throw new Error('OpenAI API key is not configured');
+    }
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o",
@@ -111,7 +119,6 @@ serve(async (req) => {
     const result = completion.choices[0].message.content;
     console.log('AI analysis result:', result);
 
-    // Parse the result and ensure it matches our expected format
     let parsedResult;
     try {
       parsedResult = JSON.parse(result);
@@ -126,14 +133,33 @@ serve(async (req) => {
       throw new Error('Invalid response structure');
     }
 
+    // Validate all fields are present with correct types
+    const productInfo = parsedResult.analyzed_content.product_info;
+    const validatedResult = {
+      analyzed_content: {
+        product_info: {
+          product_name: typeof productInfo.product_name === 'string' ? productInfo.product_name : null,
+          product_code: typeof productInfo.product_code === 'string' ? productInfo.product_code : null,
+          vendor_uid: typeof productInfo.vendor_uid === 'string' ? productInfo.vendor_uid : null,
+          purchase_date: typeof productInfo.purchase_date === 'string' ? productInfo.purchase_date : null,
+          quantity: typeof productInfo.quantity === 'number' ? productInfo.quantity : null,
+          notes: typeof productInfo.notes === 'string' ? productInfo.notes : null
+        }
+      }
+    };
+
     return new Response(
-      JSON.stringify(parsedResult),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify(validatedResult),
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200
+      }
     );
 
   } catch (error) {
     console.error('Error in analyze-caption:', error);
     
+    // Return a valid structure even on error
     return new Response(
       JSON.stringify({
         analyzed_content: {
@@ -143,13 +169,13 @@ serve(async (req) => {
             vendor_uid: null,
             purchase_date: null,
             quantity: null,
-            notes: null
+            notes: `Error analyzing caption: ${error.message}`
           }
         }
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500,
+        status: 200 // Always return 200 to prevent cascade failures
       }
     );
   }
