@@ -20,6 +20,7 @@ export async function handleWebhookUpdate(
       chat_id: message.chat.id,
       media_group_id: message.media_group_id,
       has_caption: !!message.caption,
+      has_text: !!message.text,
       correlation_id: correlationId
     });
 
@@ -48,8 +49,13 @@ export async function handleWebhookUpdate(
     let originalMessageId = null;
     let analyzedContent = null;
 
+    // Handle text-only messages
+    if (message.text && !message.photo && !message.video && !message.document && !message.animation) {
+      console.log('Processing text-only message');
+      analyzedContent = await analyzeCaptionWithAI(message.text);
+    }
     // Handle media group caption logic
-    if (message.media_group_id) {
+    else if (message.media_group_id) {
       console.log('Processing media group message:', message.media_group_id);
       
       const { data: groupMessages } = await supabase
@@ -88,6 +94,7 @@ export async function handleWebhookUpdate(
         url: messageUrl,
         media_group_id: message.media_group_id,
         caption: message.caption,
+        text: message.text, // Add text field for text-only messages
         message_id: message.message_id,
         chat_id: message.chat.id,
         date: message.date
@@ -110,12 +117,17 @@ export async function handleWebhookUpdate(
       }
     };
 
+    // Determine message type
+    const messageType = message.text && !message.photo && !message.video && !message.document && !message.animation 
+      ? 'text'
+      : determineMessageType(message);
+
     // Create message record
     const messageData = {
       message_id: message.message_id,
       chat_id: message.chat.id,
       sender_info: message.from || message.sender_chat || {},
-      message_type: determineMessageType(message),
+      message_type: messageType,
       telegram_data: message,
       media_group_id: message.media_group_id,
       message_url: messageUrl,
@@ -124,18 +136,20 @@ export async function handleWebhookUpdate(
       original_message_id: originalMessageId,
       analyzed_content: analyzedContent,
       message_media_data: messageMediaData,
-      status: 'pending',
-      caption: message.caption
+      status: messageType === 'text' ? 'processed' : 'pending', // Mark text messages as processed
+      caption: message.caption,
+      text: message.text // Store text content
     };
 
     console.log('Inserting message:', {
       message_id: messageData.message_id,
       chat_id: messageData.chat_id,
       media_group_id: messageData.media_group_id,
-      is_original_caption: messageData.is_original_caption
+      is_original_caption: messageData.is_original_caption,
+      message_type: messageData.message_type
     });
 
-    // Insert message record with conflict handling
+    // Insert message record
     const { data: messageRecord, error: messageError } = await withDatabaseRetry(async () => {
       return await supabase
         .from('messages')
@@ -149,28 +163,31 @@ export async function handleWebhookUpdate(
       throw messageError;
     }
 
-    // Queue for processing
-    const { error: queueError } = await supabase
-      .from('unified_processing_queue')
-      .insert({
-        queue_type: message.media_group_id ? 'media_group' : 'media',
-        data: messageMediaData,
-        status: 'pending',
-        correlation_id: correlationId,
-        chat_id: message.chat.id,
-        message_id: message.message_id,
-        message_media_data: messageMediaData
-      });
+    // Only queue media messages for processing
+    if (messageType !== 'text') {
+      const { error: queueError } = await supabase
+        .from('unified_processing_queue')
+        .insert({
+          queue_type: message.media_group_id ? 'media_group' : 'media',
+          data: messageMediaData,
+          status: 'pending',
+          correlation_id: correlationId,
+          chat_id: message.chat.id,
+          message_id: message.message_id,
+          message_media_data: messageMediaData
+        });
 
-    if (queueError) {
-      console.error('Error queueing message:', queueError);
-      throw queueError;
+      if (queueError) {
+        console.error('Error queueing message:', queueError);
+        throw queueError;
+      }
     }
 
     console.log('Successfully processed message:', {
       message_id: messageRecord.id,
       correlation_id: correlationId,
-      is_original_caption: isOriginalCaption
+      is_original_caption: isOriginalCaption,
+      message_type: messageType
     });
 
     return {
@@ -188,6 +205,7 @@ export async function handleWebhookUpdate(
 }
 
 function determineMessageType(message: any): string {
+  if (message.text && !message.photo && !message.video && !message.document && !message.animation) return 'text';
   if (message.photo && message.photo.length > 0) return 'photo';
   if (message.video) return 'video';
   if (message.document) return 'document';
