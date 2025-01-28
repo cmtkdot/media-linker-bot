@@ -264,15 +264,22 @@ export type Database = {
           message_media_data: Json | null
           message_type: string
           message_url: string | null
+          notes: string | null
           original_message_id: string | null
           processed_at: string | null
           processing_error: string | null
+          product_code: string | null
+          product_name: string | null
+          purchase_date: string | null
+          purchase_order_uid: string | null
+          quantity: number | null
           raw_text: string | null
           retry_count: number | null
           sender_info: Json
           status: string | null
           telegram_data: Json
           updated_at: string
+          vendor_uid: string | null
         }
         Insert: {
           analyzed_content?: Json | null
@@ -287,15 +294,22 @@ export type Database = {
           message_media_data?: Json | null
           message_type: string
           message_url?: string | null
+          notes?: string | null
           original_message_id?: string | null
           processed_at?: string | null
           processing_error?: string | null
+          product_code?: string | null
+          product_name?: string | null
+          purchase_date?: string | null
+          purchase_order_uid?: string | null
+          quantity?: number | null
           raw_text?: string | null
           retry_count?: number | null
           sender_info?: Json
           status?: string | null
           telegram_data?: Json
           updated_at?: string
+          vendor_uid?: string | null
         }
         Update: {
           analyzed_content?: Json | null
@@ -310,15 +324,22 @@ export type Database = {
           message_media_data?: Json | null
           message_type?: string
           message_url?: string | null
+          notes?: string | null
           original_message_id?: string | null
           processed_at?: string | null
           processing_error?: string | null
+          product_code?: string | null
+          product_name?: string | null
+          purchase_date?: string | null
+          purchase_order_uid?: string | null
+          quantity?: number | null
           raw_text?: string | null
           retry_count?: number | null
           sender_info?: Json
           status?: string | null
           telegram_data?: Json
           updated_at?: string
+          vendor_uid?: string | null
         }
         Relationships: [
           {
