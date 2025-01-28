@@ -1,148 +1,91 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { TelegramMessage, TelegramUpdate } from './telegram-types.ts';
-import { analyzeWebhookMessage } from './webhook-message-analyzer.ts';
+import { analyzeCaptionWithAI } from './caption-analyzer.ts';
 import { buildWebhookMessageData } from './webhook-message-builder.ts';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { analyzeWebhookMessage } from './webhook-message-analyzer.ts';
+import { updateMediaStatus } from './media/status-updater.ts';
 
 export async function handleWebhookUpdate(
-  update: TelegramUpdate,
-  supabase: ReturnType<typeof createClient>,
+  update: any,
+  supabaseClient: any,
   correlationId: string,
   botToken: string
 ) {
-  const message = update.message || update.channel_post;
-  if (!message) {
-    return {
-      success: false,
-      message: "No message in update",
-      data: { status: "error" },
-    };
-  }
+  console.log('Processing webhook update:', {
+    update_id: update.update_id,
+    correlation_id: correlationId
+  });
 
   try {
-    console.log("Processing webhook update:", {
-      message_id: message.message_id,
-      chat_id: message.chat.id,
-      media_group_id: message.media_group_id,
-      has_caption: !!message.caption,
-    });
+    const message = update.message || update.channel_post;
+    if (!message) {
+      throw new Error('No message found in update');
+    }
 
-    // Generate message URL
-    const chatId = message.chat.id.toString();
-    const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
-
-    // Check for existing messages in the same media group
+    // Get existing messages in the same media group
     let existingGroupMessages = [];
     if (message.media_group_id) {
-      const { data: groupMessages } = await supabase
-        .from("messages")
-        .select("*")
-        .eq("media_group_id", message.media_group_id)
-        .order("created_at", { ascending: true });
-
+      const { data: groupMessages } = await supabaseClient
+        .from('messages')
+        .select('*')
+        .eq('media_group_id', message.media_group_id);
+      
       existingGroupMessages = groupMessages || [];
-      console.log("Found existing group messages:", existingGroupMessages.length);
     }
 
     // Analyze message content
-    const analyzedMessageContent = await analyzeWebhookMessage(
-      message,
-      existingGroupMessages
-    );
-    console.log("Message analysis result:", analyzedMessageContent);
-
-    // Build message data structure with media info
-    const messageData = buildWebhookMessageData(
-      message,
-      messageUrl,
-      analyzedMessageContent
-    );
-    console.log("Built message data structure");
-
-    // Extract media type
-    const mediaType = getMediaType(message);
-    console.log("Media type:", mediaType);
-
-    // Create message record with complete media data
-    const { data: messageRecord, error: messageError } = await supabase
-      .from("messages")
+    const analyzedContent = await analyzeWebhookMessage(message, existingGroupMessages);
+    
+    // Build message URL
+    const messageUrl = `https://t.me/c/${Math.abs(message.chat.id).toString()}/${message.message_id}`;
+    
+    // Build webhook message data
+    const messageData = buildWebhookMessageData(message, messageUrl, analyzedContent);
+    
+    // Insert message into database
+    const { data: insertedMessage, error: insertError } = await supabaseClient
+      .from('messages')
       .insert({
         message_id: message.message_id,
         chat_id: message.chat.id,
         sender_info: message.from || message.sender_chat || {},
-        message_type: mediaType || "text",
+        message_type: getMessageType(message),
         telegram_data: message,
         media_group_id: message.media_group_id,
-        message_url: messageUrl,
         correlation_id: correlationId,
-        caption: message.caption,
-        text: message.text,
-        analyzed_content: analyzedMessageContent.analyzed_content,
-        is_original_caption: analyzedMessageContent.is_original_caption,
-        original_message_id: analyzedMessageContent.original_message_id,
+        message_url: messageUrl,
         message_media_data: messageData,
-        status: "pending",
-        media_group_size: message.media_group_id ? existingGroupMessages.length + 1 : null,
-        last_group_message_at: message.media_group_id ? new Date().toISOString() : null
+        is_original_caption: analyzedContent.is_original_caption,
+        original_message_id: analyzedContent.original_message_id,
+        analyzed_content: analyzedContent.analyzed_content,
+        status: 'pending'
       })
       .select()
       .single();
 
-    if (messageError) {
-      console.error("Error creating message record:", messageError);
-      throw messageError;
-    }
+    if (insertError) throw insertError;
 
-    console.log("Created message record:", messageRecord.id);
-
-    // Create initial media processing log
-    if (mediaType && messageData.media) {
-      const { error: logError } = await supabase
-        .from("media_processing_logs")
-        .insert({
-          message_id: messageRecord.id,
-          file_id: messageData.media.file_id,
-          file_type: messageData.media.file_type,
-          correlation_id: correlationId,
-          status: "pending",
-          created_at: new Date().toISOString()
-        });
-
-      if (logError) {
-        console.error("Error creating media processing log:", logError);
-      }
-    }
+    // Update status after caption processing
+    await updateMediaStatus(
+      supabaseClient,
+      insertedMessage.id,
+      analyzedContent.analyzed_content ? 'processed' : 'pending'
+    );
 
     return {
       success: true,
-      message: "Update processed successfully",
-      messageId: messageRecord.id,
-      data: {
-        telegram_data: message,
-        status: "pending",
-      },
+      message_id: insertedMessage.id,
+      correlation_id: correlationId
     };
+
   } catch (error) {
-    console.error("Error in webhook handler:", error);
-    return {
-      success: false,
-      message: error instanceof Error ? error.message : String(error),
-      data: {
-        telegram_data: message,
-        status: "error",
-      },
-    };
+    console.error('Error in webhook handler:', error);
+    throw error;
   }
 }
 
-function getMediaType(message: TelegramMessage): string | null {
-  if (message.photo) return "photo";
-  if (message.video) return "video";
-  if (message.document) return "document";
-  if (message.animation) return "animation";
-  return null;
+function getMessageType(message: any): string {
+  if (message.photo) return 'photo';
+  if (message.video) return 'video';
+  if (message.document) return 'document';
+  if (message.animation) return 'animation';
+  return 'text';
 }

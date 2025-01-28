@@ -30,7 +30,7 @@ serve(async (req) => {
       .from('messages')
       .select('*')
       .eq('id', messageId)
-      .single();
+      .maybeSingle();
 
     if (messageError) throw messageError;
     if (!message) throw new Error('Message not found');
@@ -38,11 +38,15 @@ serve(async (req) => {
     console.log('Retrieved message data:', {
       id: message.id,
       media_group_id: message.media_group_id,
-      has_media_data: !!message.message_media_data
+      has_media_data: !!message.message_media_data,
+      status: message.status
     });
 
+    // Extract media data from message_media_data
     const mediaData = message.message_media_data?.media;
-    if (!mediaData?.file_id) {
+    const fileId = mediaData?.file_id;
+    
+    if (!fileId) {
       throw new Error('No media data found in message');
     }
 
@@ -50,29 +54,31 @@ serve(async (req) => {
     const { data: existingMedia } = await supabase
       .from('telegram_media')
       .select('*')
-      .eq('file_id', mediaData.file_id)
+      .eq('file_id', fileId)
       .maybeSingle();
 
     if (existingMedia) {
       console.log('Found existing media:', existingMedia.id);
       
       // Update message with existing media data
+      const updatedMessageMediaData = {
+        ...message.message_media_data,
+        media: {
+          ...message.message_media_data.media,
+          public_url: existingMedia.public_url,
+          storage_path: existingMedia.storage_path
+        },
+        meta: {
+          ...message.message_media_data.meta,
+          status: 'processed',
+          processed_at: new Date().toISOString()
+        }
+      };
+
       const { error: updateError } = await supabase
         .from('messages')
         .update({
-          message_media_data: {
-            ...message.message_media_data,
-            media: {
-              ...message.message_media_data.media,
-              public_url: existingMedia.public_url,
-              storage_path: existingMedia.storage_path
-            },
-            meta: {
-              ...message.message_media_data.meta,
-              status: 'processed',
-              processed_at: new Date().toISOString()
-            }
-          },
+          message_media_data: updatedMessageMediaData,
           status: 'processed',
           processed_at: new Date().toISOString()
         })
@@ -108,17 +114,18 @@ serve(async (req) => {
         media_group_id: message.media_group_id,
         caption: message.caption,
         analyzed_content: message.analyzed_content,
-        product_name: message.product_name,
-        product_code: message.product_code,
-        quantity: message.quantity,
-        vendor_uid: message.vendor_uid,
-        purchase_date: message.purchase_date,
-        notes: message.notes,
+        product_name: message.message_media_data?.analysis?.product_name,
+        product_code: message.message_media_data?.analysis?.product_code,
+        quantity: message.message_media_data?.analysis?.quantity,
+        vendor_uid: message.message_media_data?.analysis?.vendor_uid,
+        purchase_date: message.message_media_data?.analysis?.purchase_date,
+        notes: message.message_media_data?.analysis?.notes,
         mime_type: mediaData.mime_type,
         width: mediaData.width,
         height: mediaData.height,
         duration: mediaData.duration,
-        file_size: mediaData.file_size
+        file_size: mediaData.file_size,
+        status: message.message_media_data?.meta?.status || 'pending'
       })
       .select()
       .single();
