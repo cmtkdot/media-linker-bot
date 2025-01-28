@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { processMediaMessage } from "../_shared/media/processor.ts";
+import { handleMediaError } from "../_shared/media/error-handler.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -26,15 +27,20 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Get message data
+    // Get message data with message_media_data
     const { data: message, error: messageError } = await supabase
       .from('messages')
-      .select('*')
+      .select('*, message_media_data')
       .eq('id', messageId)
       .single();
 
     if (messageError) throw messageError;
     if (!message) throw new Error('Message not found');
+
+    // Check if message has media data
+    if (!message.message_media_data?.media?.file_id) {
+      throw new Error('No media data found in message');
+    }
 
     await processMediaMessage(supabase, message, botToken);
 

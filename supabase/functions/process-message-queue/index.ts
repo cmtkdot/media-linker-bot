@@ -24,12 +24,15 @@ serve(async (req) => {
     }
 
     const correlationId = crypto.randomUUID();
+    console.log('Starting queue processing:', { correlationId });
+
     const result = await processMessageQueue(supabase, correlationId, botToken);
 
     return new Response(
       JSON.stringify({ 
         message: 'Queue processing completed',
-        ...result
+        ...result,
+        correlationId
       }),
       { 
         headers: { 
@@ -43,7 +46,8 @@ serve(async (req) => {
     
     return new Response(
       JSON.stringify({
-        error: error instanceof Error ? error.message : 'An unexpected error occurred'
+        error: error instanceof Error ? error.message : 'An unexpected error occurred',
+        details: error
       }),
       { 
         headers: { 
