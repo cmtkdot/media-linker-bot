@@ -1,7 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { processMessageContent } from "../_shared/message-group-sync.ts";
 
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN') || '';
 const TELEGRAM_WEBHOOK_SECRET = Deno.env.get('TELEGRAM_WEBHOOK_SECRET') || '';
@@ -44,44 +43,6 @@ serve(async (req) => {
     const chatId = message.chat.id.toString();
     const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
 
-    // Handle original caption logic for media groups
-    let isOriginalCaption = false;
-    let originalMessageId = null;
-
-    if (message.media_group_id && message.caption) {
-      console.log('Processing media group message with caption:', {
-        media_group_id: message.media_group_id,
-        message_id: message.message_id,
-        correlation_id: correlationId
-      });
-
-      // Check if there's already a message with caption in this group
-      const { data: existingCaptionHolder } = await supabaseClient
-        .from('messages')
-        .select('id')
-        .eq('media_group_id', message.media_group_id)
-        .eq('is_original_caption', true)
-        .maybeSingle();
-
-      if (!existingCaptionHolder) {
-        // This is the first message with caption in the group
-        isOriginalCaption = true;
-      } else {
-        // There's already a caption holder, reference it
-        originalMessageId = existingCaptionHolder.id;
-      }
-    } else if (message.caption) {
-      // Single message with caption is always original
-      isOriginalCaption = true;
-    }
-
-    // Process message content and get analyzed content immediately
-    const { analyzedContent, messageStatus, productInfo } = await processMessageContent(
-      supabaseClient,
-      message,
-      correlationId
-    );
-
     // Create message media data structure
     const messageMediaData = {
       message: {
@@ -96,16 +57,11 @@ serve(async (req) => {
         sender_info: message.from || message.sender_chat || {},
         chat_info: message.chat
       },
-      analysis: {
-        analyzed_content: analyzedContent,
-        ...productInfo
-      },
       meta: {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        status: messageStatus,
-        is_original_caption: isOriginalCaption,
-        original_message_id: originalMessageId
+        status: 'pending',
+        error: null
       }
     };
 
@@ -119,15 +75,11 @@ serve(async (req) => {
       media_group_id: message.media_group_id,
       message_url: messageUrl,
       correlation_id: correlationId,
-      analyzed_content: analyzedContent,
-      status: messageStatus,
-      is_original_caption: isOriginalCaption,
-      original_message_id: originalMessageId,
-      message_media_data: messageMediaData,
-      ...productInfo
+      status: 'pending',
+      message_media_data: messageMediaData
     };
 
-    // Create or update message record
+    // Create message record
     const { data: messageRecord, error: messageError } = await supabaseClient
       .from('messages')
       .upsert(messageData)
@@ -144,46 +96,14 @@ serve(async (req) => {
       throw messageError;
     }
 
-    // If this is a media group message, ensure all messages in group are properly linked
-    if (message.media_group_id && messageRecord && isOriginalCaption) {
-      console.log('Syncing media group messages:', {
-        media_group_id: message.media_group_id,
-        current_message_id: messageRecord.id,
-        correlation_id: correlationId
-      });
-
-      // Update all messages in the group with shared analyzed content
-      if (analyzedContent) {
-        const { error: groupUpdateError } = await supabaseClient
-          .from('messages')
-          .update({
-            analyzed_content: analyzedContent,
-            status: 'processed',
-            original_message_id: messageRecord.id,
-            ...productInfo
-          })
-          .eq('media_group_id', message.media_group_id)
-          .neq('id', messageRecord.id);
-
-        if (groupUpdateError) {
-          console.error('Error updating media group:', {
-            error: groupUpdateError,
-            media_group_id: message.media_group_id,
-            correlation_id: correlationId
-          });
-        }
-      }
-    }
-
     return new Response(
       JSON.stringify({
         success: true,
-        message: 'Message processed successfully',
+        message: 'Message queued for processing',
         messageId: messageRecord?.id,
         correlationId,
         status: messageRecord?.status,
-        mediaGroupId: message.media_group_id,
-        isOriginalCaption
+        mediaGroupId: message.media_group_id
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
