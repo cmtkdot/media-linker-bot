@@ -33,9 +33,7 @@ export async function handleWebhookUpdate(
 
     // Generate message URL
     const chatId = message.chat.id.toString();
-    const messageUrl = `https://t.me/c/${chatId.substring(4)}/${
-      message.message_id
-    }`;
+    const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
 
     // Check for existing messages in the same media group
     let existingGroupMessages = [];
@@ -47,10 +45,7 @@ export async function handleWebhookUpdate(
         .order("created_at", { ascending: true });
 
       existingGroupMessages = groupMessages || [];
-      console.log(
-        "Found existing group messages:",
-        existingGroupMessages.length
-      );
+      console.log("Found existing group messages:", existingGroupMessages.length);
     }
 
     // Analyze message content
@@ -68,14 +63,18 @@ export async function handleWebhookUpdate(
     );
     console.log("Built message data structure");
 
-    // Create message record first
+    // Extract media type and file info before creating message record
+    const mediaType = getMediaType(message);
+    const mediaFile = mediaType ? extractMediaFile(message, mediaType) : null;
+
+    // Create message record
     const { data: messageRecord, error: messageError } = await supabase
       .from("messages")
       .insert({
         message_id: message.message_id,
         chat_id: message.chat.id,
         sender_info: message.from || message.sender_chat || {},
-        message_type: getMediaType(message) || "text",
+        message_type: mediaType || "text",
         telegram_data: message,
         media_group_id: message.media_group_id,
         message_url: messageUrl,
@@ -98,33 +97,15 @@ export async function handleWebhookUpdate(
 
     console.log("Created message record:", messageRecord.id);
 
-    // Process media if present
-    const mediaType = getMediaType(message);
-    if (mediaType) {
-      const mediaFile =
-        mediaType === "photo"
-          ? message.photo?.[message.photo.length - 1]
-          : message.video || message.document || message.animation;
-
-      if (!mediaFile) {
-        throw new Error(`No valid media file found for type: ${mediaType}`);
-      }
+    // Only process media if we have valid media file information
+    if (mediaFile && mediaType) {
+      console.log("Processing media file:", {
+        file_id: mediaFile.file_id,
+        file_type: mediaType,
+        message_id: messageRecord.id,
+      });
 
       try {
-        console.log("Processing media file:", {
-          file_id: mediaFile.file_id,
-          file_type: mediaType,
-          message_id: messageRecord.id,
-          file_size: mediaFile.file_size,
-          dimensions:
-            mediaType === "photo"
-              ? {
-                  width: mediaFile.width,
-                  height: mediaFile.height,
-                }
-              : undefined,
-        });
-
         // Validate media file
         await validateMediaFile(mediaFile, mediaType);
 
@@ -156,48 +137,37 @@ export async function handleWebhookUpdate(
           },
         };
 
-        // Create telegram_media record using message_media_data
-        const { data: telegramMedia, error: mediaError } = await supabase
-          .from("telegram_media")
-          .insert({
-            message_id: messageRecord.id,
-            file_id: updatedMessageMediaData.media.file_id,
-            file_unique_id: updatedMessageMediaData.media.file_unique_id,
-            file_type: updatedMessageMediaData.media.file_type,
-            public_url: updatedMessageMediaData.media.public_url,
-            storage_path: updatedMessageMediaData.media.storage_path,
-            telegram_data: updatedMessageMediaData.telegram_data,
-            message_media_data: updatedMessageMediaData,
-            analyzed_content: updatedMessageMediaData.analysis.analyzed_content,
-            correlation_id: correlationId,
-            is_original_caption: analyzedMessageContent.is_original_caption,
-            original_message_id: analyzedMessageContent.original_message_id,
-            processed: false,
-          })
-          .select()
-          .single();
+        // Only create telegram_media record if we have valid file information
+        if (mediaFile.file_id) {
+          const { error: mediaError } = await supabase
+            .from("telegram_media")
+            .insert({
+              message_id: messageRecord.id,
+              file_id: mediaFile.file_id,
+              file_unique_id: mediaFile.file_unique_id,
+              file_type: mediaType,
+              public_url: publicUrl,
+              storage_path: storagePath,
+              telegram_data: message,
+              message_media_data: updatedMessageMediaData,
+              analyzed_content: analyzedMessageContent.analyzed_content,
+              correlation_id: correlationId,
+              is_original_caption: analyzedMessageContent.is_original_caption,
+              original_message_id: analyzedMessageContent.original_message_id,
+            });
 
-        if (mediaError) {
-          throw mediaError;
+          if (mediaError) {
+            throw mediaError;
+          }
         }
 
-        // Now update both messages and telegram_media tables in a transaction
+        // Update both messages and telegram_media tables
         await updateMediaRecords(supabase, {
           messageId: messageRecord.id,
           publicUrl,
           storagePath,
           messageMediaData: updatedMessageMediaData,
         });
-
-        // After successful transaction, mark telegram_media as processed
-        const { error: updateError } = await supabase
-          .from("telegram_media")
-          .update({ processed: true })
-          .eq("id", telegramMedia.id);
-
-        if (updateError) {
-          throw updateError;
-        }
 
         // Log successful processing
         await logMediaProcessing(supabase, {
@@ -218,8 +188,7 @@ export async function handleWebhookUpdate(
         await supabase
           .from("messages")
           .update({
-            processing_error:
-              error instanceof Error ? error.message : String(error),
+            processing_error: error instanceof Error ? error.message : String(error),
             status: "error",
           })
           .eq("id", messageRecord.id);
@@ -256,4 +225,12 @@ function getMediaType(message: TelegramMessage): string | null {
   if (message.document) return "document";
   if (message.animation) return "animation";
   return null;
+}
+
+function extractMediaFile(message: TelegramMessage, mediaType: string) {
+  if (mediaType === "photo") {
+    const photos = message.photo || [];
+    return photos[photos.length - 1]; // Get largest photo
+  }
+  return message.video || message.document || message.animation || null;
 }
