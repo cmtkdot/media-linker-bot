@@ -1,16 +1,16 @@
-import { createSupabaseClient } from "@/lib/supabase/client";
+import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 import { useEffect, useState } from "react";
 import { InventorySliderGrid } from "@/components/inventory/InventorySliderGrid";
 import { MediaItem } from "@/types/media";
 import { useQuery } from "@tanstack/react-query";
-
-const supabase = createSupabaseClient;
+import { useToast } from "@/components/ui/use-toast";
 
 const InventoryPage = () => {
   const [items, setItems] = useState<MediaItem[]>([]);
+  const { toast } = useToast();
 
-  const { data, refetch } = useQuery({
+  const { data, refetch, error } = useQuery({
     queryKey: ['inventory'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -18,7 +18,15 @@ const InventoryPage = () => {
         .select("*")
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error("Error fetching inventory:", error);
+        toast({
+          title: "Error loading inventory",
+          description: "Failed to load inventory items. Please try again.",
+          variant: "destructive",
+        });
+        throw error;
+      }
 
       return data.map((item: any): MediaItem => {
         const messageData = item.telegram_data || {};
@@ -44,6 +52,11 @@ const InventoryPage = () => {
   return (
     <div className="container mx-auto py-8">
       <h1 className="text-4xl font-bold mb-8">Inventory</h1>
+      {error && (
+        <div className="text-red-500 mb-4">
+          Error loading inventory. Please try again.
+        </div>
+      )}
       <InventorySliderGrid initialItems={items} />
     </div>
   );
