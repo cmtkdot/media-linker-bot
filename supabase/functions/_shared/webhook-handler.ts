@@ -16,77 +16,6 @@ interface MessageData {
   caption?: string;
 }
 
-async function findOriginalMessage(supabase: any, mediaGroupId: string) {
-  const { data } = await supabase
-    .from('messages')
-    .select('id, analyzed_content')
-    .eq('media_group_id', mediaGroupId)
-    .eq('is_original_caption', true)
-    .maybeSingle();
-  
-  return data;
-}
-
-async function createMessageRecord(supabase: any, messageData: MessageData) {
-  const { data, error } = await supabase
-    .from('messages')
-    .upsert(messageData)
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
-}
-
-async function queueForProcessing(supabase: any, messageRecord: any) {
-  // Only queue messages with media
-  if (!['photo', 'video', 'document', 'animation'].includes(messageRecord.message_type)) {
-    return;
-  }
-
-  const queueData = {
-    queue_type: messageRecord.media_group_id ? 'media_group' : 'media',
-    message_media_data: {
-      message: {
-        url: messageRecord.message_url,
-        media_group_id: messageRecord.media_group_id,
-        caption: messageRecord.caption,
-        message_id: messageRecord.message_id,
-        chat_id: messageRecord.chat_id,
-        date: messageRecord.telegram_data.date
-      },
-      sender: {
-        sender_info: messageRecord.sender_info,
-        chat_info: messageRecord.telegram_data.chat
-      },
-      analysis: {
-        analyzed_content: messageRecord.analyzed_content
-      },
-      meta: {
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        status: 'pending',
-        is_original_caption: messageRecord.is_original_caption,
-        original_message_id: messageRecord.original_message_id
-      }
-    },
-    status: 'pending',
-    correlation_id: messageRecord.correlation_id,
-    chat_id: messageRecord.chat_id,
-    message_id: messageRecord.message_id
-  };
-
-  const { error } = await supabase
-    .from('unified_processing_queue')
-    .insert([queueData])
-    .onConflict(['correlation_id', 'message_id', 'chat_id'])
-    .ignore();
-
-  if (error) {
-    console.error('Error queueing message:', error);
-  }
-}
-
 export async function handleWebhookUpdate(
   update: any, 
   supabase: any,
@@ -125,25 +54,8 @@ export async function handleWebhookUpdate(
       }
     }
 
-    // Handle media groups and original caption
-    let isOriginalCaption = false;
-    let originalMessageId = null;
-
-    if (message.media_group_id && message.caption) {
-      const existingOriginal = await findOriginalMessage(supabase, message.media_group_id);
-      
-      if (!existingOriginal) {
-        isOriginalCaption = true;
-      } else {
-        originalMessageId = existingOriginal.id;
-        analyzedContent = existingOriginal.analyzed_content;
-        
-        // Wait briefly to ensure original message exists
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-    } else if (message.caption) {
-      isOriginalCaption = true;
-    }
+    // Determine if this is an original caption message
+    const isOriginalCaption = !!message.caption;
 
     // Create message record
     const messageData = {
@@ -156,21 +68,86 @@ export async function handleWebhookUpdate(
       message_url: messageUrl,
       correlation_id: correlationId,
       is_original_caption: isOriginalCaption,
-      original_message_id: originalMessageId,
       analyzed_content: analyzedContent,
       status: 'pending',
-      caption: message.caption
+      caption: message.caption,
+      message_media_data: {
+        message: {
+          url: messageUrl,
+          media_group_id: message.media_group_id,
+          caption: message.caption,
+          message_id: message.message_id,
+          chat_id: message.chat.id,
+          date: message.date
+        },
+        sender: {
+          sender_info: message.from || message.sender_chat || {},
+          chat_info: message.chat
+        },
+        analysis: {
+          analyzed_content: analyzedContent
+        },
+        meta: {
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          status: 'pending',
+          error: null,
+          is_original_caption: isOriginalCaption,
+          correlation_id: correlationId
+        }
+      }
     };
 
-    const messageRecord = await createMessageRecord(supabase, messageData);
-    await queueForProcessing(supabase, messageRecord);
+    console.log('Creating message record:', {
+      message_id: message.message_id,
+      chat_id: message.chat.id,
+      correlation_id: correlationId,
+      is_original_caption: isOriginalCaption,
+      media_group_id: message.media_group_id
+    });
+
+    // Insert message record with conflict handling
+    const { data: messageRecord, error: messageError } = await supabase
+      .from('messages')
+      .upsert(messageData, {
+        onConflict: 'message_id, chat_id',
+        ignoreDuplicates: false
+      })
+      .select()
+      .single();
+
+    if (messageError) {
+      console.error('Error creating message:', messageError);
+      throw messageError;
+    }
+
+    // Queue for processing with conflict handling
+    const { error: queueError } = await supabase
+      .from('unified_processing_queue')
+      .upsert({
+        queue_type: message.media_group_id ? 'media_group' : 'media',
+        message_media_data: messageData.message_media_data,
+        status: 'pending',
+        correlation_id: correlationId,
+        chat_id: message.chat.id,
+        message_id: message.message_id
+      }, {
+        onConflict: 'correlation_id, message_id, chat_id',
+        ignoreDuplicates: true
+      });
+
+    if (queueError) {
+      console.error('Error queueing message:', queueError);
+      throw queueError;
+    }
 
     return {
       success: true,
       message: 'Update processed successfully',
       messageId: messageRecord.id,
       correlationId,
-      isOriginalCaption
+      isOriginalCaption,
+      status: 'pending'
     };
 
   } catch (error) {
