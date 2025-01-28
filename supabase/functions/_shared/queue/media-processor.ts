@@ -13,6 +13,8 @@ export async function processMediaItem(
     console.log(`Processing media item for message ${item.message_media_data.message.message_id}`);
 
     const mediaData = item.message_media_data.media;
+    const messageData = item.message_media_data.message;
+    const analysisData = item.message_media_data.analysis;
     
     // Check for existing media
     const { data: existingMedia } = await supabase
@@ -28,8 +30,7 @@ export async function processMediaItem(
       const { error: updateError } = await supabase
         .from('telegram_media')
         .update({
-          telegram_data: item.message_media_data.telegram_data,
-          analyzed_content: item.message_media_data.analysis?.analyzed_content,
+          analyzed_content: analysisData?.analyzed_content,
           message_media_data: item.message_media_data,
           updated_at: new Date().toISOString()
         })
@@ -44,7 +45,7 @@ export async function processMediaItem(
     
     // Download file from Telegram
     console.log('Downloading file from Telegram:', mediaData.file_id);
-    const { buffer } = await getAndDownloadTelegramFile(
+    const { buffer, filePath } = await getAndDownloadTelegramFile(
       mediaData.file_id,
       botToken
     );
@@ -75,43 +76,17 @@ export async function processMediaItem(
             storage_path: storagePath
           }
         },
-        telegram_data: item.message_media_data.telegram_data || {},
-        analyzed_content: item.message_media_data.analysis?.analyzed_content || {},
-        caption: item.message_media_data.message?.caption,
-        message_url: item.message_media_data.message?.url,
+        analyzed_content: analysisData?.analyzed_content || {},
+        caption: messageData?.caption,
+        message_url: messageData?.url,
         is_original_caption: item.message_media_data.meta?.is_original_caption,
         original_message_id: item.message_media_data.meta?.original_message_id,
-        message_id: item.message_id,
         processed: true
       }])
       .select()
       .single();
 
     if (insertError) throw insertError;
-
-    // Update queue item status
-    const { error: queueError } = await supabase
-      .from('unified_processing_queue')
-      .update({
-        status: 'processed',
-        processed_at: new Date().toISOString(),
-        message_media_data: {
-          ...item.message_media_data,
-          media: {
-            ...mediaData,
-            public_url: publicUrl,
-            storage_path: storagePath
-          },
-          meta: {
-            ...item.message_media_data.meta,
-            status: 'processed',
-            processed_at: new Date().toISOString()
-          }
-        }
-      })
-      .eq('id', item.id);
-
-    if (queueError) throw queueError;
 
     console.log('Successfully processed media item:', {
       file_id: mediaData.file_id,

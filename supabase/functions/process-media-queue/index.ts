@@ -1,8 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { processMediaGroup, isMediaGroupComplete } from "../_shared/queue/media-group-processor.ts";
 import { processMediaItem } from "../_shared/queue/media-processor.ts";
-import { QueueItem } from "../_shared/queue/types.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -50,48 +48,22 @@ serve(async (req) => {
 
     console.log(`Processing ${queueItems.length} queue items`);
 
-    // Group items by media_group_id
-    const mediaGroups = new Map<string, QueueItem[]>();
-    const individualItems: QueueItem[] = [];
-
-    queueItems.forEach(item => {
-      const groupId = item.message_media_data?.message?.media_group_id;
-      if (groupId) {
-        if (!mediaGroups.has(groupId)) {
-          mediaGroups.set(groupId, []);
-        }
-        mediaGroups.get(groupId)?.push(item);
-      } else {
-        individualItems.push(item);
-      }
-    });
-
-    console.log(`Found ${mediaGroups.size} media groups and ${individualItems.length} individual items`);
-
-    // Process media groups
-    for (const [groupId, groupItems] of mediaGroups) {
-      console.log(`Processing media group ${groupId} with ${groupItems.length} items`);
+    // Process each item directly using message_media_data
+    for (const item of queueItems) {
+      console.log(`Processing item ${item.id}`);
       
-      const isComplete = await isMediaGroupComplete(supabase, groupId);
-      if (!isComplete) {
-        console.log(`Skipping incomplete media group ${groupId}`);
+      // Skip if message_media_data is missing required fields
+      if (!item.message_media_data?.media?.file_id) {
+        console.log(`Skipping item ${item.id} - missing media data`);
         continue;
       }
 
-      await processMediaGroup(supabase, groupId, groupItems, botToken);
-    }
-
-    // Process individual items
-    for (const item of individualItems) {
-      console.log(`Processing individual item ${item.id}`);
       await processMediaItem(supabase, item, botToken);
     }
 
-    // Update processed items status
-    const processedIds = queueItems
-      .filter(item => !item.message_media_data?.message?.media_group_id)
-      .map(item => item.id);
-
+    // Mark processed items as complete
+    const processedIds = queueItems.map(item => item.id);
+    
     if (processedIds.length > 0) {
       console.log(`Marking ${processedIds.length} items as processed`);
       
@@ -111,9 +83,7 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ 
-        processed: queueItems.length,
-        groups: mediaGroups.size,
-        individual: individualItems.length
+        processed: queueItems.length
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
