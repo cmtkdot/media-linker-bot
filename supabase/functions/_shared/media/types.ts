@@ -1,21 +1,22 @@
-export interface TelegramMediaFile {
-  file_id: string;
-  file_unique_id: string;
-  file_type: string;
-  width?: number;
-  height?: number;
-  duration?: number;
-  file_size?: number;
-}
-
-export interface StorageResult {
+export interface MediaProcessingResult {
   publicUrl: string;
   storagePath: string;
   isExisting: boolean;
+  error?: string;
 }
 
 export interface MediaProcessingOptions {
   botToken?: string;
   fileId?: string;
   retryCount?: number;
+}
+
+export interface MediaProcessingLog {
+  messageId: string;
+  fileId: string;
+  fileType: string;
+  status: 'processed' | 'error' | 'duplicate';
+  storagePath?: string;
+  errorMessage?: string;
+  correlationId?: string;
 }
