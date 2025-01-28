@@ -1,10 +1,10 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -24,7 +24,7 @@ serve(async (req) => {
     const { data: queueItems, error } = await supabaseClient
       .from('unified_processing_queue')
       .select('*')
-      .in('status', ['pending', 'processing'])
+      .in('status', ['pending'])
       .order('priority', { ascending: false })
       .order('created_at', { ascending: true })
       .limit(10);
@@ -44,19 +44,18 @@ serve(async (req) => {
 
     for (const item of queueItems) {
       try {
-        // Extract media info directly from message_media_data structure
-        const mediaData = item.message_media_data?.media || {};
-        const messageData = item.message_media_data?.message || {};
-        const telegramData = item.message_media_data?.telegram_data || {};
+        // Extract media info from message_media_data structure
+        const mediaData = item.message_media_data?.media;
+        const messageData = item.message_media_data?.message;
         
         console.log('Processing media data:', {
-          file_id: mediaData.file_id,
-          file_type: mediaData.file_type,
-          message_id: messageData.message_id,
-          media_group_id: messageData.media_group_id
+          file_id: mediaData?.file_id,
+          file_type: mediaData?.file_type,
+          message_id: messageData?.message_id,
+          media_group_id: messageData?.media_group_id
         });
 
-        if (!mediaData.file_id) {
+        if (!mediaData?.file_id) {
           throw new Error('Missing required media data: file_id');
         }
 
@@ -76,11 +75,10 @@ serve(async (req) => {
         const fileBuffer = await fileResponse.arrayBuffer();
 
         // Generate storage path using file_unique_id and type
-        const fileType = mediaData.file_type || 'photo';
         const storagePath = `${mediaData.file_unique_id}${
-          fileType === 'photo' ? '.jpg' :
-          fileType === 'video' ? '.mp4' :
-          fileType === 'document' ? '.pdf' :
+          mediaData.file_type === 'photo' ? '.jpg' :
+          mediaData.file_type === 'video' ? '.mp4' :
+          mediaData.file_type === 'document' ? '.pdf' :
           '.bin'
         }`;
 
@@ -88,9 +86,9 @@ serve(async (req) => {
         const { error: uploadError } = await supabaseClient.storage
           .from('media')
           .upload(storagePath, fileBuffer, {
-            contentType: fileType === 'photo' ? 'image/jpeg' :
-                        fileType === 'video' ? 'video/mp4' :
-                        fileType === 'document' ? 'application/pdf' :
+            contentType: mediaData.file_type === 'photo' ? 'image/jpeg' :
+                        mediaData.file_type === 'video' ? 'video/mp4' :
+                        mediaData.file_type === 'document' ? 'application/pdf' :
                         'application/octet-stream',
             upsert: true
           });
@@ -102,31 +100,30 @@ serve(async (req) => {
           .from('media')
           .getPublicUrl(storagePath);
 
-        // Update telegram_media record with complete data structure
-        const mediaRecord = {
-          file_id: mediaData.file_id,
-          file_unique_id: mediaData.file_unique_id,
-          file_type: fileType,
-          public_url: publicUrl,
-          storage_path: storagePath,
-          message_media_data: {
-            ...item.message_media_data,
-            media: {
-              ...mediaData,
-              public_url: publicUrl,
-              storage_path: storagePath
-            }
-          },
-          telegram_data: telegramData,
-          correlation_id: item.correlation_id,
-          processed: true,
-          message_id: messageData.message_id,
-          caption: messageData.caption
-        };
-
+        // Update telegram_media record
         const { error: mediaError } = await supabaseClient
           .from('telegram_media')
-          .upsert(mediaRecord);
+          .upsert({
+            file_id: mediaData.file_id,
+            file_unique_id: mediaData.file_unique_id,
+            file_type: mediaData.file_type,
+            public_url: publicUrl,
+            storage_path: storagePath,
+            message_media_data: {
+              ...item.message_media_data,
+              media: {
+                ...mediaData,
+                public_url: publicUrl,
+                storage_path: storagePath
+              }
+            },
+            message_id: item.message_media_data?.message?.message_id,
+            correlation_id: item.correlation_id,
+            processed: true,
+            caption: messageData?.caption,
+            is_original_caption: item.message_media_data?.meta?.is_original_caption,
+            original_message_id: item.message_media_data?.meta?.original_message_id
+          });
 
         if (mediaError) throw mediaError;
 
