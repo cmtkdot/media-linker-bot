@@ -5,12 +5,6 @@ export interface MediaProcessingResult {
   error?: string;
 }
 
-export interface MediaProcessingOptions {
-  botToken?: string;
-  fileId?: string;
-  retryCount?: number;
-}
-
 export interface MediaProcessingLog {
   messageId: string;
   fileId: string;
@@ -19,4 +13,10 @@ export interface MediaProcessingLog {
   storagePath?: string;
   errorMessage?: string;
   correlationId?: string;
+}
+
+export interface MediaStorageOptions {
+  botToken?: string;
+  fileId?: string;
+  retryCount?: number;
 }

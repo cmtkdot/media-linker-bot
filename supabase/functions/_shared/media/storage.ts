@@ -1,5 +1,5 @@
 import { SupabaseClient } from "@supabase/supabase-js";
-import { MediaProcessingResult, MediaProcessingOptions } from "./types";
+import { MediaProcessingResult, MediaStorageOptions } from "./types";
 import { generateFileName, getMimeType, delay } from "./utils";
 
 const MAX_RETRIES = 3;
@@ -10,7 +10,7 @@ export async function uploadMediaToStorage(
   buffer: ArrayBuffer,
   fileUniqueId: string,
   fileType: string,
-  options: MediaProcessingOptions = {}
+  options: MediaStorageOptions = {}
 ): Promise<MediaProcessingResult> {
   const { botToken, fileId, retryCount = 0 } = options;
   const fileName = generateFileName(fileUniqueId, fileType);
@@ -46,7 +46,7 @@ export async function uploadMediaToStorage(
 
     // Get file from Telegram if needed
     let uploadBuffer = buffer;
-    if (fileType === 'photo' && botToken && fileId) {
+    if (botToken && fileId) {
       uploadBuffer = await getTelegramFile(botToken, fileId);
     }
 
