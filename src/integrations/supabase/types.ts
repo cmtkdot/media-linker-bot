@@ -551,6 +551,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      update_public_urls: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
