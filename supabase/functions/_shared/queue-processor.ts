@@ -65,7 +65,7 @@ export async function processQueueItem(supabase: any, item: QueueItem) {
       .from('telegram_media')
       .select('*')
       .eq('file_unique_id', fileUniqueId)
-      .single();
+      .maybeSingle();
 
     if (existingMedia) {
       return await handleExistingMedia(supabase, existingMedia, item);
