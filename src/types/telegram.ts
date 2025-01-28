@@ -4,12 +4,8 @@ export interface TelegramMessage {
   chat_id: number;
   sender_info: Record<string, any>;
   message_type: string;
-  message_data: Record<string, any>;
-  caption?: string;
+  telegram_data: Record<string, any>;
   media_group_id?: string;
-  product_name?: string;
-  product_code?: string;
-  quantity?: number;
   processed_at?: string;
   processing_error?: string;
   created_at: string;
@@ -17,9 +13,11 @@ export interface TelegramMessage {
   retry_count?: number;
   last_retry_at?: string;
   status?: string;
-  vendor_uid?: string;
-  purchase_date?: string;
-  notes?: string;
   analyzed_content?: Record<string, any>;
-  purchase_order_uid?: string;
+  message_url?: string;
+  correlation_id?: string;
+  message_media_data?: Record<string, any>;
+  is_original_caption?: boolean;
+  original_message_id?: string;
+  raw_text?: string;
 }

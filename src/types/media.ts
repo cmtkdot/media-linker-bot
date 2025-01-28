@@ -15,6 +15,13 @@ export interface MessageMediaData {
   };
   analysis: {
     analyzed_content: Record<string, any>;
+    product_name?: string;
+    product_code?: string;
+    quantity?: number;
+    vendor_uid?: string;
+    purchase_date?: string;
+    notes?: string;
+    raw_text?: string;
   };
   meta: {
     created_at: string;
@@ -54,6 +61,7 @@ export interface MediaItem {
   vendor_uid?: string;
   purchase_date?: string;
   notes?: string;
+  raw_text?: string;
   
   processed?: boolean;
   processing_error?: string;

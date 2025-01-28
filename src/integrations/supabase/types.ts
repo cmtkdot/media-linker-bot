@@ -245,13 +245,6 @@ export type Database = {
             foreignKeyName: "glide_sync_queue_record_id_fkey"
             columns: ["record_id"]
             isOneToOne: false
-            referencedRelation: "message_media_view"
-            referencedColumns: ["telegram_media_id"]
-          },
-          {
-            foreignKeyName: "glide_sync_queue_record_id_fkey"
-            columns: ["record_id"]
-            isOneToOne: false
             referencedRelation: "telegram_media"
             referencedColumns: ["id"]
           },
@@ -260,7 +253,6 @@ export type Database = {
       messages: {
         Row: {
           analyzed_content: Json | null
-          caption: string | null
           chat_id: number
           correlation_id: string | null
           created_at: string
@@ -272,25 +264,18 @@ export type Database = {
           message_media_data: Json | null
           message_type: string
           message_url: string | null
-          notes: string | null
           original_message_id: string | null
           processed_at: string | null
           processing_error: string | null
-          product_code: string | null
-          product_name: string | null
-          purchase_date: string | null
-          quantity: number | null
           raw_text: string | null
           retry_count: number | null
           sender_info: Json
           status: string | null
           telegram_data: Json
           updated_at: string
-          vendor_uid: string | null
         }
         Insert: {
           analyzed_content?: Json | null
-          caption?: string | null
           chat_id: number
           correlation_id?: string | null
           created_at?: string
@@ -302,25 +287,18 @@ export type Database = {
           message_media_data?: Json | null
           message_type: string
           message_url?: string | null
-          notes?: string | null
           original_message_id?: string | null
           processed_at?: string | null
           processing_error?: string | null
-          product_code?: string | null
-          product_name?: string | null
-          purchase_date?: string | null
-          quantity?: number | null
           raw_text?: string | null
           retry_count?: number | null
           sender_info?: Json
           status?: string | null
           telegram_data?: Json
           updated_at?: string
-          vendor_uid?: string | null
         }
         Update: {
           analyzed_content?: Json | null
-          caption?: string | null
           chat_id?: number
           correlation_id?: string | null
           created_at?: string
@@ -332,30 +310,17 @@ export type Database = {
           message_media_data?: Json | null
           message_type?: string
           message_url?: string | null
-          notes?: string | null
           original_message_id?: string | null
           processed_at?: string | null
           processing_error?: string | null
-          product_code?: string | null
-          product_name?: string | null
-          purchase_date?: string | null
-          quantity?: number | null
           raw_text?: string | null
           retry_count?: number | null
           sender_info?: Json
           status?: string | null
           telegram_data?: Json
           updated_at?: string
-          vendor_uid?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "messages_original_message_id_fkey"
-            columns: ["original_message_id"]
-            isOneToOne: false
-            referencedRelation: "message_media_view"
-            referencedColumns: ["message_id"]
-          },
           {
             foreignKeyName: "messages_original_message_id_fkey"
             columns: ["original_message_id"]
@@ -479,22 +444,8 @@ export type Database = {
             foreignKeyName: "telegram_media_message_id_fkey"
             columns: ["message_id"]
             isOneToOne: true
-            referencedRelation: "message_media_view"
-            referencedColumns: ["message_id"]
-          },
-          {
-            foreignKeyName: "telegram_media_message_id_fkey"
-            columns: ["message_id"]
-            isOneToOne: true
             referencedRelation: "messages"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "telegram_media_original_message_id_fkey"
-            columns: ["original_message_id"]
-            isOneToOne: false
-            referencedRelation: "message_media_view"
-            referencedColumns: ["message_id"]
           },
           {
             foreignKeyName: "telegram_media_original_message_id_fkey"
@@ -566,17 +517,7 @@ export type Database = {
       }
     }
     Views: {
-      message_media_view: {
-        Row: {
-          analyzed_content: Json | null
-          message_content: string | null
-          message_id: string | null
-          telegram_data: Json | null
-          telegram_media_id: string | null
-          telegram_media_url: string | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Functions: {
       cleanup_processed_queue_items: {
