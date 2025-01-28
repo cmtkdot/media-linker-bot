@@ -1,20 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { analyzeCaptionWithAI } from './caption-analyzer.ts';
-
-interface MessageData {
-  message_id: number;
-  chat_id: number;
-  sender_info: Record<string, any>;
-  message_type: string;
-  telegram_data: Record<string, any>;
-  media_group_id?: string;
-  message_url: string;
-  correlation_id: string;
-  is_original_caption: boolean;
-  original_message_id?: string;
-  analyzed_content?: Record<string, any>;
-  caption?: string;
-}
+import { withDatabaseRetry } from './database-retry.ts';
 
 export async function handleWebhookUpdate(
   update: any, 
@@ -33,29 +19,96 @@ export async function handleWebhookUpdate(
       message_id: message.message_id,
       chat_id: message.chat.id,
       media_group_id: message.media_group_id,
-      has_caption: !!message.caption
+      has_caption: !!message.caption,
+      correlation_id: correlationId
     });
 
-    // Generate message URL
+    // Check if message already exists
+    const { data: existingMessage } = await supabase
+      .from('messages')
+      .select('id, is_original_caption, analyzed_content')
+      .eq('message_id', message.message_id)
+      .eq('chat_id', message.chat.id)
+      .maybeSingle();
+
+    if (existingMessage) {
+      console.log('Message already exists:', existingMessage);
+      return {
+        success: true,
+        message: 'Message already processed',
+        messageId: existingMessage.id,
+        correlationId
+      };
+    }
+
     const chatId = message.chat.id.toString();
     const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
 
-    // Analyze caption if present
+    let isOriginalCaption = false;
+    let originalMessageId = null;
     let analyzedContent = null;
-    if (message.caption) {
-      try {
-        analyzedContent = await analyzeCaptionWithAI(message.caption);
-        console.log('Caption analyzed:', { 
-          message_id: message.message_id,
-          analyzed_content: analyzedContent
-        });
-      } catch (error) {
-        console.error('Error analyzing caption:', error);
+
+    // Handle media group caption logic
+    if (message.media_group_id) {
+      console.log('Processing media group message:', message.media_group_id);
+      
+      const { data: groupMessages } = await supabase
+        .from('messages')
+        .select('id, is_original_caption, analyzed_content, caption')
+        .eq('media_group_id', message.media_group_id)
+        .order('created_at', { ascending: true });
+
+      if (message.caption) {
+        const captionHolder = groupMessages?.find(m => m.is_original_caption);
+        if (!captionHolder) {
+          console.log('This is the first caption in the group');
+          isOriginalCaption = true;
+          analyzedContent = await analyzeCaptionWithAI(message.caption);
+        } else {
+          console.log('Using existing caption holder:', captionHolder.id);
+          originalMessageId = captionHolder.id;
+          analyzedContent = captionHolder.analyzed_content;
+        }
+      } else if (groupMessages?.length > 0) {
+        const captionHolder = groupMessages.find(m => m.is_original_caption);
+        if (captionHolder) {
+          originalMessageId = captionHolder.id;
+          analyzedContent = captionHolder.analyzed_content;
+        }
       }
+    } else if (message.caption) {
+      console.log('Processing single message with caption');
+      isOriginalCaption = true;
+      analyzedContent = await analyzeCaptionWithAI(message.caption);
     }
 
-    // Determine if this is an original caption message
-    const isOriginalCaption = !!message.caption;
+    // Create message media data structure
+    const messageMediaData = {
+      message: {
+        url: messageUrl,
+        media_group_id: message.media_group_id,
+        caption: message.caption,
+        message_id: message.message_id,
+        chat_id: message.chat.id,
+        date: message.date
+      },
+      sender: {
+        sender_info: message.from || message.sender_chat || {},
+        chat_info: message.chat
+      },
+      analysis: {
+        analyzed_content: analyzedContent
+      },
+      meta: {
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        status: 'pending',
+        error: null,
+        is_original_caption: isOriginalCaption,
+        original_message_id: originalMessageId,
+        correlation_id: correlationId
+      }
+    };
 
     // Create message record
     const messageData = {
@@ -68,72 +121,45 @@ export async function handleWebhookUpdate(
       message_url: messageUrl,
       correlation_id: correlationId,
       is_original_caption: isOriginalCaption,
+      original_message_id: originalMessageId,
       analyzed_content: analyzedContent,
+      message_media_data: messageMediaData,
       status: 'pending',
-      caption: message.caption,
-      message_media_data: {
-        message: {
-          url: messageUrl,
-          media_group_id: message.media_group_id,
-          caption: message.caption,
-          message_id: message.message_id,
-          chat_id: message.chat.id,
-          date: message.date
-        },
-        sender: {
-          sender_info: message.from || message.sender_chat || {},
-          chat_info: message.chat
-        },
-        analysis: {
-          analyzed_content: analyzedContent
-        },
-        meta: {
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          status: 'pending',
-          error: null,
-          is_original_caption: isOriginalCaption,
-          correlation_id: correlationId
-        }
-      }
+      caption: message.caption
     };
 
-    console.log('Creating message record:', {
-      message_id: message.message_id,
-      chat_id: message.chat.id,
-      correlation_id: correlationId,
-      is_original_caption: isOriginalCaption,
-      media_group_id: message.media_group_id
+    console.log('Inserting message:', {
+      message_id: messageData.message_id,
+      chat_id: messageData.chat_id,
+      media_group_id: messageData.media_group_id,
+      is_original_caption: messageData.is_original_caption
     });
 
     // Insert message record with conflict handling
-    const { data: messageRecord, error: messageError } = await supabase
-      .from('messages')
-      .upsert(messageData, {
-        onConflict: 'message_id, chat_id',
-        ignoreDuplicates: false
-      })
-      .select()
-      .single();
+    const { data: messageRecord, error: messageError } = await withDatabaseRetry(async () => {
+      return await supabase
+        .from('messages')
+        .insert(messageData)
+        .select()
+        .single();
+    });
 
     if (messageError) {
       console.error('Error creating message:', messageError);
       throw messageError;
     }
 
-    // Queue for processing with conflict handling
+    // Queue for processing
     const { error: queueError } = await supabase
       .from('unified_processing_queue')
-      .upsert({
+      .insert({
         queue_type: message.media_group_id ? 'media_group' : 'media',
-        message_media_data: messageData.message_media_data,
+        data: messageMediaData,
         status: 'pending',
         correlation_id: correlationId,
         chat_id: message.chat.id,
-        message_id: message.message_id
-      }, {
-        onConflict: 'correlation_id, message_id, chat_id',
-        ignoreDuplicates: true
+        message_id: message.message_id,
+        message_media_data: messageMediaData
       });
 
     if (queueError) {
@@ -141,13 +167,18 @@ export async function handleWebhookUpdate(
       throw queueError;
     }
 
+    console.log('Successfully processed message:', {
+      message_id: messageRecord.id,
+      correlation_id: correlationId,
+      is_original_caption: isOriginalCaption
+    });
+
     return {
       success: true,
       message: 'Update processed successfully',
       messageId: messageRecord.id,
       correlationId,
-      isOriginalCaption,
-      status: 'pending'
+      isOriginalCaption
     };
 
   } catch (error) {
