@@ -7,19 +7,13 @@ export interface MessageData {
   date: number;
 }
 
-export interface SenderData {
-  sender_info: Record<string, any>;
-  chat_info: Record<string, any>;
-}
-
-export interface AnalysisData {
-  analyzed_content: Record<string, any>;
-  product_name?: string;
-  product_code?: string;
-  quantity?: number;
-  vendor_uid?: string;
-  purchase_date?: string;
-  notes?: string;
+export interface MediaData {
+  file_id: string;
+  file_unique_id: string;
+  file_type: string;
+  public_url?: string;
+  storage_path?: string;
+  mime_type?: string;
 }
 
 export interface MessageMetadata {
@@ -36,9 +30,20 @@ export interface MessageMetadata {
 }
 
 export interface MessageMediaData {
-  message: MessageData;
-  sender: SenderData;
-  analysis: AnalysisData;
-  meta: MessageMetadata;
-  telegram_data: Record<string, any>;
+  message?: MessageData;
+  media?: MediaData;
+  meta?: MessageMetadata;
+  analysis?: {
+    analyzed_content?: Record<string, any>;
+    product_name?: string;
+    product_code?: string;
+    quantity?: number;
+    vendor_uid?: string;
+    purchase_date?: string;
+    notes?: string;
+  };
+  sender?: {
+    sender_info: Record<string, any>;
+    chat_info: Record<string, any>;
+  };
 }

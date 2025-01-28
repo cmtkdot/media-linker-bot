@@ -7,7 +7,7 @@ export async function uploadToStorage(
   fileType: string
 ): Promise<{ publicUrl: string; storagePath: string }> {
   try {
-    // Generate storage path
+    // Generate storage path with proper extension
     const storagePath = `${fileUniqueId}${
       fileType === 'photo' ? '.jpg' :
       fileType === 'video' ? '.mp4' :
@@ -49,7 +49,7 @@ export async function uploadToStorage(
 
     return { publicUrl, storagePath };
   } catch (error) {
-    console.error('Error uploading media to storage:', error);
+    console.error('Error uploading to storage:', error);
     throw error;
   }
 }
