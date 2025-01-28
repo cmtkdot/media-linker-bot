@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { Configuration, OpenAIApi } from 'https://esm.sh/openai@4.28.0';
+import OpenAI from 'https://esm.sh/openai@4.28.0';
 
 interface AnalyzedContent {
   product_info: {
@@ -71,10 +71,9 @@ function analyzeWithRegex(input: string): AnalyzedContent {
 
 async function analyzeWithAI(input: string): Promise<AnalyzedContent | null> {
   try {
-    const configuration = new Configuration({
+    const openai = new OpenAI({
       apiKey: Deno.env.get('OPENAI_API_KEY'),
     });
-    const openai = new OpenAIApi(configuration);
 
     const prompt = `Analyze this cannabis product information and extract structured data:
     "${input}"
@@ -87,8 +86,8 @@ async function analyzeWithAI(input: string): Promise<AnalyzedContent | null> {
     - quantity: Number after x (if present)
     - notes: Any text in parentheses (if present)`;
 
-    const response = await openai.createChatCompletion({
-      model: "gpt-4",
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
       messages: [
         {
           role: "system",
@@ -101,7 +100,7 @@ async function analyzeWithAI(input: string): Promise<AnalyzedContent | null> {
       ]
     });
 
-    const result = response.data.choices[0]?.message?.content;
+    const result = response.choices[0]?.message?.content;
     if (!result) return null;
 
     const parsed = JSON.parse(result);
