@@ -417,6 +417,9 @@ export type Database = {
           analyzed_content: Json | null
           correlation_id: string | null
           created_at: string
+          file_id: string | null
+          file_type: string | null
+          file_unique_id: string | null
           glide_data: Json | null
           id: string
           is_original_caption: boolean | null
@@ -427,6 +430,8 @@ export type Database = {
           original_message_id: string | null
           processed: boolean | null
           processing_error: string | null
+          public_url: string | null
+          storage_path: string | null
           telegram_data: Json | null
           updated_at: string
         }
@@ -434,6 +439,9 @@ export type Database = {
           analyzed_content?: Json | null
           correlation_id?: string | null
           created_at?: string
+          file_id?: string | null
+          file_type?: string | null
+          file_unique_id?: string | null
           glide_data?: Json | null
           id?: string
           is_original_caption?: boolean | null
@@ -444,6 +452,8 @@ export type Database = {
           original_message_id?: string | null
           processed?: boolean | null
           processing_error?: string | null
+          public_url?: string | null
+          storage_path?: string | null
           telegram_data?: Json | null
           updated_at?: string
         }
@@ -451,6 +461,9 @@ export type Database = {
           analyzed_content?: Json | null
           correlation_id?: string | null
           created_at?: string
+          file_id?: string | null
+          file_type?: string | null
+          file_unique_id?: string | null
           glide_data?: Json | null
           id?: string
           is_original_caption?: boolean | null
@@ -461,6 +474,8 @@ export type Database = {
           original_message_id?: string | null
           processed?: boolean | null
           processing_error?: string | null
+          public_url?: string | null
+          storage_path?: string | null
           telegram_data?: Json | null
           updated_at?: string
         }
@@ -518,6 +533,9 @@ export type Database = {
           analyzed_content: Json | null
           correlation_id: string | null
           created_at: string
+          file_id: string | null
+          file_type: string | null
+          file_unique_id: string | null
           glide_data: Json | null
           id: string
           is_original_caption: boolean | null
@@ -528,6 +546,8 @@ export type Database = {
           original_message_id: string | null
           processed: boolean | null
           processing_error: string | null
+          public_url: string | null
+          storage_path: string | null
           telegram_data: Json | null
           updated_at: string
         }[]
