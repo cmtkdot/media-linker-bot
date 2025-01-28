@@ -2,18 +2,17 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { analyzeCaptionWithAI } from "../_shared/caption-analyzer.ts";
+import { processMessageContent } from "../_shared/message-group-sync.ts";
 
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN') || '';
 const TELEGRAM_WEBHOOK_SECRET = Deno.env.get('TELEGRAM_WEBHOOK_SECRET') || '';
 
 serve(async (req) => {
   try {
-    // Handle CORS
     if (req.method === 'OPTIONS') {
       return new Response('ok', { headers: corsHeaders });
     }
 
-    // Validate webhook secret
     const secretHeader = req.headers.get('X-Telegram-Bot-Api-Secret-Token');
     if (!secretHeader || secretHeader !== TELEGRAM_WEBHOOK_SECRET) {
       console.error('Invalid webhook secret');
@@ -44,47 +43,35 @@ serve(async (req) => {
     const chatId = message.chat.id.toString();
     const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
 
-    // Determine if this message should be the original caption holder
-    let isOriginalCaption = false;
-    let originalMessageId = null;
-
-    if (message.media_group_id && message.caption) {
-      // Check if there's already an original caption holder for this group
-      const { data: existingHolder } = await supabaseClient
-        .from('messages')
-        .select('id')
-        .eq('media_group_id', message.media_group_id)
-        .eq('is_original_caption', true)
-        .maybeSingle();
-
-      if (!existingHolder) {
-        isOriginalCaption = true;
-      } else {
-        originalMessageId = existingHolder.id;
-      }
-    } else if (message.caption) {
-      // If it's a single message with caption, it's automatically the original
-      isOriginalCaption = true;
-    }
-
-    // Analyze caption if present and is original caption holder
+    // Analyze caption if present
     let analyzedContent = null;
-    if (message.caption && isOriginalCaption) {
+    if (message.caption) {
       try {
         analyzedContent = await analyzeCaptionWithAI(message.caption);
         console.log('Caption analyzed:', { 
           message_id: message.message_id,
           correlation_id: correlationId,
-          analyzed_content: analyzedContent,
-          is_original_caption: isOriginalCaption
+          analyzed_content: analyzedContent
         });
       } catch (error) {
-        console.error('Error analyzing caption:', {
-          error,
-          message_id: message.message_id,
-          correlation_id: correlationId
-        });
+        console.error('Error analyzing caption:', error);
       }
+    }
+
+    // Process message content and handle media group syncing
+    const { isOriginalCaption, originalMessageId, analyzedContent: syncedContent } = 
+      await processMessageContent(
+        supabaseClient,
+        message,
+        message.media_group_id,
+        analyzedContent,
+        false,
+        correlationId
+      );
+
+    // Use synced content if available
+    if (syncedContent) {
+      analyzedContent = syncedContent;
     }
 
     // Create message media data structure
@@ -122,7 +109,7 @@ serve(async (req) => {
       }
     };
 
-    // Create or update message record
+    // Create message record
     const messageData = {
       message_id: message.message_id,
       chat_id: message.chat.id,
@@ -136,10 +123,11 @@ serve(async (req) => {
       original_message_id: originalMessageId,
       message_media_data: messageMediaData,
       analyzed_content: analyzedContent,
-      status: 'pending'
+      status: 'pending',
+      caption: message.caption
     };
 
-    console.log('Creating/updating message record:', {
+    console.log('Creating message record:', {
       message_id: message.message_id,
       chat_id: message.chat.id,
       correlation_id: correlationId,
@@ -155,15 +143,11 @@ serve(async (req) => {
       .single();
 
     if (messageError) {
-      console.error('Error creating/updating message:', {
-        error: messageError,
-        message_id: message.message_id,
-        correlation_id: correlationId
-      });
+      console.error('Error creating message:', messageError);
       throw messageError;
     }
 
-    // Insert into unified_processing_queue
+    // Queue for processing
     const queueType = message.photo || message.video || message.document || message.animation 
       ? 'media' 
       : 'webhook';
@@ -181,21 +165,9 @@ serve(async (req) => {
       });
 
     if (queueError) {
-      console.error('Error queueing message:', {
-        error: queueError,
-        message_id: messageRecord.id,
-        correlation_id: correlationId
-      });
+      console.error('Error queueing message:', queueError);
       throw queueError;
     }
-
-    console.log('Message queued successfully:', {
-      queue_type: queueType,
-      message_id: messageRecord.id,
-      correlation_id: correlationId,
-      is_original_caption: isOriginalCaption,
-      status: 'pending'
-    });
 
     return new Response(
       JSON.stringify({
@@ -211,15 +183,7 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Error in webhook handler:', {
-      error: error.message,
-      stack: error.stack,
-      update_id: update?.update_id,
-      message_id: message?.message_id,
-      chat_id: message?.chat?.id,
-      correlation_id: correlationId
-    });
-    
+    console.error('Error in webhook handler:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
