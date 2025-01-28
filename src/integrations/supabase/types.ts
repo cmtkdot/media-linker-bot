@@ -353,6 +353,7 @@ export type Database = {
           glide_data: Json
           glide_json: Json | null
           id: string
+          is_original_caption: boolean | null
           last_synced_at: string | null
           media_metadata: Json
           message_data: Json | null
@@ -360,6 +361,7 @@ export type Database = {
           message_media_data: Json | null
           message_url: string | null
           notes: string | null
+          original_message_id: string | null
           processed: boolean | null
           processing_error: string | null
           product_code: string | null
@@ -386,6 +388,7 @@ export type Database = {
           glide_data?: Json
           glide_json?: Json | null
           id?: string
+          is_original_caption?: boolean | null
           last_synced_at?: string | null
           media_metadata?: Json
           message_data?: Json | null
@@ -393,6 +396,7 @@ export type Database = {
           message_media_data?: Json | null
           message_url?: string | null
           notes?: string | null
+          original_message_id?: string | null
           processed?: boolean | null
           processing_error?: string | null
           product_code?: string | null
@@ -419,6 +423,7 @@ export type Database = {
           glide_data?: Json
           glide_json?: Json | null
           id?: string
+          is_original_caption?: boolean | null
           last_synced_at?: string | null
           media_metadata?: Json
           message_data?: Json | null
@@ -426,6 +431,7 @@ export type Database = {
           message_media_data?: Json | null
           message_url?: string | null
           notes?: string | null
+          original_message_id?: string | null
           processed?: boolean | null
           processing_error?: string | null
           product_code?: string | null
@@ -453,6 +459,20 @@ export type Database = {
             foreignKeyName: "telegram_media_message_id_fkey"
             columns: ["message_id"]
             isOneToOne: true
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "telegram_media_original_message_id_fkey"
+            columns: ["original_message_id"]
+            isOneToOne: false
+            referencedRelation: "message_media_view"
+            referencedColumns: ["message_id"]
+          },
+          {
+            foreignKeyName: "telegram_media_original_message_id_fkey"
+            columns: ["original_message_id"]
+            isOneToOne: false
             referencedRelation: "messages"
             referencedColumns: ["id"]
           },
@@ -565,6 +585,7 @@ export type Database = {
           glide_data: Json
           glide_json: Json | null
           id: string
+          is_original_caption: boolean | null
           last_synced_at: string | null
           media_metadata: Json
           message_data: Json | null
@@ -572,6 +593,7 @@ export type Database = {
           message_media_data: Json | null
           message_url: string | null
           notes: string | null
+          original_message_id: string | null
           processed: boolean | null
           processing_error: string | null
           product_code: string | null

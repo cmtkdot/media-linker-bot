@@ -74,7 +74,8 @@ const MediaEditDialog = ({ editItem, onClose, onSave, onItemChange, formatDate }
     try {
       await onSave();
 
-      if (editItem.telegram_data?.message_id && editItem.telegram_data?.chat?.id) {
+      // Only update Telegram if this is the original caption holder
+      if (editItem.is_original_caption && editItem.telegram_data?.message_id && editItem.telegram_data?.chat?.id) {
         await updateTelegramMessage(
           editItem.telegram_data.message_id,
           editItem.telegram_data.chat.id,

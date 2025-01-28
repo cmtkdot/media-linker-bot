@@ -21,6 +21,8 @@ export interface MessageMediaData {
     updated_at: string;
     status: 'pending' | 'processed' | 'error';
     error: string | null;
+    is_original_caption?: boolean;
+    original_message_id?: string;
   };
   media: {
     file_id: string;
@@ -67,6 +69,9 @@ export interface MediaItem {
   last_synced_at?: string;
   message_data?: Json;
   purchase_order_uid?: string;
+  
+  is_original_caption?: boolean;
+  original_message_id?: string;
 }
 
 export interface MediaItemUpdate extends Partial<MediaItem> {

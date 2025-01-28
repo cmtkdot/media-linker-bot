@@ -33,6 +33,18 @@ export const getMediaItems = async (): Promise<MediaItem[]> => {
 };
 
 export const updateMediaItem = async (id: string, updates: Partial<MediaItem>): Promise<MediaItem> => {
+  // Update message_media_data meta with is_original_caption if it exists
+  if (updates.is_original_caption !== undefined) {
+    updates.message_media_data = {
+      ...updates.message_media_data,
+      meta: {
+        ...updates.message_media_data?.meta,
+        is_original_caption: updates.is_original_caption,
+        original_message_id: updates.original_message_id
+      }
+    };
+  }
+
   const { data, error } = await supabase
     .from('telegram_media')
     .update(updates as any)
