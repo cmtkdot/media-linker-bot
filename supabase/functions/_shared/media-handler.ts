@@ -245,6 +245,7 @@ export async function uploadMediaToStorage(
       throw uploadError;
     }
 
+    // Get public URL from storage path
     const {
       data: { publicUrl },
     } = await supabase.storage.from("media").getPublicUrl(fileName);
@@ -253,18 +254,25 @@ export async function uploadMediaToStorage(
       throw new Error("Failed to get public URL after upload");
     }
 
-    // Verify the upload
-    const response = await fetch(publicUrl, { method: "HEAD" });
-    if (!response.ok) {
-      throw new Error(`Upload verification failed: ${response.status}`);
+    // Verify the upload using HEAD request
+    try {
+      const response = await fetch(publicUrl, { method: "HEAD" });
+      if (!response.ok) {
+        throw new Error(`Upload verification failed: ${response.status}`);
+      }
+      console.log("Upload verified:", {
+        fileName,
+        publicUrl,
+        verificationStatus: response.status,
+        contentLength: response.headers.get("content-length"),
+        contentType: response.headers.get("content-type"),
+      });
+    } catch (error) {
+      console.error("Upload verification failed:", error);
+      throw new Error(`Upload verification failed: ${error.message}`);
     }
 
-    console.log("Upload successful:", {
-      fileName,
-      publicUrl,
-      verificationStatus: response.status,
-    });
-
+    // Let the database trigger handle URL consistency
     return {
       publicUrl,
       storagePath: fileName,
