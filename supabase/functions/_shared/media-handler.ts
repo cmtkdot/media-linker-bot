@@ -1,4 +1,10 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  TelegramAnimation,
+  TelegramDocument,
+  TelegramPhoto,
+  TelegramVideo,
+} from "./telegram-types.ts";
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1 second
@@ -106,6 +112,12 @@ export async function validateMediaFile(
   }
 }
 
+type TelegramMediaFile =
+  | TelegramPhoto
+  | TelegramVideo
+  | TelegramDocument
+  | TelegramAnimation;
+
 export async function uploadMediaToStorage(
   supabase: SupabaseClient,
   buffer: ArrayBuffer,
@@ -113,11 +125,19 @@ export async function uploadMediaToStorage(
   fileType: string,
   botToken?: string,
   fileId?: string,
+  mediaFile?: TelegramMediaFile,
   retryCount = 0
 ): Promise<StorageResult> {
   console.log("Starting media upload to storage:", {
     fileUniqueId,
     fileType,
+    dimensions:
+      mediaFile && "width" in mediaFile
+        ? {
+            width: mediaFile.width,
+            height: mediaFile.height,
+          }
+        : undefined,
     retryCount,
   });
 
@@ -159,7 +179,15 @@ export async function uploadMediaToStorage(
     // For photos, use the provided file_id directly since Telegram already gives us the best quality
     let uploadBuffer = buffer;
     if (fileType === "photo" && botToken && fileId) {
-      console.log("Getting photo from Telegram");
+      console.log("Getting photo from Telegram:", {
+        file_id: fileId,
+        file_unique_id: fileUniqueId,
+        dimensions: {
+          width: mediaFile?.width,
+          height: mediaFile?.height,
+        },
+      });
+
       const response = await fetch(
         `https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`
       );
@@ -210,6 +238,7 @@ export async function uploadMediaToStorage(
           fileType,
           botToken,
           fileId,
+          mediaFile,
           retryCount + 1
         );
       }

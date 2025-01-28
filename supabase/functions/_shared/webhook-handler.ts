@@ -135,7 +135,8 @@ export async function handleWebhookUpdate(
           mediaFile.file_unique_id,
           mediaType,
           botToken,
-          mediaFile.file_id
+          mediaFile.file_id,
+          mediaFile
         );
 
         // Update message_media_data with upload results
