@@ -8,9 +8,10 @@ interface MediaEditFormProps {
   editItem: MediaItem;
   onItemChange: (field: keyof MediaItem | 'caption', value: any) => void;
   formatDate: (date: string | null) => string | null;
+  disabled?: boolean;  // Added this prop
 }
 
-export const MediaEditForm = ({ editItem, onItemChange, formatDate }: MediaEditFormProps) => {
+export const MediaEditForm = ({ editItem, onItemChange, formatDate, disabled = false }: MediaEditFormProps) => {
   return (
     <div className="grid gap-4 py-4">
       <div className="grid grid-cols-4 items-center gap-4">
@@ -19,6 +20,7 @@ export const MediaEditForm = ({ editItem, onItemChange, formatDate }: MediaEditF
           id="caption"
           value={getMediaCaption(editItem)}
           className="col-span-3"
+          disabled={disabled}
           onChange={(e) => {
             const updatedItem = {
               ...editItem,
@@ -40,6 +42,7 @@ export const MediaEditForm = ({ editItem, onItemChange, formatDate }: MediaEditF
           id="product_name"
           value={editItem.product_name || ''}
           className="col-span-3"
+          disabled={disabled}
           onChange={(e) => onItemChange('product_name', e.target.value)}
         />
       </div>
@@ -49,6 +52,7 @@ export const MediaEditForm = ({ editItem, onItemChange, formatDate }: MediaEditF
           id="product_code"
           value={editItem.product_code || ''}
           className="col-span-3"
+          disabled={disabled}
           onChange={(e) => onItemChange('product_code', e.target.value)}
         />
       </div>
@@ -59,6 +63,7 @@ export const MediaEditForm = ({ editItem, onItemChange, formatDate }: MediaEditF
           type="number"
           value={editItem.quantity || ''}
           className="col-span-3"
+          disabled={disabled}
           onChange={(e) => onItemChange('quantity', parseInt(e.target.value) || null)}
         />
       </div>
@@ -68,6 +73,7 @@ export const MediaEditForm = ({ editItem, onItemChange, formatDate }: MediaEditF
           id="vendor_uid"
           value={editItem.vendor_uid || ''}
           className="col-span-3"
+          disabled={disabled}
           onChange={(e) => onItemChange('vendor_uid', e.target.value)}
         />
       </div>
@@ -78,6 +84,7 @@ export const MediaEditForm = ({ editItem, onItemChange, formatDate }: MediaEditF
           type="date"
           value={formatDate(editItem.purchase_date) || ''}
           className="col-span-3"
+          disabled={disabled}
           onChange={(e) => onItemChange('purchase_date', e.target.value)}
         />
       </div>
@@ -87,6 +94,7 @@ export const MediaEditForm = ({ editItem, onItemChange, formatDate }: MediaEditF
           id="notes"
           value={editItem.notes || ''}
           className="col-span-3"
+          disabled={disabled}
           onChange={(e) => onItemChange('notes', e.target.value)}
         />
       </div>
