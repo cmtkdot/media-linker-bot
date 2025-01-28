@@ -415,69 +415,126 @@ export type Database = {
       telegram_media: {
         Row: {
           analyzed_content: Json | null
+          caption: string | null
           correlation_id: string | null
           created_at: string
+          duration: number | null
           file_id: string | null
+          file_size: number | null
           file_type: string | null
           file_unique_id: string | null
           glide_data: Json | null
+          height: number | null
           id: string
           is_original_caption: boolean | null
+          last_retry_at: string | null
           last_synced_at: string | null
+          media_group_id: string | null
+          media_group_size: number | null
           media_metadata: Json | null
           message_id: string
           message_media_data: Json | null
+          mime_type: string | null
+          notes: string | null
           original_message_id: string | null
           processed: boolean | null
+          processed_at: string | null
           processing_error: string | null
+          product_code: string | null
+          product_name: string | null
           public_url: string | null
+          purchase_date: string | null
+          purchase_order_uid: string | null
+          quantity: number | null
+          retry_count: number | null
+          status: string | null
           storage_path: string | null
           telegram_data: Json | null
           updated_at: string
+          vendor_uid: string | null
+          width: number | null
         }
         Insert: {
           analyzed_content?: Json | null
+          caption?: string | null
           correlation_id?: string | null
           created_at?: string
+          duration?: number | null
           file_id?: string | null
+          file_size?: number | null
           file_type?: string | null
           file_unique_id?: string | null
           glide_data?: Json | null
+          height?: number | null
           id?: string
           is_original_caption?: boolean | null
+          last_retry_at?: string | null
           last_synced_at?: string | null
+          media_group_id?: string | null
+          media_group_size?: number | null
           media_metadata?: Json | null
           message_id: string
           message_media_data?: Json | null
+          mime_type?: string | null
+          notes?: string | null
           original_message_id?: string | null
           processed?: boolean | null
+          processed_at?: string | null
           processing_error?: string | null
+          product_code?: string | null
+          product_name?: string | null
           public_url?: string | null
+          purchase_date?: string | null
+          purchase_order_uid?: string | null
+          quantity?: number | null
+          retry_count?: number | null
+          status?: string | null
           storage_path?: string | null
           telegram_data?: Json | null
           updated_at?: string
+          vendor_uid?: string | null
+          width?: number | null
         }
         Update: {
           analyzed_content?: Json | null
+          caption?: string | null
           correlation_id?: string | null
           created_at?: string
+          duration?: number | null
           file_id?: string | null
+          file_size?: number | null
           file_type?: string | null
           file_unique_id?: string | null
           glide_data?: Json | null
+          height?: number | null
           id?: string
           is_original_caption?: boolean | null
+          last_retry_at?: string | null
           last_synced_at?: string | null
+          media_group_id?: string | null
+          media_group_size?: number | null
           media_metadata?: Json | null
           message_id?: string
           message_media_data?: Json | null
+          mime_type?: string | null
+          notes?: string | null
           original_message_id?: string | null
           processed?: boolean | null
+          processed_at?: string | null
           processing_error?: string | null
+          product_code?: string | null
+          product_name?: string | null
           public_url?: string | null
+          purchase_date?: string | null
+          purchase_order_uid?: string | null
+          quantity?: number | null
+          retry_count?: number | null
+          status?: string | null
           storage_path?: string | null
           telegram_data?: Json | null
           updated_at?: string
+          vendor_uid?: string | null
+          width?: number | null
         }
         Relationships: [
           {
@@ -531,25 +588,44 @@ export type Database = {
         }
         Returns: {
           analyzed_content: Json | null
+          caption: string | null
           correlation_id: string | null
           created_at: string
+          duration: number | null
           file_id: string | null
+          file_size: number | null
           file_type: string | null
           file_unique_id: string | null
           glide_data: Json | null
+          height: number | null
           id: string
           is_original_caption: boolean | null
+          last_retry_at: string | null
           last_synced_at: string | null
+          media_group_id: string | null
+          media_group_size: number | null
           media_metadata: Json | null
           message_id: string
           message_media_data: Json | null
+          mime_type: string | null
+          notes: string | null
           original_message_id: string | null
           processed: boolean | null
+          processed_at: string | null
           processing_error: string | null
+          product_code: string | null
+          product_name: string | null
           public_url: string | null
+          purchase_date: string | null
+          purchase_order_uid: string | null
+          quantity: number | null
+          retry_count: number | null
+          status: string | null
           storage_path: string | null
           telegram_data: Json | null
           updated_at: string
+          vendor_uid: string | null
+          width: number | null
         }[]
       }
       update_media_records: {
