@@ -150,6 +150,20 @@ const MediaCard = ({ item, onPreview, onEdit, relatedMedia = [] }: MediaCardProp
             </div>
           )}
 
+          {/* Processing status indicator */}
+          {currentItem.message_media_data?.meta?.status === 'processing' && (
+            <div className="absolute top-2 right-2 bg-blue-500 text-white px-2 py-1 rounded-full text-xs">
+              Processing...
+            </div>
+          )}
+
+          {/* Error indicator */}
+          {currentItem.message_media_data?.meta?.status === 'error' && (
+            <div className="absolute top-2 right-2 bg-red-500 text-white px-2 py-1 rounded-full text-xs">
+              Error
+            </div>
+          )}
+
           {/* Hover overlay with actions */}
           <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity">
             <div className="absolute inset-0 flex items-center justify-center gap-2">
@@ -173,6 +187,8 @@ const MediaCard = ({ item, onPreview, onEdit, relatedMedia = [] }: MediaCardProp
           <p className="text-xs text-muted-foreground">
             {currentItem.file_type.charAt(0).toUpperCase() + currentItem.file_type.slice(1)}
             {allMedia.length > 1 && ` • ${currentIndex + 1}/${allMedia.length}`}
+            {currentItem.message_media_data?.meta?.retry_count > 0 && 
+              ` • Retries: ${currentItem.message_media_data.meta.retry_count}`}
           </p>
         </div>
       </CardContent>

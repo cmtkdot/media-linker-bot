@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { MediaItem } from "@/types/media";
-import MediaCard, { MediaCardProps } from "./MediaCard";
+import MediaCard from "./MediaCard";
 import MediaViewer from "./MediaViewer";
 import MediaEditDialog from "./MediaEditDialog";
+import { useToast } from "@/components/ui/use-toast";
 
 interface MediaGridContentProps {
   items: MediaItem[];
@@ -16,13 +17,32 @@ const MediaGridContent = ({ items = [], view, isLoading, error, onMediaUpdate }:
   const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
   const [editItem, setEditItem] = useState<MediaItem | null>(null);
   const [viewerOpen, setViewerOpen] = useState(false);
+  const { toast } = useToast();
 
   const handleView = (item: MediaItem) => {
+    // Don't allow viewing if media is still processing
+    if (item.message_media_data?.meta?.status === 'processing') {
+      toast({
+        title: "Media Processing",
+        description: "This media item is still being processed. Please wait.",
+      });
+      return;
+    }
+
     setSelectedMedia(item);
     setViewerOpen(true);
   };
 
   const handleEdit = (item: MediaItem) => {
+    // Don't allow editing if media is still processing
+    if (item.message_media_data?.meta?.status === 'processing') {
+      toast({
+        title: "Media Processing",
+        description: "Cannot edit while media is being processed. Please wait.",
+      });
+      return;
+    }
+
     setEditItem(item);
   };
 
@@ -68,9 +88,15 @@ const MediaGridContent = ({ items = [], view, isLoading, error, onMediaUpdate }:
       }>
         {items.map((item) => (
           <MediaCard
+            key={item.id}
             item={item}
             onPreview={() => handleView(item)}
             onEdit={handleEdit}
+            relatedMedia={items.filter(
+              relatedItem => 
+                relatedItem.id !== item.id && 
+                relatedItem.telegram_data?.media_group_id === item.telegram_data?.media_group_id
+            )}
           />
         ))}
       </div>
