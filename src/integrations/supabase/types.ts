@@ -516,6 +516,12 @@ export type Database = {
         }
         Returns: string
       }
+      get_public_url: {
+        Args: {
+          storage_path: string
+        }
+        Returns: string
+      }
       search_telegram_media: {
         Args: {
           search_term: string
@@ -550,6 +556,13 @@ export type Database = {
           p_message_media_data: Json
         }
         Returns: undefined
+      }
+      update_message_media_data_url: {
+        Args: {
+          message_data: Json
+          new_url: string
+        }
+        Returns: Json
       }
       update_public_urls: {
         Args: Record<PropertyKey, never>
