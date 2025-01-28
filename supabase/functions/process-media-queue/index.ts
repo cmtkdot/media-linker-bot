@@ -44,19 +44,23 @@ serve(async (req) => {
 
     for (const item of queueItems) {
       try {
-        // Extract media info from structured message_media_data
-        const mediaInfo = item.message_media_data?.meta?.extracted_fields;
-        const fileId = mediaInfo?.file_id;
-        const fileUniqueId = mediaInfo?.file_unique_id;
+        // Get media info from both possible locations to ensure backward compatibility
+        const mediaData = item.message_media_data?.media;
+        const extractedFields = item.message_media_data?.meta?.extracted_fields;
+        
+        const fileId = mediaData?.file_id || extractedFields?.file_id;
+        const fileUniqueId = mediaData?.file_unique_id || extractedFields?.file_unique_id;
+        const fileType = mediaData?.file_type || 'photo'; // Default to photo if not specified
         
         console.log('Processing item:', {
           file_id: fileId,
           file_unique_id: fileUniqueId,
-          correlation_id: item.correlation_id
+          correlation_id: item.correlation_id,
+          file_type: fileType
         });
 
         if (!fileId || !fileUniqueId) {
-          throw new Error('Missing required media information');
+          throw new Error('Missing required media information: file_id or file_unique_id');
         }
 
         // Download file from Telegram
@@ -74,8 +78,7 @@ serve(async (req) => {
         );
         const fileBuffer = await fileResponse.arrayBuffer();
 
-        // Determine file type and generate storage path
-        const fileType = item.message_media_data?.media?.file_type || 'photo';
+        // Generate storage path
         const storagePath = `${fileUniqueId}${
           fileType === 'photo' ? '.jpg' :
           fileType === 'video' ? '.mp4' :
@@ -102,28 +105,30 @@ serve(async (req) => {
           .getPublicUrl(storagePath);
 
         // Update telegram_media record
+        const mediaRecord = {
+          file_id: fileId,
+          file_unique_id: fileUniqueId,
+          file_type: fileType,
+          public_url: publicUrl,
+          storage_path: storagePath,
+          message_media_data: {
+            ...item.message_media_data,
+            media: {
+              file_id: fileId,
+              file_unique_id: fileUniqueId,
+              file_type: fileType,
+              public_url: publicUrl,
+              storage_path: storagePath
+            }
+          },
+          correlation_id: item.correlation_id,
+          telegram_data: item.message_media_data?.telegram_data || {},
+          processed: true
+        };
+
         const { error: mediaError } = await supabaseClient
           .from('telegram_media')
-          .upsert({
-            file_id: fileId,
-            file_unique_id: fileUniqueId,
-            file_type: fileType,
-            public_url: publicUrl,
-            storage_path: storagePath,
-            message_media_data: {
-              ...item.message_media_data,
-              media: {
-                file_id: fileId,
-                file_unique_id: fileUniqueId,
-                file_type: fileType,
-                public_url: publicUrl,
-                storage_path: storagePath
-              }
-            },
-            correlation_id: item.correlation_id,
-            telegram_data: item.message_media_data.telegram_data,
-            processed: true
-          });
+          .upsert(mediaRecord);
 
         if (mediaError) throw mediaError;
 
@@ -143,7 +148,7 @@ serve(async (req) => {
                 storage_path: storagePath
               },
               meta: {
-                ...item.message_media_data.meta,
+                ...item.message_media_data?.meta,
                 status: 'processed',
                 processed_at: new Date().toISOString()
               }
