@@ -1,7 +1,7 @@
 select
   cron.schedule(
-    'process-media-queue', -- name of the cron job
-    '* * * * *', -- every minute
+    'process-media-queue',
+    '* * * * *',
     $$
     select net.http_post(
       'https://kzfamethztziwqiocbwz.supabase.co/functions/v1/process-media-queue',
