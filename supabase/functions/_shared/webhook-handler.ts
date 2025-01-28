@@ -2,7 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { TelegramMessage, TelegramUpdate } from './telegram-types.ts';
 import { analyzeWebhookMessage } from './webhook-message-analyzer.ts';
 import { buildWebhookMessageData } from './webhook-message-builder.ts';
-import { processMediaMessage } from './media-handler.ts';
+import { processMediaMessage } from './media/processor.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -98,7 +98,7 @@ export async function handleWebhookUpdate(
 
     console.log("Created message record:", messageRecord.id);
 
-    // Only process media and create telegram_media record if we have valid media file information
+    // Only process media if we have valid media file information
     if (mediaFile && mediaType) {
       console.log("Processing media file:", {
         file_id: mediaFile.file_id,
@@ -107,6 +107,7 @@ export async function handleWebhookUpdate(
       });
 
       try {
+        // Process media using the dedicated processor
         await processMediaMessage(supabase, messageRecord, botToken);
       } catch (error) {
         console.error("Error processing media:", error);

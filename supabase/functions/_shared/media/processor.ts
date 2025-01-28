@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { MediaFile, MediaProcessingLog } from './types.ts';
+import { MediaFile } from './types.ts';
 import { uploadMediaToStorage } from './storage.ts';
 
 export async function processMediaMessage(
@@ -22,7 +22,7 @@ export async function processMediaMessage(
     console.log('Extracted media file:', mediaFile);
 
     // Upload to storage and get URLs
-    const { publicUrl, storagePath, isExisting } = await uploadMediaToStorage(
+    const { publicUrl, storagePath } = await uploadMediaToStorage(
       supabase,
       new ArrayBuffer(0),
       mediaFile.file_unique_id,
@@ -57,37 +57,7 @@ export async function processMediaMessage(
       })
       .eq('id', messageId);
 
-    // Update telegram_media table
-    await supabase
-      .from('telegram_media')
-      .upsert({
-        message_id: messageId,
-        file_id: mediaFile.file_id,
-        file_unique_id: mediaFile.file_unique_id,
-        file_type: mediaFile.file_type,
-        public_url: publicUrl,
-        storage_path: storagePath,
-        message_media_data: updatedMediaData,
-        correlation_id: correlationId,
-        telegram_data: message.telegram_data,
-        is_original_caption: message.is_original_caption,
-        original_message_id: message.original_message_id,
-        processed: true,
-        updated_at: new Date().toISOString()
-      }, {
-        onConflict: 'message_id'
-      });
-
-    // Log processing status
-    await logMediaProcessing(supabase, {
-      messageId,
-      fileId: mediaFile.file_id,
-      fileType: mediaFile.file_type,
-      status: isExisting ? 'duplicate' : 'processed',
-      storagePath,
-      correlationId
-    });
-
+    // The telegram_media table will be automatically updated via triggers
     console.log('Media processing completed successfully');
 
   } catch (error) {
@@ -101,16 +71,6 @@ export async function processMediaMessage(
         processing_error: error.message
       })
       .eq('id', messageId);
-
-    // Log error
-    await logMediaProcessing(supabase, {
-      messageId,
-      fileId: message.message_media_data?.media?.file_id,
-      fileType: message.message_media_data?.media?.file_type,
-      status: 'error',
-      errorMessage: error.message,
-      correlationId
-    });
 
     throw error;
   }
@@ -155,26 +115,4 @@ function extractMediaFile(message: Record<string, any>): MediaFile | null {
   }
 
   return null;
-}
-
-async function logMediaProcessing(
-  supabase: ReturnType<typeof createClient>,
-  log: MediaProcessingLog
-): Promise<void> {
-  try {
-    await supabase
-      .from('media_processing_logs')
-      .insert({
-        message_id: log.messageId,
-        file_id: log.fileId,
-        file_type: log.fileType,
-        status: log.status,
-        storage_path: log.storagePath,
-        error_message: log.errorMessage,
-        correlation_id: log.correlationId,
-        processed_at: log.status === 'processed' ? new Date().toISOString() : null
-      });
-  } catch (error) {
-    console.error('Failed to log media processing:', error);
-  }
 }
