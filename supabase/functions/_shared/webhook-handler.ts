@@ -55,7 +55,7 @@ export async function handleWebhookUpdate(
     );
     console.log("Message analysis result:", analyzedMessageContent);
 
-    // Build message data structure
+    // Build message data structure with media info
     const messageData = buildWebhookMessageData(
       message,
       messageUrl,
@@ -63,11 +63,11 @@ export async function handleWebhookUpdate(
     );
     console.log("Built message data structure");
 
-    // Extract media type and file info
+    // Extract media type
     const mediaType = getMediaType(message);
     console.log("Media type:", mediaType);
 
-    // Create message record
+    // Create message record with complete media data
     const { data: messageRecord, error: messageError } = await supabase
       .from("messages")
       .insert({
@@ -99,12 +99,14 @@ export async function handleWebhookUpdate(
 
     console.log("Created message record:", messageRecord.id);
 
-    // Log the initial media processing attempt
-    if (mediaType) {
+    // Create initial media processing log
+    if (mediaType && messageData.media) {
       const { error: logError } = await supabase
         .from("media_processing_logs")
         .insert({
           message_id: messageRecord.id,
+          file_id: messageData.media.file_id,
+          file_type: messageData.media.file_type,
           correlation_id: correlationId,
           status: "pending",
           created_at: new Date().toISOString()
