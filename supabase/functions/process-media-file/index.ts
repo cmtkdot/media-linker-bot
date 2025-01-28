@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { uploadMediaToStorage } from "../_shared/storage-manager.ts";
-import { validateMediaFile, getMediaType } from "../_shared/media-validators.ts";
+import { validateMediaFile } from "../_shared/media-validators.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -13,8 +13,14 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  let supabase;
+  let messageId;
+  let correlationId;
+
   try {
-    const { fileId, fileUniqueId, fileType, messageId, botToken } = await req.json();
+    const { fileId, fileUniqueId, fileType, messageId: msgId, botToken, correlationId: corrId } = await req.json();
+    messageId = msgId;
+    correlationId = corrId;
 
     if (!fileId || !fileUniqueId || !fileType || !messageId || !botToken) {
       throw new Error('Missing required parameters');
@@ -22,15 +28,26 @@ serve(async (req) => {
 
     console.log('Processing media file:', {
       file_id: fileId,
-      file_unique_id: fileUniqueId,
       file_type: fileType,
-      message_id: messageId
+      message_id: messageId,
+      correlation_id: correlationId
     });
 
-    const supabase = createClient(
+    supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
+
+    // Update status to processing
+    await supabase
+      .from('messages')
+      .update({
+        status: 'processing',
+        message_media_data: {
+          meta: { status: 'processing', updated_at: new Date().toISOString() }
+        }
+      })
+      .eq('id', messageId);
 
     // Get file from Telegram
     const response = await fetch(
@@ -103,21 +120,30 @@ serve(async (req) => {
       }
     };
 
-    // Update telegram_media with verified storage information
-    const { error: updateError } = await supabase
-      .from('telegram_media')
-      .update({
-        public_url: publicUrl,
-        storage_path: storagePath,
-        processed: true,
-        message_media_data: updatedMessageMediaData,
-        updated_at: new Date().toISOString()
-      })
-      .eq('message_id', messageId);
+    // Begin transaction to update both tables
+    const { error: updateError } = await supabase.rpc('update_media_records', {
+      p_message_id: messageId,
+      p_public_url: publicUrl,
+      p_storage_path: storagePath,
+      p_message_media_data: updatedMessageMediaData
+    });
 
     if (updateError) {
       throw updateError;
     }
+
+    // Log successful processing
+    await supabase
+      .from('media_processing_logs')
+      .insert({
+        message_id: messageId,
+        file_id: fileId,
+        file_type: fileType,
+        status: 'processed',
+        storage_path: storagePath,
+        correlation_id: correlationId,
+        processed_at: new Date().toISOString()
+      });
 
     return new Response(
       JSON.stringify({ 
@@ -131,12 +157,24 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error processing media:', error);
     
-    try {
-      const supabase = createClient(
-        Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-      );
+    // Update message status to error
+    if (supabase && messageId) {
+      await supabase
+        .from('messages')
+        .update({
+          status: 'error',
+          processing_error: error.message,
+          message_media_data: {
+            meta: { 
+              status: 'error', 
+              error: error.message,
+              updated_at: new Date().toISOString()
+            }
+          }
+        })
+        .eq('id', messageId);
 
+      // Log error
       await supabase
         .from('media_processing_logs')
         .insert({
@@ -144,10 +182,9 @@ serve(async (req) => {
           file_id: fileId,
           file_type: fileType,
           error_message: error.message,
-          status: 'error'
+          status: 'error',
+          correlation_id: correlationId
         });
-    } catch (logError) {
-      console.error('Failed to log error:', logError);
     }
 
     return new Response(
