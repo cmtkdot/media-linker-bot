@@ -253,6 +253,7 @@ export type Database = {
       messages: {
         Row: {
           analyzed_content: Json | null
+          caption: string | null
           chat_id: number
           correlation_id: string | null
           created_at: string
@@ -273,7 +274,6 @@ export type Database = {
           purchase_date: string | null
           purchase_order_uid: string | null
           quantity: number | null
-          raw_text: string | null
           retry_count: number | null
           sender_info: Json
           status: string | null
@@ -283,6 +283,7 @@ export type Database = {
         }
         Insert: {
           analyzed_content?: Json | null
+          caption?: string | null
           chat_id: number
           correlation_id?: string | null
           created_at?: string
@@ -303,7 +304,6 @@ export type Database = {
           purchase_date?: string | null
           purchase_order_uid?: string | null
           quantity?: number | null
-          raw_text?: string | null
           retry_count?: number | null
           sender_info?: Json
           status?: string | null
@@ -313,6 +313,7 @@ export type Database = {
         }
         Update: {
           analyzed_content?: Json | null
+          caption?: string | null
           chat_id?: number
           correlation_id?: string | null
           created_at?: string
@@ -333,7 +334,6 @@ export type Database = {
           purchase_date?: string | null
           purchase_order_uid?: string | null
           quantity?: number | null
-          raw_text?: string | null
           retry_count?: number | null
           sender_info?: Json
           status?: string | null
