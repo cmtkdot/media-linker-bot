@@ -14,7 +14,6 @@ export interface MediaItem {
   message_id: string;
   message_url?: string;
   caption?: string;
-  media_group_id?: string;
   
   product_name?: string;
   product_code?: string;
@@ -38,4 +37,17 @@ export interface MediaItem {
   last_synced_at?: string;
   message_data?: Json;
   purchase_order_uid?: string;
+}
+
+export interface MediaItemUpdate extends Partial<MediaItem> {
+  id: string;
+}
+
+export interface TableResult {
+  table_name: string;
+}
+
+export interface SyncResult {
+  synced_count: number;
+  error_count: number;
 }

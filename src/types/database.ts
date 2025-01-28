@@ -1,5 +1,5 @@
 import { Database as GeneratedDatabase } from "@/integrations/supabase/types";
-import { TableResult } from "./media";
+import { TableResult } from "@/types/media";
 
 export interface Database extends Omit<GeneratedDatabase, 'public'> {
   public: {
