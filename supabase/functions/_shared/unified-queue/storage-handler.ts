@@ -1,5 +1,21 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+export const generateStoragePath = (fileUniqueId: string, fileType: string): string => {
+  return `${fileUniqueId}${
+    fileType === 'photo' ? '.jpg' :
+    fileType === 'video' ? '.mp4' :
+    fileType === 'document' ? '.pdf' :
+    '.bin'
+  }`;
+};
+
+export const getMimeType = (fileType: string): string => {
+  return fileType === 'photo' ? 'image/jpeg' :
+         fileType === 'video' ? 'video/mp4' :
+         fileType === 'document' ? 'application/pdf' :
+         'application/octet-stream';
+};
+
 export const uploadMediaToStorage = async (
   supabase: any,
   buffer: ArrayBuffer,
@@ -7,25 +23,21 @@ export const uploadMediaToStorage = async (
   fileType: string
 ): Promise<{ publicUrl: string; storagePath: string }> => {
   try {
-    const storagePath = `${fileUniqueId}${
-      fileType === 'photo' ? '.jpg' :
-      fileType === 'video' ? '.mp4' :
-      '.bin'
-    }`;
+    const storagePath = generateStoragePath(fileUniqueId, fileType);
+    const mimeType = getMimeType(fileType);
 
     console.log('Uploading file to storage:', {
       file_unique_id: fileUniqueId,
       storage_path: storagePath,
       size: buffer.byteLength,
-      file_type: fileType
+      file_type: fileType,
+      mime_type: mimeType
     });
 
     const { error: uploadError } = await supabase.storage
       .from('media')
       .upload(storagePath, buffer, {
-        contentType: fileType === 'photo' ? 'image/jpeg' :
-                    fileType === 'video' ? 'video/mp4' :
-                    'application/octet-stream',
+        contentType: mimeType,
         upsert: true,
         cacheControl: '3600'
       });

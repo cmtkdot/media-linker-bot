@@ -1,5 +1,5 @@
 import { QueueItem, ProcessingResult } from "./types.ts";
-import { uploadMediaToStorage } from "./storage-handler.ts";
+import { uploadMediaToStorage, generateStoragePath, getMimeType } from "./storage-handler.ts";
 import { getAndDownloadTelegramFile } from "../telegram-service.ts";
 import { validateMediaFile } from "../media-validators.ts";
 
@@ -21,7 +21,10 @@ export async function processMediaItem(
     
     // Download and upload file
     const { buffer, filePath } = await getAndDownloadTelegramFile(mediaData.file_id, botToken);
-    const { publicUrl, storagePath } = await uploadMediaToStorage(
+    const storagePath = generateStoragePath(mediaData.file_unique_id, mediaData.file_type);
+    const mimeType = getMimeType(mediaData.file_type);
+
+    const { publicUrl } = await uploadMediaToStorage(
       supabase,
       buffer,
       mediaData.file_unique_id,
@@ -34,7 +37,8 @@ export async function processMediaItem(
       media: {
         ...mediaData,
         public_url: publicUrl,
-        storage_path: storagePath
+        storage_path: storagePath,
+        mime_type: mimeType
       },
       meta: {
         ...item.message_media_data.meta,
@@ -54,7 +58,7 @@ export async function processMediaItem(
         public_url: publicUrl,
         storage_path: storagePath,
         message_media_data: updatedMessageMediaData,
-        telegram_data: telegramData,
+        telegram_data: telegramData || {},
         analyzed_content: analysisData?.analyzed_content || {},
         caption: messageData?.caption,
         message_url: messageData?.url,
@@ -62,7 +66,8 @@ export async function processMediaItem(
         original_message_id: item.message_media_data.meta?.original_message_id,
         sender_info: item.message_media_data.sender?.sender_info || {},
         correlation_id: item.correlation_id,
-        processed: true
+        processed: true,
+        message_id: item.id
       }])
       .select()
       .single();
