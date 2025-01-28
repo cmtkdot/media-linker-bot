@@ -62,22 +62,38 @@ export async function handleWebhookUpdate(
       
       const { data: groupMessages } = await supabase
         .from('messages')
-        .select('id, is_original_caption, analyzed_content, caption')
+        .select('id, is_original_caption, analyzed_content, caption, message_type')
         .eq('media_group_id', message.media_group_id)
         .order('created_at', { ascending: true });
 
       if (message.caption) {
-        const captionHolder = groupMessages?.find(m => m.is_original_caption);
-        if (!captionHolder) {
+        const existingCaptionHolder = groupMessages?.find(m => m.is_original_caption);
+        
+        if (!existingCaptionHolder) {
           console.log('This is the first caption in the group');
           isOriginalCaption = true;
           analyzedContent = await analyzeCaptionWithAI(message.caption);
+          
+          // If there are existing messages in the group, update them with this caption
+          if (groupMessages?.length > 0) {
+            for (const groupMsg of groupMessages) {
+              await supabase
+                .from('messages')
+                .update({
+                  analyzed_content: analyzedContent,
+                  caption: message.caption
+                })
+                .eq('id', groupMsg.id);
+            }
+          }
         } else {
-          console.log('Using existing caption holder:', captionHolder.id);
-          originalMessageId = captionHolder.id;
-          analyzedContent = captionHolder.analyzed_content;
+          // If there's already a caption holder, use its content
+          console.log('Using existing caption holder:', existingCaptionHolder.id);
+          originalMessageId = existingCaptionHolder.id;
+          analyzedContent = existingCaptionHolder.analyzed_content;
         }
       } else if (groupMessages?.length > 0) {
+        // For messages without caption, check if we have a caption holder
         const captionHolder = groupMessages.find(m => m.is_original_caption);
         if (captionHolder) {
           originalMessageId = captionHolder.id;
