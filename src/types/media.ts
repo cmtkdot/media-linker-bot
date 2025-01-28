@@ -52,7 +52,6 @@ export interface MediaItem {
 
   message_id: string;
   message_url?: string;
-  caption?: string;
   media_group_id?: string;
 
   product_name?: string;
