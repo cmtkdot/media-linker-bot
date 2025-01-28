@@ -1,34 +1,24 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+export async function downloadTelegramFile(fileId: string, botToken: string) {
+  try {
+    console.log(`Downloading file ${fileId} from Telegram`);
+    
+    const fileInfoResponse = await fetch(
+      `https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`
+    );
+    const fileInfo = await fileInfoResponse.json();
+    
+    if (!fileInfo.ok || !fileInfo.result.file_path) {
+      throw new Error('Failed to get file info from Telegram');
+    }
 
-export async function getTelegramFilePath(fileId: string, botToken: string): Promise<string> {
-  const response = await fetch(
-    `https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`
-  );
+    const fileResponse = await fetch(
+      `https://api.telegram.org/file/bot${botToken}/${fileInfo.result.file_path}`
+    );
+    const buffer = await fileResponse.arrayBuffer();
 
-  if (!response.ok) {
-    throw new Error(`Failed to get file info: ${response.statusText}`);
+    return { buffer };
+  } catch (error) {
+    console.error('Error downloading file from Telegram:', error);
+    throw error;
   }
-
-  const data = await response.json();
-  
-  if (!data.ok || !data.result.file_path) {
-    throw new Error('Failed to get file path from Telegram');
-  }
-
-  return data.result.file_path;
-}
-
-export async function downloadTelegramFile(fileId: string, botToken: string): Promise<{ buffer: ArrayBuffer; filePath: string }> {
-  console.log(`Getting file path for file ID: ${fileId}`);
-  const filePath = await getTelegramFilePath(fileId, botToken);
-  
-  console.log(`Downloading file from path: ${filePath}`);
-  const response = await fetch(`https://api.telegram.org/file/bot${botToken}/${filePath}`);
-
-  if (!response.ok) {
-    throw new Error(`Failed to download file: ${response.statusText}`);
-  }
-
-  const buffer = await response.arrayBuffer();
-  return { buffer, filePath };
 }
