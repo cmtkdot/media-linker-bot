@@ -48,31 +48,27 @@ serve(async (req) => {
     let isOriginalCaption = false;
     let originalMessageId = null;
 
-    if (message.media_group_id) {
-      console.log('Processing media group message:', {
+    if (message.media_group_id && message.caption) {
+      console.log('Processing media group message with caption:', {
         media_group_id: message.media_group_id,
         message_id: message.message_id,
-        has_caption: !!message.caption,
         correlation_id: correlationId
       });
 
-      // Check if this message has a caption
-      if (message.caption) {
-        // Check if there's already a message with caption in this group
-        const { data: existingCaptionHolder } = await supabaseClient
-          .from('messages')
-          .select('id')
-          .eq('media_group_id', message.media_group_id)
-          .eq('is_original_caption', true)
-          .maybeSingle();
+      // Check if there's already a message with caption in this group
+      const { data: existingCaptionHolder } = await supabaseClient
+        .from('messages')
+        .select('id')
+        .eq('media_group_id', message.media_group_id)
+        .eq('is_original_caption', true)
+        .maybeSingle();
 
-        if (!existingCaptionHolder) {
-          // This is the first message with caption in the group
-          isOriginalCaption = true;
-        } else {
-          // There's already a caption holder, reference it
-          originalMessageId = existingCaptionHolder.id;
-        }
+      if (!existingCaptionHolder) {
+        // This is the first message with caption in the group
+        isOriginalCaption = true;
+      } else {
+        // There's already a caption holder, reference it
+        originalMessageId = existingCaptionHolder.id;
       }
     } else if (message.caption) {
       // Single message with caption is always original
@@ -85,27 +81,6 @@ serve(async (req) => {
       message,
       correlationId
     );
-
-    // Extract raw text from caption or analyzed content
-    const rawText = analyzedContent?.raw_text || message.caption || null;
-
-    // Prepare message data with original caption info and raw text
-    const messageData = {
-      message_id: message.message_id,
-      chat_id: message.chat.id,
-      sender_info: message.from || message.sender_chat || {},
-      message_type: determineMessageType(message),
-      telegram_data: message,
-      media_group_id: message.media_group_id,
-      message_url: messageUrl,
-      correlation_id: correlationId,
-      analyzed_content: analyzedContent,
-      status: messageStatus,
-      is_original_caption: isOriginalCaption,
-      original_message_id: originalMessageId,
-      raw_text: rawText,
-      ...productInfo
-    };
 
     // Create message media data structure
     const messageMediaData = {
@@ -122,25 +97,40 @@ serve(async (req) => {
         chat_info: message.chat
       },
       analysis: {
-        analyzed_content: analyzedContent
+        analyzed_content: analyzedContent,
+        ...productInfo
       },
       meta: {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         status: messageStatus,
         is_original_caption: isOriginalCaption,
-        original_message_id: originalMessageId,
-        raw_text: rawText
+        original_message_id: originalMessageId
       }
+    };
+
+    // Prepare message data
+    const messageData = {
+      message_id: message.message_id,
+      chat_id: message.chat.id,
+      sender_info: message.from || message.sender_chat || {},
+      message_type: determineMessageType(message),
+      telegram_data: message,
+      media_group_id: message.media_group_id,
+      message_url: messageUrl,
+      correlation_id: correlationId,
+      analyzed_content: analyzedContent,
+      status: messageStatus,
+      is_original_caption: isOriginalCaption,
+      original_message_id: originalMessageId,
+      message_media_data: messageMediaData,
+      ...productInfo
     };
 
     // Create or update message record
     const { data: messageRecord, error: messageError } = await supabaseClient
       .from('messages')
-      .upsert({
-        ...messageData,
-        message_media_data: messageMediaData
-      })
+      .upsert(messageData)
       .select()
       .single();
 
@@ -170,7 +160,6 @@ serve(async (req) => {
             analyzed_content: analyzedContent,
             status: 'processed',
             original_message_id: messageRecord.id,
-            raw_text: rawText,
             ...productInfo
           })
           .eq('media_group_id', message.media_group_id)
@@ -194,9 +183,7 @@ serve(async (req) => {
         correlationId,
         status: messageRecord?.status,
         mediaGroupId: message.media_group_id,
-        isOriginalCaption,
-        originalMessageId,
-        rawText
+        isOriginalCaption
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
