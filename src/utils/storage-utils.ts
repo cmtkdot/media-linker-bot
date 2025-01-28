@@ -14,15 +14,51 @@ export const generateSafeFileName = (fileUniqueId: string, fileType: string): st
   return `${safeId}.${extension}`;
 };
 
+export const getMimeType = (fileType: string): string => {
+  switch (fileType) {
+    case 'photo':
+      return 'image/jpeg';
+    case 'video':
+      return 'video/mp4';
+    case 'document':
+      return 'application/pdf';
+    default:
+      return 'application/octet-stream';
+  }
+};
+
 export const uploadToStorage = async (
   buffer: ArrayBuffer,
   fileUniqueId: string,
   fileType: string,
   mimeType: string
 ): Promise<string> => {
+  console.log('Starting file upload to storage:', {
+    fileUniqueId,
+    fileType,
+    mimeType
+  });
+
   const fileName = generateSafeFileName(fileUniqueId, fileType);
   
   try {
+    // Check if file already exists
+    const { data: existingFile } = await supabase.storage
+      .from('media')
+      .list('', {
+        search: fileName
+      });
+
+    if (existingFile && existingFile.length > 0) {
+      console.log('File already exists in storage:', fileName);
+      const { data: { publicUrl } } = await supabase.storage
+        .from('media')
+        .getPublicUrl(fileName);
+      return publicUrl;
+    }
+
+    console.log('Uploading file to storage:', fileName);
+
     const { error: uploadError } = await supabase.storage
       .from('media')
       .upload(fileName, buffer, {
@@ -31,15 +67,45 @@ export const uploadToStorage = async (
         cacheControl: '3600'
       });
 
-    if (uploadError) throw uploadError;
+    if (uploadError) {
+      console.error('Error uploading to storage:', uploadError);
+      throw uploadError;
+    }
+
+    console.log('File uploaded successfully:', fileName);
 
     const { data: { publicUrl } } = await supabase.storage
       .from('media')
       .getPublicUrl(fileName);
 
+    if (!publicUrl) {
+      throw new Error('Failed to get public URL after upload');
+    }
+
+    console.log('Generated public URL:', publicUrl);
     return publicUrl;
   } catch (error) {
-    console.error('Error uploading to storage:', error);
+    console.error('Error in uploadToStorage:', error);
     throw error;
+  }
+};
+
+export const validateStorageFile = async (fileName: string): Promise<boolean> => {
+  try {
+    const { data, error } = await supabase.storage
+      .from('media')
+      .list('', {
+        search: fileName
+      });
+
+    if (error) {
+      console.error('Error validating storage file:', error);
+      return false;
+    }
+
+    return data && data.length > 0;
+  } catch (error) {
+    console.error('Error in validateStorageFile:', error);
+    return false;
   }
 };
