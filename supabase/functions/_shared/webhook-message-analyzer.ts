@@ -14,7 +14,8 @@ export async function analyzeWebhookMessage(
   console.log('Analyzing webhook message:', {
     message_id: message.message_id,
     has_caption: !!message.caption,
-    media_group_id: message.media_group_id
+    media_group_id: message.media_group_id,
+    message_type: message.photo ? 'photo' : message.video ? 'video' : 'other'
   });
 
   // If message is part of a media group

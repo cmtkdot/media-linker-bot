@@ -37,6 +37,9 @@ export function buildWebhookMessageData(
 ): WebhookMessageData {
   const now = new Date().toISOString();
   
+  // Extract analyzed data if available
+  const extractedData = analyzedContent.analyzed_content?.analyzed_content?.extracted_data || {};
+  
   return {
     message: {
       url: messageUrl,
