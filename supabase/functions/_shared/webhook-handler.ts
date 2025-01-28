@@ -15,6 +15,9 @@ export async function handleWebhookUpdate(
   }
 
   try {
+    // Generate a new correlation ID for each unique message
+    const messageCorrelationId = crypto.randomUUID();
+    
     console.log('Processing webhook update:', {
       update_id: update.update_id,
       message_id: message.message_id,
@@ -23,7 +26,7 @@ export async function handleWebhookUpdate(
       has_caption: !!message.caption,
       has_text: !!message.text,
       message_type: determineMessageType(message),
-      correlation_id: correlationId
+      correlation_id: messageCorrelationId
     });
 
     // Check if message already exists
@@ -38,44 +41,17 @@ export async function handleWebhookUpdate(
     const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
     const messageType = determineMessageType(message);
 
-    // If message exists and it's part of a media group, update it
-    if (existingMessage && message.media_group_id) {
-      console.log('Updating existing message in media group:', {
+    // If message exists, return early
+    if (existingMessage) {
+      console.log('Message already exists:', {
         message_id: message.message_id,
-        media_group_id: message.media_group_id
+        existing_id: existingMessage.id
       });
-
-      let analyzedContent = existingMessage.analyzed_content;
-      
-      // If this message has a caption and no analyzed content yet
-      if (message.caption && (!analyzedContent || Object.keys(analyzedContent).length === 0)) {
-        analyzedContent = await analyzeCaptionWithAI(message.caption);
-        
-        // Update all messages in the group with the new analyzed content
-        const { data: groupMessages } = await supabase
-          .from('messages')
-          .select('id')
-          .eq('media_group_id', message.media_group_id);
-
-        if (groupMessages?.length > 0) {
-          await Promise.all(groupMessages.map(async (groupMsg: any) => {
-            await supabase
-              .from('messages')
-              .update({
-                analyzed_content: analyzedContent,
-                caption: message.caption,
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', groupMsg.id);
-          }));
-        }
-      }
-
       return {
         success: true,
-        message: 'Message updated successfully',
+        message: 'Message already exists',
         messageId: existingMessage.id,
-        correlationId
+        correlationId: messageCorrelationId
       };
     }
 
@@ -83,7 +59,7 @@ export async function handleWebhookUpdate(
     let messageData;
     
     if (messageType === 'text') {
-      messageData = await processTextMessage(message, messageUrl, correlationId);
+      messageData = await processTextMessage(message, messageUrl, messageCorrelationId);
     } else {
       // Handle media messages (photos, videos, etc.)
       let isOriginalCaption = false;
@@ -139,7 +115,7 @@ export async function handleWebhookUpdate(
         telegram_data: message,
         media_group_id: message.media_group_id,
         message_url: messageUrl,
-        correlation_id: correlationId,
+        correlation_id: messageCorrelationId,
         is_original_caption: isOriginalCaption,
         original_message_id: originalMessageId,
         analyzed_content: analyzedContent,
@@ -155,7 +131,7 @@ export async function handleWebhookUpdate(
     console.log('Inserting message:', {
       message_id: messageData.message_id,
       chat_id: messageData.chat_id,
-      media_group_id: messageData.media_group_id,
+      correlation_id: messageCorrelationId,
       is_original_caption: messageData.is_original_caption
     });
 
@@ -181,7 +157,7 @@ export async function handleWebhookUpdate(
           queue_type: message.media_group_id ? 'media_group' : 'media',
           data: messageData.message_media_data,
           status: 'pending',
-          correlation_id: correlationId,
+          correlation_id: messageCorrelationId,
           chat_id: message.chat.id,
           message_id: message.message_id,
           message_media_data: messageData.message_media_data
@@ -195,7 +171,7 @@ export async function handleWebhookUpdate(
 
     console.log('Successfully processed message:', {
       message_id: messageRecord.id,
-      correlation_id: correlationId,
+      correlation_id: messageCorrelationId,
       is_original_caption: messageData.is_original_caption,
       message_type: messageType
     });
@@ -204,7 +180,7 @@ export async function handleWebhookUpdate(
       success: true,
       message: 'Update processed successfully',
       messageId: messageRecord.id,
-      correlationId,
+      correlationId: messageCorrelationId,
       isOriginalCaption: messageData.is_original_caption
     };
 
