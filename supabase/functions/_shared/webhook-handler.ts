@@ -21,6 +21,7 @@ export async function handleWebhookUpdate(
       media_group_id: message.media_group_id,
       has_caption: !!message.caption,
       has_text: !!message.text,
+      message_type: determineMessageType(message),
       correlation_id: correlationId
     });
 
@@ -48,9 +49,10 @@ export async function handleWebhookUpdate(
     let isOriginalCaption = false;
     let originalMessageId = null;
     let analyzedContent = null;
+    const messageType = determineMessageType(message);
 
     // Handle text-only messages
-    if (message.text && !message.photo && !message.video && !message.document && !message.animation) {
+    if (messageType === 'text') {
       console.log('Processing text-only message');
       analyzedContent = await analyzeCaptionWithAI(message.text);
     }
@@ -94,10 +96,11 @@ export async function handleWebhookUpdate(
         url: messageUrl,
         media_group_id: message.media_group_id,
         caption: message.caption,
-        text: message.text, // Add text field for text-only messages
+        text: message.text,
         message_id: message.message_id,
         chat_id: message.chat.id,
-        date: message.date
+        date: message.date,
+        message_type: messageType
       },
       sender: {
         sender_info: message.from || message.sender_chat || {},
@@ -109,18 +112,13 @@ export async function handleWebhookUpdate(
       meta: {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        status: 'pending',
+        status: messageType === 'text' ? 'processed' : 'pending',
         error: null,
         is_original_caption: isOriginalCaption,
         original_message_id: originalMessageId,
         correlation_id: correlationId
       }
     };
-
-    // Determine message type
-    const messageType = message.text && !message.photo && !message.video && !message.document && !message.animation 
-      ? 'text'
-      : determineMessageType(message);
 
     // Create message record
     const messageData = {
@@ -136,9 +134,9 @@ export async function handleWebhookUpdate(
       original_message_id: originalMessageId,
       analyzed_content: analyzedContent,
       message_media_data: messageMediaData,
-      status: messageType === 'text' ? 'processed' : 'pending', // Mark text messages as processed
+      status: messageType === 'text' ? 'processed' : 'pending',
       caption: message.caption,
-      text: message.text // Store text content
+      text: message.text
     };
 
     console.log('Inserting message:', {
@@ -163,8 +161,8 @@ export async function handleWebhookUpdate(
       throw messageError;
     }
 
-    // Only queue media messages for processing
-    if (messageType !== 'text') {
+    // Only queue photo and video messages for processing
+    if (messageType === 'photo' || messageType === 'video') {
       const { error: queueError } = await supabase
         .from('unified_processing_queue')
         .insert({
