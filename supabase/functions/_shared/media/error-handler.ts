@@ -39,7 +39,17 @@ export async function handleMediaError(
       processing_error: errorMessage,
       retry_count: newRetryCount,
       last_retry_at: new Date().toISOString(),
-      status: isFinalRetry ? 'error' : 'pending'
+      status: isFinalRetry ? 'error' : 'pending',
+      message_media_data: message?.message_media_data ? {
+        ...message.message_media_data,
+        meta: {
+          ...message.message_media_data.meta,
+          error: errorMessage,
+          status: isFinalRetry ? 'error' : 'pending',
+          retry_count: newRetryCount,
+          last_retry_at: new Date().toISOString()
+        }
+      } : undefined
     })
     .eq('id', messageId);
 
@@ -66,5 +76,21 @@ export async function handleMediaError(
     }
   } else {
     console.warn('No file_id available for logging:', { messageId, correlationId });
+  }
+
+  // Update telegram_media record if it exists
+  if (fileId) {
+    const { error: mediaUpdateError } = await supabase
+      .from('telegram_media')
+      .update({
+        processing_error: errorMessage,
+        processed: false,
+        message_media_data: message?.message_media_data
+      })
+      .eq('message_id', messageId);
+
+    if (mediaUpdateError) {
+      console.error('Error updating telegram_media:', mediaUpdateError);
+    }
   }
 }

@@ -18,7 +18,23 @@ export async function uploadMediaToStorage(
   const fileName = generateFileName(fileUniqueId, fileType);
   
   try {
-    // Check for existing file
+    // First check if we already have this file_id in telegram_media
+    const { data: existingMedia } = await supabase
+      .from('telegram_media')
+      .select('public_url, storage_path')
+      .eq('file_id', fileId)
+      .maybeSingle();
+
+    if (existingMedia?.public_url && existingMedia?.storage_path) {
+      console.log('Reusing existing media file:', existingMedia);
+      return {
+        publicUrl: existingMedia.public_url,
+        storagePath: existingMedia.storage_path,
+        isExisting: true
+      };
+    }
+
+    // Check for existing file in storage
     const { data: existingFile } = await supabase.storage
       .from('media')
       .list('', { search: fileName });
@@ -45,7 +61,7 @@ export async function uploadMediaToStorage(
       }
     }
 
-    // Get file from Telegram
+    // Get file from Telegram if we need to upload it
     const fileBuffer = await getTelegramFile(botToken, fileId);
     console.log('Retrieved file from Telegram:', { size: fileBuffer.byteLength });
 
