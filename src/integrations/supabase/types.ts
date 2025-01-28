@@ -265,6 +265,7 @@ export type Database = {
           correlation_id: string | null
           created_at: string
           id: string
+          is_original_caption: boolean | null
           last_retry_at: string | null
           media_group_id: string | null
           message_id: number
@@ -272,6 +273,7 @@ export type Database = {
           message_type: string
           message_url: string | null
           notes: string | null
+          original_message_id: string | null
           processed_at: string | null
           processing_error: string | null
           product_code: string | null
@@ -292,6 +294,7 @@ export type Database = {
           correlation_id?: string | null
           created_at?: string
           id?: string
+          is_original_caption?: boolean | null
           last_retry_at?: string | null
           media_group_id?: string | null
           message_id: number
@@ -299,6 +302,7 @@ export type Database = {
           message_type: string
           message_url?: string | null
           notes?: string | null
+          original_message_id?: string | null
           processed_at?: string | null
           processing_error?: string | null
           product_code?: string | null
@@ -319,6 +323,7 @@ export type Database = {
           correlation_id?: string | null
           created_at?: string
           id?: string
+          is_original_caption?: boolean | null
           last_retry_at?: string | null
           media_group_id?: string | null
           message_id?: number
@@ -326,6 +331,7 @@ export type Database = {
           message_type?: string
           message_url?: string | null
           notes?: string | null
+          original_message_id?: string | null
           processed_at?: string | null
           processing_error?: string | null
           product_code?: string | null
@@ -339,7 +345,22 @@ export type Database = {
           updated_at?: string
           vendor_uid?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "messages_original_message_id_fkey"
+            columns: ["original_message_id"]
+            isOneToOne: false
+            referencedRelation: "message_media_view"
+            referencedColumns: ["message_id"]
+          },
+          {
+            foreignKeyName: "messages_original_message_id_fkey"
+            columns: ["original_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       telegram_media: {
         Row: {
