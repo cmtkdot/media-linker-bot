@@ -85,7 +85,10 @@ export async function handleMediaError(
       .update({
         processing_error: errorMessage,
         processed: false,
-        message_media_data: message?.message_media_data
+        message_media_data: message?.message_media_data,
+        retry_count: newRetryCount,
+        status: isFinalRetry ? 'error' : 'pending',
+        last_retry_at: new Date().toISOString()
       })
       .eq('message_id', messageId);
 

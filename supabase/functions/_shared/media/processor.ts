@@ -104,7 +104,10 @@ export async function processMediaMessage(
         is_original_caption: message.is_original_caption,
         original_message_id: message.original_message_id,
         processed: true,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
+        retry_count: 0,
+        max_retries: 3,
+        status: 'processed'
       });
 
     if (mediaError) throw mediaError;

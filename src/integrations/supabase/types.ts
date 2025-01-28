@@ -321,6 +321,7 @@ export type Database = {
           is_original_caption: boolean | null
           last_group_message_at: string | null
           last_retry_at: string | null
+          max_retries: number | null
           media_group_id: string | null
           media_group_size: number | null
           message_id: number
@@ -354,6 +355,7 @@ export type Database = {
           is_original_caption?: boolean | null
           last_group_message_at?: string | null
           last_retry_at?: string | null
+          max_retries?: number | null
           media_group_id?: string | null
           media_group_size?: number | null
           message_id: number
@@ -387,6 +389,7 @@ export type Database = {
           is_original_caption?: boolean | null
           last_group_message_at?: string | null
           last_retry_at?: string | null
+          max_retries?: number | null
           media_group_id?: string | null
           media_group_size?: number | null
           message_id?: number
@@ -429,6 +432,7 @@ export type Database = {
           is_original_caption: boolean | null
           last_retry_at: string | null
           last_synced_at: string | null
+          max_retries: number | null
           media_group_id: string | null
           media_group_size: number | null
           media_metadata: Json | null
@@ -470,6 +474,7 @@ export type Database = {
           is_original_caption?: boolean | null
           last_retry_at?: string | null
           last_synced_at?: string | null
+          max_retries?: number | null
           media_group_id?: string | null
           media_group_size?: number | null
           media_metadata?: Json | null
@@ -511,6 +516,7 @@ export type Database = {
           is_original_caption?: boolean | null
           last_retry_at?: string | null
           last_synced_at?: string | null
+          max_retries?: number | null
           media_group_id?: string | null
           media_group_size?: number | null
           media_metadata?: Json | null
@@ -558,6 +564,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cleanup_old_messages: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      cleanup_orphaned_media: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       create_glide_sync_table: {
         Args: {
           p_table_name: string
@@ -582,6 +596,10 @@ export type Database = {
         }
         Returns: string
       }
+      maintenance_cleanup: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       search_telegram_media: {
         Args: {
           search_term: string
@@ -602,6 +620,7 @@ export type Database = {
           is_original_caption: boolean | null
           last_retry_at: string | null
           last_synced_at: string | null
+          max_retries: number | null
           media_group_id: string | null
           media_group_size: number | null
           media_metadata: Json | null
@@ -645,6 +664,10 @@ export type Database = {
         Returns: Json
       }
       update_public_urls: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      validate_media_groups: {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }

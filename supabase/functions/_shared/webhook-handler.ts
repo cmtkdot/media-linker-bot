@@ -56,7 +56,9 @@ export async function handleWebhookUpdate(
         is_original_caption: analyzedContent.is_original_caption,
         original_message_id: analyzedContent.original_message_id,
         analyzed_content: analyzedContent.analyzed_content,
-        status: 'pending'
+        status: 'pending',
+        retry_count: 0,
+        max_retries: 3
       })
       .select()
       .single();
