@@ -4,7 +4,6 @@ import { corsHeaders } from "../_shared/cors.ts";
 
 function parseProductCode(text: string): { product_code: string | null; vendor_uid: string | null; purchase_date: string | null; validation_errors: string[] } {
   const errors: string[] = [];
-  // Updated regex to capture any uppercase letters before numbers
   const codeMatch = text.match(/#([A-Z]+)(\d*)/);
   
   if (!codeMatch) {
@@ -45,7 +44,7 @@ function parseProductCode(text: string): { product_code: string | null; vendor_u
 
   return {
     product_code: formattedCode,
-    vendor_uid: vendorPart, // Simply use all letters found before the date
+    vendor_uid: vendorPart,
     purchase_date: purchaseDate,
     validation_errors: errors
   };
@@ -59,22 +58,19 @@ function parseQuantity(text: string): number | null {
 function parseNotes(text: string, validationErrors: string[]): string | null {
   const notes: string[] = [];
   
-  // Get parenthetical content
   const noteMatches = text.matchAll(/\((.*?)\)/g);
   for (const match of noteMatches) {
     if (match[1]) notes.push(match[1].trim());
   }
 
-  // Add validation errors as notes
   if (validationErrors.length > 0) {
     notes.push(`Validation errors: ${validationErrors.join('; ')}`);
   }
 
-  // Get remaining text that's not part of other fields
   const remainingText = text
-    .replace(/#[A-Z]+\d*\s*/g, '') // Remove product code
-    .replace(/x\s*\d+/g, '') // Remove quantity
-    .replace(/\(.*?\)/g, '') // Remove parenthetical content
+    .replace(/#[A-Z]+\d*\s*/g, '')
+    .replace(/x\s*\d+/g, '')
+    .replace(/\(.*?\)/g, '')
     .trim();
 
   if (remainingText && !remainingText.match(/^[A-Za-z\s]+$/)) {
@@ -115,7 +111,7 @@ serve(async (req) => {
     Example output: "Blue Dream"`;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: caption }
@@ -126,13 +122,12 @@ serve(async (req) => {
 
     const productName = completion.choices[0].message.content.trim();
     
-    // Parse additional fields with validation
     const { product_code, vendor_uid, purchase_date, validation_errors } = parseProductCode(caption);
     const quantity = parseQuantity(caption);
     const notes = parseNotes(caption, validation_errors);
 
     const analyzedContent = {
-      raw_text: caption,
+      caption,
       extracted_data: {
         product_name: productName === "null" ? null : productName,
         product_code,
