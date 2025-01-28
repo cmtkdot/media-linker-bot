@@ -1,8 +1,29 @@
+import { SupabaseClient } from "@supabase/supabase-js";
+
+// Database type for Supabase client
+export type Database = {
+  public: {
+    Tables: {
+      messages: {
+        Row: any; // Replace with actual message table type
+      };
+      telegram_media: {
+        Row: TelegramMedia;
+      };
+      media_processing_logs: {
+        Row: any; // Replace with actual log table type
+      };
+    };
+  };
+};
+
+export type SupabaseClientWithDatabase = SupabaseClient<Database>;
+
 export interface GlideSyncQueueItem {
   id: string;
   table_name: string;
   record_id: string;
-  operation: 'INSERT' | 'UPDATE' | 'DELETE';
+  operation: "INSERT" | "UPDATE" | "DELETE";
   old_data?: TelegramMedia | null;
   new_data?: TelegramMedia | null;
   created_at?: string | null;
@@ -30,7 +51,13 @@ export interface GlideConfig {
   supabase_table_name: string;
 }
 
-export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
 
 export interface TelegramMedia {
   id: string;
@@ -38,6 +65,7 @@ export interface TelegramMedia {
   file_unique_id: string;
   file_type: string;
   public_url?: string;
+  storage_path?: string;
   product_name?: string;
   product_code?: string;
   quantity?: number;
@@ -61,11 +89,11 @@ export interface TelegramMedia {
 }
 
 export interface GlideMutation {
-  kind: 'add-row-to-table' | 'set-columns-in-row' | 'delete-row';
+  kind: "add-row-to-table" | "set-columns-in-row" | "delete-row";
   tableName: string;
   columnValues?: {
     UkkMS?: string; // id
-    '9Bod8'?: string; // file_id
+    "9Bod8"?: string; // file_id
     IYnip?: string; // file_unique_id
     hbjE4?: string; // file_type
     d8Di5?: string; // public_url
@@ -79,14 +107,14 @@ export interface GlideMutation {
     A4sZX?: string; // processing_error
     PWhCr?: string; // last_synced_at
     Oa3L9?: string; // created_at
-    '9xwrl'?: string; // updated_at
+    "9xwrl"?: string; // updated_at
     Uzkgt?: string; // message_id
     pRsjz?: string; // caption
     uxDo1?: string; // vendor_uid
     AMWxJ?: string; // purchase_date
     BkUFO?: string; // notes
     QhAgy?: string; // analyzed_content (stringified)
-    '3y8Wt'?: string; // purchase_order_uid
+    "3y8Wt"?: string; // purchase_order_uid
     rCJK2?: string; // default_public_url
     NL5gM?: string; // media_json (stringified)
   };
@@ -100,7 +128,7 @@ export interface GlideApiRequest {
 
 export interface GlideColumnMapping {
   name: string;
-  type?: 'string' | 'number' | 'boolean' | 'json';
+  type?: "string" | "number" | "boolean" | "json";
 }
 
 export interface GlideTableSchemaType {
@@ -132,31 +160,31 @@ export interface GlideTableSchemaType {
 }
 
 export const GlideTableSchema: GlideTableSchemaType = {
-  id: { name: 'UkkMS', type: 'string' },
-  file_id: { name: '9Bod8', type: 'string' },
-  file_unique_id: { name: 'IYnip', type: 'string' },
-  file_type: { name: 'hbjE4', type: 'string' },
-  public_url: { name: 'd8Di5', type: 'string' },
-  product_name: { name: 'xGGv3', type: 'string' },
-  product_code: { name: 'xlfB9', type: 'string' },
-  quantity: { name: 'TWRwx', type: 'number' },
-  telegram_data: { name: 'Wm1he', type: 'json' },
-  glide_data: { name: 'ZRV7Z', type: 'json' },
-  media_metadata: { name: 'Eu9Zn', type: 'json' },
-  processed: { name: 'oj7fP', type: 'boolean' },
-  processing_error: { name: 'A4sZX', type: 'string' },
-  last_synced_at: { name: 'PWhCr', type: 'string' },
-  created_at: { name: 'Oa3L9', type: 'string' },
-  updated_at: { name: '9xwrl', type: 'string' },
-  message_id: { name: 'Uzkgt', type: 'string' },
-  caption: { name: 'pRsjz', type: 'string' },
-  vendor_uid: { name: 'uxDo1', type: 'string' },
-  purchase_date: { name: 'AMWxJ', type: 'string' },
-  notes: { name: 'BkUFO', type: 'string' },
-  analyzed_content: { name: 'QhAgy', type: 'json' },
-  purchase_order_uid: { name: '3y8Wt', type: 'string' },
-  default_public_url: { name: 'rCJK2', type: 'string' },
-  media_json: { name: 'NL5gM', type: 'json' }
+  id: { name: "UkkMS", type: "string" },
+  file_id: { name: "9Bod8", type: "string" },
+  file_unique_id: { name: "IYnip", type: "string" },
+  file_type: { name: "hbjE4", type: "string" },
+  public_url: { name: "d8Di5", type: "string" },
+  product_name: { name: "xGGv3", type: "string" },
+  product_code: { name: "xlfB9", type: "string" },
+  quantity: { name: "TWRwx", type: "number" },
+  telegram_data: { name: "Wm1he", type: "json" },
+  glide_data: { name: "ZRV7Z", type: "json" },
+  media_metadata: { name: "Eu9Zn", type: "json" },
+  processed: { name: "oj7fP", type: "boolean" },
+  processing_error: { name: "A4sZX", type: "string" },
+  last_synced_at: { name: "PWhCr", type: "string" },
+  created_at: { name: "Oa3L9", type: "string" },
+  updated_at: { name: "9xwrl", type: "string" },
+  message_id: { name: "Uzkgt", type: "string" },
+  caption: { name: "pRsjz", type: "string" },
+  vendor_uid: { name: "uxDo1", type: "string" },
+  purchase_date: { name: "AMWxJ", type: "string" },
+  notes: { name: "BkUFO", type: "string" },
+  analyzed_content: { name: "QhAgy", type: "json" },
+  purchase_order_uid: { name: "3y8Wt", type: "string" },
+  default_public_url: { name: "rCJK2", type: "string" },
+  media_json: { name: "NL5gM", type: "json" },
 };
 
 export interface GlideApiResponse {
