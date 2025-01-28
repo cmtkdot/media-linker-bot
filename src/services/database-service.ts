@@ -62,7 +62,6 @@ export const getMediaItems = async (): Promise<MediaItem[]> => {
 };
 
 export const updateMediaItem = async (id: string, updates: Partial<MediaItem>): Promise<MediaItem> => {
-  // Ensure message_media_data is properly structured
   const messageMediaData = {
     ...updates.message_media_data,
     analysis: {
@@ -90,16 +89,12 @@ export const updateMediaItem = async (id: string, updates: Partial<MediaItem>): 
     }
   };
 
-  // Prepare the update payload
-  const updatePayload = {
-    ...updates,
-    message_media_data: messageMediaData,
-    updated_at: new Date().toISOString()
-  };
-
   const { data, error } = await supabase
     .from('telegram_media')
-    .update(updatePayload as any)
+    .update({
+      message_media_data: messageMediaData,
+      updated_at: new Date().toISOString()
+    })
     .eq('id', id)
     .select()
     .single();

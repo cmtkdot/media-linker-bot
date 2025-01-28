@@ -1,61 +1,81 @@
-import { MediaSearchBarProps } from "@/types/filters";
-import { useState } from "react";
+import React from "react";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useMediaFilters } from "@/hooks/useMediaFilters";
 
-const MediaGridFilters = ({
-  search,
-  onSearchChange,
-  view,
-  onViewChange,
-  selectedChannel,
-  onChannelChange,
-  selectedType,
-  onTypeChange,
-  selectedVendor,
-  onVendorChange,
-  selectedSort,
-  onSortChange,
-  channels,
-  vendors,
-}: MediaSearchBarProps) => {
+const MediaGridFilters = () => {
+  const {
+    search,
+    setSearch,
+    selectedChannel,
+    setSelectedChannel,
+    selectedType,
+    setSelectedType,
+    selectedVendor,
+    setSelectedVendor,
+    selectedSort,
+    setSelectedSort,
+    filterOptions
+  } = useMediaFilters();
+
   return (
-    <div className="flex flex-col space-y-4">
-      <input
-        type="text"
-        value={search}
-        onChange={(e) => onSearchChange(e.target.value)}
-        placeholder="Search..."
-        className="p-2 border rounded"
-      />
-      <div className="flex space-x-2">
-        <select value={view} onChange={(e) => onViewChange(e.target.value as 'grid' | 'table')} className="p-2 border rounded">
-          <option value="grid">Grid View</option>
-          <option value="table">Table View</option>
-        </select>
-        <select value={selectedChannel} onChange={(e) => onChannelChange(e.target.value)} className="p-2 border rounded">
-          <option value="all">All Channels</option>
-          {channels.map((channel) => (
-            <option key={channel} value={channel}>{channel}</option>
-          ))}
-        </select>
-        <select value={selectedType} onChange={(e) => onTypeChange(e.target.value)} className="p-2 border rounded">
-          <option value="all">All Types</option>
-          <option value="photo">Photo</option>
-          <option value="video">Video</option>
-          <option value="document">Document</option>
-        </select>
-        <select value={selectedVendor} onChange={(e) => onVendorChange(e.target.value)} className="p-2 border rounded">
-          <option value="all">All Vendors</option>
-          {vendors.map((vendor) => (
-            <option key={vendor} value={vendor}>{vendor}</option>
-          ))}
-        </select>
-        <select value={selectedSort} onChange={(e) => onSortChange(e.target.value)} className="p-2 border rounded">
-          <option value="created_desc">Created (Newest First)</option>
-          <option value="created_asc">Created (Oldest First)</option>
-          <option value="name">Name</option>
-          <option value="code">Code</option>
-          <option value="vendor">Vendor</option>
-        </select>
+    <div className="space-y-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Input
+          placeholder="Search media..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        
+        <Select value={selectedChannel} onValueChange={setSelectedChannel}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select channel" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Channels</SelectItem>
+            {filterOptions?.channels.map((channel) => (
+              <SelectItem key={channel} value={channel}>
+                {channel}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={selectedType} onValueChange={setSelectedType}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Types</SelectItem>
+            <SelectItem value="photo">Photos</SelectItem>
+            <SelectItem value="video">Videos</SelectItem>
+            <SelectItem value="document">Documents</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={selectedVendor} onValueChange={setSelectedVendor}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select vendor" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Vendors</SelectItem>
+            {filterOptions?.vendors.map((vendor) => (
+              <SelectItem key={vendor} value={vendor}>
+                {vendor}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={selectedSort} onValueChange={setSelectedSort}>
+          <SelectTrigger>
+            <SelectValue placeholder="Sort by" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="created_desc">Newest First</SelectItem>
+            <SelectItem value="created_asc">Oldest First</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
     </div>
   );

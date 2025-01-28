@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { MediaItem } from "@/types/media";
 
 export type FilterOptions = {
   channels: string[];
@@ -18,22 +17,23 @@ export const useMediaFilters = () => {
   const { data: filterOptions } = useQuery<FilterOptions>({
     queryKey: ['filter-options'],
     queryFn: async () => {
-      const [channelsResult, vendorsResult] = await Promise.all([
-        supabase
-          .from('telegram_media')
-          .select('telegram_data')
-          .not('telegram_data->chat->title', 'is', null),
-        supabase
-          .from('telegram_media')
-          .select('vendor_uid')
-          .not('vendor_uid', 'is', null)
-      ]);
+      // Get unique channels
+      const channelsResult = await supabase
+        .from('telegram_media')
+        .select('telegram_data')
+        .not('telegram_data->chat->title', 'is', null);
+
+      // Get unique vendors from message_media_data
+      const vendorsResult = await supabase
+        .from('telegram_media')
+        .select('message_media_data')
+        .not('message_media_data->analysis->vendor_uid', 'is', null);
 
       const channels = [...new Set(channelsResult.data?.map(item => 
         (item.telegram_data as any).chat?.title).filter(Boolean) || [])];
       
       const vendors = [...new Set(vendorsResult.data?.map(item => 
-        item.vendor_uid).filter(Boolean) || [])];
+        (item.message_media_data as any).analysis?.vendor_uid).filter(Boolean) || [])];
 
       return { channels, vendors };
     }

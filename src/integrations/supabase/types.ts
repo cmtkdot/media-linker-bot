@@ -414,14 +414,11 @@ export type Database = {
       }
       telegram_media: {
         Row: {
-          analyzed_content: Json | null
-          caption: string | null
           correlation_id: string | null
           created_at: string
           file_id: string
           file_type: string
           file_unique_id: string
-          glide_app_url: string | null
           glide_data: Json
           id: string
           is_original_caption: boolean | null
@@ -429,32 +426,20 @@ export type Database = {
           media_metadata: Json
           message_id: string
           message_media_data: Json | null
-          message_url: string | null
-          notes: string | null
           original_message_id: string | null
           processed: boolean | null
           processing_error: string | null
-          product_code: string | null
-          product_name: string | null
           public_url: string | null
-          purchase_date: string | null
-          purchase_order_uid: string | null
-          quantity: number | null
           storage_path: string | null
           telegram_data: Json
-          telegram_media_row_id: string | null
           updated_at: string
-          vendor_uid: string | null
         }
         Insert: {
-          analyzed_content?: Json | null
-          caption?: string | null
           correlation_id?: string | null
           created_at?: string
           file_id: string
           file_type: string
           file_unique_id: string
-          glide_app_url?: string | null
           glide_data?: Json
           id?: string
           is_original_caption?: boolean | null
@@ -462,32 +447,20 @@ export type Database = {
           media_metadata?: Json
           message_id: string
           message_media_data?: Json | null
-          message_url?: string | null
-          notes?: string | null
           original_message_id?: string | null
           processed?: boolean | null
           processing_error?: string | null
-          product_code?: string | null
-          product_name?: string | null
           public_url?: string | null
-          purchase_date?: string | null
-          purchase_order_uid?: string | null
-          quantity?: number | null
           storage_path?: string | null
           telegram_data?: Json
-          telegram_media_row_id?: string | null
           updated_at?: string
-          vendor_uid?: string | null
         }
         Update: {
-          analyzed_content?: Json | null
-          caption?: string | null
           correlation_id?: string | null
           created_at?: string
           file_id?: string
           file_type?: string
           file_unique_id?: string
-          glide_app_url?: string | null
           glide_data?: Json
           id?: string
           is_original_caption?: boolean | null
@@ -495,22 +468,13 @@ export type Database = {
           media_metadata?: Json
           message_id?: string
           message_media_data?: Json | null
-          message_url?: string | null
-          notes?: string | null
           original_message_id?: string | null
           processed?: boolean | null
           processing_error?: string | null
-          product_code?: string | null
-          product_name?: string | null
           public_url?: string | null
-          purchase_date?: string | null
-          purchase_order_uid?: string | null
-          quantity?: number | null
           storage_path?: string | null
           telegram_data?: Json
-          telegram_media_row_id?: string | null
           updated_at?: string
-          vendor_uid?: string | null
         }
         Relationships: [
           {
@@ -557,14 +521,11 @@ export type Database = {
           search_term: string
         }
         Returns: {
-          analyzed_content: Json | null
-          caption: string | null
           correlation_id: string | null
           created_at: string
           file_id: string
           file_type: string
           file_unique_id: string
-          glide_app_url: string | null
           glide_data: Json
           id: string
           is_original_caption: boolean | null
@@ -572,22 +533,13 @@ export type Database = {
           media_metadata: Json
           message_id: string
           message_media_data: Json | null
-          message_url: string | null
-          notes: string | null
           original_message_id: string | null
           processed: boolean | null
           processing_error: string | null
-          product_code: string | null
-          product_name: string | null
           public_url: string | null
-          purchase_date: string | null
-          purchase_order_uid: string | null
-          quantity: number | null
           storage_path: string | null
           telegram_data: Json
-          telegram_media_row_id: string | null
           updated_at: string
-          vendor_uid: string | null
         }[]
       }
       update_media_records: {
