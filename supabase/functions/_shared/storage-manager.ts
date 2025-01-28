@@ -7,7 +7,7 @@ export const uploadMediaToStorage = async (
   fileUniqueId: string,
   fileType: string,
   mimeType?: string
-): Promise<{ publicUrl: string }> => {
+): Promise<{ publicUrl: string; storagePath: string }> => {
   console.log('Starting media upload to storage:', {
     fileUniqueId,
     fileType,
@@ -30,7 +30,7 @@ export const uploadMediaToStorage = async (
       const { data: { publicUrl } } = await supabase.storage
         .from('media')
         .getPublicUrl(fileName);
-      return { publicUrl };
+      return { publicUrl, storagePath: fileName };
     }
 
     console.log('Uploading file to storage:', {
@@ -54,6 +54,17 @@ export const uploadMediaToStorage = async (
 
     console.log('File uploaded successfully:', fileName);
 
+    // Verify the file exists in storage before getting public URL
+    const { data: verifyFile } = await supabase.storage
+      .from('media')
+      .list('', {
+        search: fileName
+      });
+
+    if (!verifyFile || verifyFile.length === 0) {
+      throw new Error('File upload verification failed');
+    }
+
     const { data: { publicUrl } } = await supabase.storage
       .from('media')
       .getPublicUrl(fileName);
@@ -62,8 +73,19 @@ export const uploadMediaToStorage = async (
       throw new Error('Failed to get public URL after upload');
     }
 
-    console.log('Generated public URL:', publicUrl);
-    return { publicUrl };
+    // Verify the public URL is accessible
+    try {
+      const response = await fetch(publicUrl, { method: 'HEAD' });
+      if (!response.ok) {
+        throw new Error(`Public URL verification failed: ${response.status}`);
+      }
+    } catch (error) {
+      console.error('Error verifying public URL:', error);
+      throw new Error('Public URL verification failed');
+    }
+
+    console.log('Generated and verified public URL:', publicUrl);
+    return { publicUrl, storagePath: fileName };
   } catch (error) {
     console.error('Error in uploadMediaToStorage:', error);
     throw error;
@@ -86,7 +108,28 @@ export const validateMediaStorage = async (
       return false;
     }
 
-    return data && data.length > 0;
+    if (!data || data.length === 0) {
+      console.error('File not found in storage:', fileName);
+      return false;
+    }
+
+    const { data: { publicUrl } } = await supabase.storage
+      .from('media')
+      .getPublicUrl(fileName);
+
+    if (!publicUrl) {
+      console.error('Failed to get public URL for file:', fileName);
+      return false;
+    }
+
+    // Verify the public URL is accessible
+    try {
+      const response = await fetch(publicUrl, { method: 'HEAD' });
+      return response.ok;
+    } catch (error) {
+      console.error('Error verifying public URL:', error);
+      return false;
+    }
   } catch (error) {
     console.error('Error in validateMediaStorage:', error);
     return false;
