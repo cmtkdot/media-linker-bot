@@ -20,20 +20,33 @@ export async function handleWebhookUpdate(
       message_id: message.message_id,
       chat_id: message.chat.id,
       media_group_id: message.media_group_id,
-      has_caption: !!message.caption,
-      correlation_id: correlationId
+      has_caption: !!message.caption
     });
 
+    // Generate message URL
     const chatId = message.chat.id.toString();
     const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
 
+    // Analyze caption if present
+    let analyzedContent = null;
+    if (message.caption) {
+      try {
+        analyzedContent = await analyzeCaptionWithAI(message.caption);
+        console.log('Caption analyzed:', { 
+          message_id: message.message_id,
+          analyzed_content: analyzedContent
+        });
+      } catch (error) {
+        console.error('Error analyzing caption:', error);
+      }
+    }
+
+    // Determine if this is an original caption holder
     let isOriginalCaption = false;
     let originalMessageId = null;
-    let analyzedContent = null;
 
-    // Handle media group caption logic
     if (message.media_group_id) {
-      // First, check if we already have a message with original caption in this group
+      // For media groups, check for existing caption holder
       const { data: existingOriginal } = await supabase
         .from('messages')
         .select('id, analyzed_content')
@@ -43,58 +56,21 @@ export async function handleWebhookUpdate(
 
       if (message.caption) {
         if (!existingOriginal) {
-          // This is the first message with a caption in the group
-          console.log('Setting as original caption holder:', message.message_id);
           isOriginalCaption = true;
-          analyzedContent = await analyzeCaptionWithAI(message.caption);
         } else {
-          // Use existing caption holder's content
-          console.log('Using existing caption holder:', existingOriginal.id);
           originalMessageId = existingOriginal.id;
           analyzedContent = existingOriginal.analyzed_content;
         }
       } else if (existingOriginal) {
-        // For non-caption messages in group, reference the caption holder
-        console.log('Referencing existing caption holder:', existingOriginal.id);
         originalMessageId = existingOriginal.id;
         analyzedContent = existingOriginal.analyzed_content;
       }
     } else if (message.caption) {
-      // Single message with caption is always original
-      console.log('Single message with caption:', message.message_id);
+      // Single messages with captions are always original
       isOriginalCaption = true;
-      analyzedContent = await analyzeCaptionWithAI(message.caption);
     }
 
-    // Create message media data structure
-    const messageMediaData = {
-      message: {
-        url: messageUrl,
-        media_group_id: message.media_group_id,
-        caption: message.caption,
-        message_id: message.message_id,
-        chat_id: message.chat.id,
-        date: message.date
-      },
-      sender: {
-        sender_info: message.from || message.sender_chat || {},
-        chat_info: message.chat || {}
-      },
-      analysis: {
-        analyzed_content: analyzedContent
-      },
-      meta: {
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        status: 'pending',
-        error: null,
-        correlation_id: correlationId,
-        is_original_caption: isOriginalCaption,
-        original_message_id: originalMessageId
-      }
-    };
-
-    // Create message record
+    // Create basic message record
     const messageData = {
       message_id: message.message_id,
       chat_id: message.chat.id,
@@ -106,18 +82,17 @@ export async function handleWebhookUpdate(
       correlation_id: correlationId,
       is_original_caption: isOriginalCaption,
       original_message_id: originalMessageId,
-      message_media_data: messageMediaData,
       analyzed_content: analyzedContent,
       status: 'pending',
       caption: message.caption
     };
 
-    // If this is a non-original message in a media group, wait briefly to ensure original exists
+    // If this is a non-original message in a media group, wait for original
     if (message.media_group_id && !isOriginalCaption && originalMessageId) {
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
-    // Insert/update message record
+    // Insert message record
     const { data: messageRecord, error: messageError } = await withDatabaseRetry(async () => {
       return await supabase
         .from('messages')
@@ -128,23 +103,47 @@ export async function handleWebhookUpdate(
 
     if (messageError) throw messageError;
 
-    // Queue for processing only if not already queued
-    const { error: queueError } = await supabase
-      .from('unified_processing_queue')
-      .insert({
-        queue_type: message.media_group_id ? 'media_group' : 'media',
-        data: messageMediaData,
-        status: 'pending',
-        correlation_id: correlationId,
-        chat_id: message.chat.id,
-        message_id: message.message_id,
-        message_media_data: messageMediaData
-      })
-      .onConflict(['correlation_id', 'message_id', 'chat_id'])
-      .ignore();
+    // Queue for processing if needed
+    if (messageRecord && (message.photo || message.video || message.document)) {
+      const { error: queueError } = await supabase
+        .from('unified_processing_queue')
+        .insert({
+          queue_type: message.media_group_id ? 'media_group' : 'media',
+          status: 'pending',
+          correlation_id: correlationId,
+          chat_id: message.chat.id,
+          message_id: message.message_id,
+          message_media_data: {
+            message: {
+              url: messageUrl,
+              media_group_id: message.media_group_id,
+              caption: message.caption,
+              message_id: message.message_id,
+              chat_id: message.chat.id,
+              date: message.date
+            },
+            sender: {
+              sender_info: message.from || message.sender_chat || {},
+              chat_info: message.chat || {}
+            },
+            analysis: {
+              analyzed_content: analyzedContent
+            },
+            meta: {
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              status: 'pending',
+              is_original_caption: isOriginalCaption,
+              original_message_id: originalMessageId
+            }
+          }
+        })
+        .onConflict(['correlation_id', 'message_id', 'chat_id'])
+        .ignore();
 
-    if (queueError) {
-      console.error('Error queueing message:', queueError);
+      if (queueError) {
+        console.error('Error queueing message:', queueError);
+      }
     }
 
     return {
