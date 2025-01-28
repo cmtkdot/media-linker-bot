@@ -1,6 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { MediaItem, MediaItemUpdate, TableResult } from "@/types/media";
-import { MessageMediaData } from "@/types/message-media";
+import { MediaItem, MediaItemUpdate, MessageMediaData } from "@/types/media";
 import { Json } from "@/integrations/supabase/types";
 
 export const convertToMediaItem = (data: any): MediaItem => ({

@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { withDatabaseRetry } from "../_shared/database-retry.ts";
 import { getAndDownloadTelegramFile } from "../_shared/telegram-service.ts";
-import { validateMediaFile } from "../_shared/media-validators.ts";
 import { uploadMediaToStorage } from "../_shared/storage-manager.ts";
 
 const corsHeaders = {
@@ -54,11 +54,9 @@ serve(async (req) => {
 
     // Generate safe filename using file_unique_id
     const fileExt = filePath.split('.').pop() || 'bin';
-    
-    console.log('Uploading file to storage:', {
-      file_unique_id: fileUniqueId,
-      file_ext: fileExt
-    });
+    const fileName = `${fileUniqueId}.${fileExt}`;
+
+    console.log('Uploading file to storage:', fileName);
     
     // Upload to Supabase Storage
     const { publicUrl } = await uploadMediaToStorage(
@@ -74,22 +72,26 @@ serve(async (req) => {
     }
 
     // Update queue item with success status
-    const { data: queueItem, error: queueError } = await supabase
-      .from('unified_processing_queue')
-      .update({
-        status: 'processed',
-        processed_at: new Date().toISOString(),
-        message_media_data: {
-          ...existingMedia?.message_media_data,
-          media: {
-            ...existingMedia?.message_media_data?.media,
-            public_url: publicUrl
-          }
-        }
-      })
-      .eq('message_id', messageId)
-      .select()
-      .single();
+    const { data: queueItem, error: queueError } = await withDatabaseRetry(
+      async () => {
+        return await supabase
+          .from('unified_processing_queue')
+          .update({
+            status: 'processed',
+            processed_at: new Date().toISOString(),
+            message_media_data: {
+              ...existingMedia?.message_media_data,
+              media: {
+                ...existingMedia?.message_media_data?.media,
+                public_url: publicUrl
+              }
+            }
+          })
+          .eq('message_id', messageId)
+          .select()
+          .single();
+      }
+    );
 
     if (queueError) throw queueError;
 
