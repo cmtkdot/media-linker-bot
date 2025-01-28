@@ -33,42 +33,37 @@ export async function handleWebhookUpdate(
 
     // Handle media group caption logic
     if (message.media_group_id) {
+      // Check for existing messages in the group
       const { data: existingMessages } = await supabase
         .from('messages')
         .select('id, is_original_caption, analyzed_content, caption')
         .eq('media_group_id', message.media_group_id)
         .order('created_at', { ascending: true });
 
+      // Find existing caption holder if any
+      const existingCaptionHolder = existingMessages?.find(m => m.is_original_caption);
+
       if (message.caption) {
-        // If this is the first message with caption in the group
-        const existingCaptionHolder = existingMessages?.find(m => m.is_original_caption);
         if (!existingCaptionHolder) {
+          // This is the first message with a caption in the group
+          console.log('Setting as original caption holder:', message.message_id);
           isOriginalCaption = true;
           analyzedContent = await analyzeCaptionWithAI(message.caption);
-          
-          // Update all existing messages in the group with the analyzed content
-          if (existingMessages?.length > 0) {
-            await supabase
-              .from('messages')
-              .update({
-                analyzed_content: analyzedContent,
-                original_message_id: null // Will be updated after current message insert
-              })
-              .eq('media_group_id', message.media_group_id);
-          }
         } else {
+          // Use existing caption holder's content
+          console.log('Using existing caption holder:', existingCaptionHolder.id);
           originalMessageId = existingCaptionHolder.id;
           analyzedContent = existingCaptionHolder.analyzed_content;
         }
-      } else if (existingMessages?.length > 0) {
-        // For non-caption messages in group, use existing analyzed content
-        const existingCaptionHolder = existingMessages.find(m => m.is_original_caption);
-        if (existingCaptionHolder) {
-          originalMessageId = existingCaptionHolder.id;
-          analyzedContent = existingCaptionHolder.analyzed_content;
-        }
+      } else if (existingCaptionHolder) {
+        // For non-caption messages in group, reference the caption holder
+        console.log('Referencing existing caption holder:', existingCaptionHolder.id);
+        originalMessageId = existingCaptionHolder.id;
+        analyzedContent = existingCaptionHolder.analyzed_content;
       }
     } else if (message.caption) {
+      // Single message with caption is always original
+      console.log('Single message with caption:', message.message_id);
       isOriginalCaption = true;
       analyzedContent = await analyzeCaptionWithAI(message.caption);
     }
@@ -136,22 +131,6 @@ export async function handleWebhookUpdate(
     });
 
     if (messageError) throw messageError;
-
-    // If this is part of a media group and has analyzed content, sync it
-    if (message.media_group_id && analyzedContent) {
-      if (isOriginalCaption) {
-        // Update all messages in the group to point to this message as original
-        await supabase
-          .from('messages')
-          .update({
-            analyzed_content: analyzedContent,
-            original_message_id: messageRecord.id,
-            is_original_caption: false
-          })
-          .eq('media_group_id', message.media_group_id)
-          .neq('id', messageRecord.id);
-      }
-    }
 
     // Queue for processing
     const { error: queueError } = await supabase
