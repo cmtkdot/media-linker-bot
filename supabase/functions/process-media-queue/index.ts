@@ -1,8 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { processMediaGroup, isMediaGroupComplete } from "../_shared/queue/media-group-processor.ts";
-import { processMediaItem } from "../_shared/queue/media-processor.ts";
-import { QueueItem } from "../_shared/queue/types.ts";
+import { processMediaGroups, processQueueItem } from "../_shared/queue-processor.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -18,11 +16,6 @@ serve(async (req) => {
     Deno.env.get('SUPABASE_URL') ?? '',
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   );
-
-  const botToken = Deno.env.get('TELEGRAM_BOT_TOKEN');
-  if (!botToken) {
-    throw new Error('Bot token not configured');
-  }
 
   try {
     // Fetch pending queue items
@@ -45,57 +38,31 @@ serve(async (req) => {
 
     console.log(`Processing ${queueItems.length} queue items`);
 
-    // Group items by media_group_id
-    const mediaGroups = new Map<string, QueueItem[]>();
-    const individualItems: QueueItem[] = [];
-
-    queueItems.forEach(item => {
-      const groupId = item.message_media_data?.message?.media_group_id;
-      if (groupId) {
-        if (!mediaGroups.has(groupId)) {
-          mediaGroups.set(groupId, []);
-        }
-        mediaGroups.get(groupId)?.push(item);
-      } else {
-        individualItems.push(item);
-      }
-    });
-
-    // Process media groups
-    for (const [groupId, groupItems] of mediaGroups) {
-      const isComplete = await isMediaGroupComplete(supabase, groupId);
-      if (!isComplete) {
-        console.log(`Skipping incomplete media group ${groupId}`);
-        continue;
-      }
-
-      await processMediaGroup(supabase, groupId, groupItems, botToken);
+    // Process media groups first
+    const groupItems = queueItems.filter(item => 
+      item.message_media_data?.message?.media_group_id
+    );
+    
+    if (groupItems.length > 0) {
+      await processMediaGroups(supabase, groupItems);
     }
 
-    // Process individual items
+    // Process remaining individual items
+    const individualItems = queueItems.filter(item => 
+      !item.message_media_data?.message?.media_group_id
+    );
+
     for (const item of individualItems) {
-      await processMediaItem(supabase, item, botToken);
+      await processQueueItem(supabase, item);
     }
 
-    // Update processed items status
-    const processedIds = queueItems
-      .filter(item => !item.message_media_data?.message?.media_group_id)
-      .map(item => item.id);
-
-    if (processedIds.length > 0) {
-      await supabase
-        .from('unified_processing_queue')
-        .update({
-          status: 'processed',
-          processed_at: new Date().toISOString()
-        })
-        .in('id', processedIds);
-    }
+    // Cleanup processed items
+    await cleanupProcessedItems(supabase);
 
     return new Response(
       JSON.stringify({ 
         processed: queueItems.length,
-        groups: mediaGroups.size,
+        groups: groupItems.length,
         individual: individualItems.length
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -109,3 +76,15 @@ serve(async (req) => {
     );
   }
 });
+
+async function cleanupProcessedItems(supabase: any) {
+  const { error } = await supabase
+    .from('unified_processing_queue')
+    .delete()
+    .eq('status', 'processed')
+    .lt('processed_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+
+  if (error) {
+    console.error('Error cleaning up processed items:', error);
+  }
+}
