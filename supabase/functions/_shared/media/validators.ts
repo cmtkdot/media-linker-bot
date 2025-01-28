@@ -8,11 +8,6 @@ export function validateMediaFile(
     throw new Error("Invalid media file: missing file_id");
   }
 
-  // Validate file size if available (100MB limit)
-  if (mediaFile.file_size && mediaFile.file_size > 100 * 1024 * 1024) {
-    throw new Error("File size exceeds maximum allowed (100MB)");
-  }
-
   switch (mediaType) {
     case "photo":
       if (!mediaFile.width || !mediaFile.height) {
