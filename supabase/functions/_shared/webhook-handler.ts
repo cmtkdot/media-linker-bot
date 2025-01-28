@@ -68,7 +68,7 @@ export async function handleWebhookUpdate(
       analyzedContent = await analyzeCaptionWithAI(message.caption);
     }
 
-    // Create message media data structure
+    // Create message media data structure with simplified analysis section
     const messageMediaData = {
       message: {
         url: messageUrl,
@@ -83,13 +83,7 @@ export async function handleWebhookUpdate(
         chat_info: message.chat || {}
       },
       analysis: {
-        analyzed_content: analyzedContent,
-        product_name: analyzedContent?.extracted_data?.product_name,
-        product_code: analyzedContent?.extracted_data?.product_code,
-        quantity: analyzedContent?.extracted_data?.quantity,
-        vendor_uid: analyzedContent?.extracted_data?.vendor_uid,
-        purchase_date: analyzedContent?.extracted_data?.purchase_date,
-        notes: analyzedContent?.extracted_data?.notes
+        analyzed_content: analyzedContent
       },
       meta: {
         created_at: new Date().toISOString(),
