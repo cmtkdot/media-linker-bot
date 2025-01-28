@@ -56,6 +56,13 @@ async function processMediaGroup(supabase: any, groupId: string, items: QueueIte
     // Get analyzed content from original item
     const analyzedContent = originalItem?.message_media_data?.analysis?.analyzed_content;
 
+    console.log('Processing media group:', {
+      group_id: groupId,
+      items_count: items.length,
+      has_original_caption: !!originalItem,
+      has_analyzed_content: !!analyzedContent
+    });
+
     // Process each item in the group
     for (const item of items) {
       // Update item's analyzed content from original if needed
