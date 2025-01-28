@@ -156,63 +156,107 @@ export async function handleWebhookUpdate(
           },
         };
 
-        // Create telegram_media record using message_media_data
+        console.log("Creating telegram_media record...");
+
+        // First create telegram_media record
         const { data: telegramMedia, error: mediaError } = await supabase
           .from("telegram_media")
           .insert({
             message_id: messageRecord.id,
-            file_id: updatedMessageMediaData.media.file_id,
-            file_unique_id: updatedMessageMediaData.media.file_unique_id,
-            file_type: updatedMessageMediaData.media.file_type,
-            public_url: updatedMessageMediaData.media.public_url,
-            storage_path: updatedMessageMediaData.media.storage_path,
-            telegram_data: updatedMessageMediaData.telegram_data,
+            file_id: mediaFile.file_id,
+            file_unique_id: mediaFile.file_unique_id,
+            file_type: mediaType,
+            public_url: publicUrl,
+            storage_path: storagePath,
             message_media_data: updatedMessageMediaData,
-            analyzed_content: updatedMessageMediaData.analysis.analyzed_content,
             correlation_id: correlationId,
-            is_original_caption: analyzedMessageContent.is_original_caption,
-            original_message_id: analyzedMessageContent.original_message_id,
             processed: false,
           })
           .select()
           .single();
 
         if (mediaError) {
+          console.error("Failed to create telegram_media record:", mediaError);
           throw mediaError;
         }
 
-        // Now update both messages and telegram_media tables in a transaction
-        await updateMediaRecords(supabase, {
-          messageId: messageRecord.id,
-          publicUrl,
-          storagePath,
-          messageMediaData: updatedMessageMediaData,
-        });
+        console.log("Created telegram_media record:", telegramMedia.id);
 
-        // After successful transaction, mark telegram_media as processed
-        const { error: updateError } = await supabase
-          .from("telegram_media")
-          .update({ processed: true })
-          .eq("id", telegramMedia.id);
+        try {
+          console.log("Updating media records...");
 
-        if (updateError) {
-          throw updateError;
+          // Update both messages and telegram_media tables in transaction
+          await updateMediaRecords(supabase, {
+            messageId: messageRecord.id,
+            publicUrl,
+            storagePath,
+            messageMediaData: updatedMessageMediaData,
+          });
+
+          console.log("Successfully updated media records");
+
+          // Log successful processing
+          await logMediaProcessing(supabase, {
+            messageId: messageRecord.id,
+            fileId: mediaFile.file_id,
+            fileType: mediaType,
+            storagePath,
+            correlationId,
+          });
+
+          console.log("Successfully logged media processing");
+
+          // After successful transaction, mark telegram_media as processed
+          const { error: updateError } = await supabase
+            .from("telegram_media")
+            .update({ processed: true })
+            .eq("id", telegramMedia.id);
+
+          if (updateError) {
+            console.error(
+              "Failed to mark telegram_media as processed:",
+              updateError
+            );
+            throw updateError;
+          }
+
+          console.log("Successfully marked telegram_media as processed");
+        } catch (error) {
+          console.error("Error in media processing transaction:", error);
+
+          // Update message status to error
+          await supabase
+            .from("messages")
+            .update({
+              status: "error",
+              processing_error:
+                error instanceof Error ? error.message : String(error),
+            })
+            .eq("id", messageRecord.id);
+
+          // Log error in media processing
+          await logMediaProcessing(supabase, {
+            messageId: messageRecord.id,
+            fileId: mediaFile.file_id,
+            fileType: mediaType,
+            storagePath,
+            correlationId,
+            status: "error",
+            error: error instanceof Error ? error.message : String(error),
+          });
+
+          throw error;
         }
 
-        // Log successful processing
-        await logMediaProcessing(supabase, {
+        return {
+          success: true,
+          message: "Update processed successfully",
           messageId: messageRecord.id,
-          fileId: mediaFile.file_id,
-          fileType: mediaType,
-          storagePath,
-          correlationId,
-        });
-
-        console.log("Successfully processed media:", {
-          file_unique_id: mediaFile.file_unique_id,
-          public_url: publicUrl,
-          media_id: messageRecord.id,
-        });
+          data: {
+            telegram_data: message,
+            status: "processed",
+          },
+        };
       } catch (error) {
         console.error("Error processing media:", error);
         await supabase
