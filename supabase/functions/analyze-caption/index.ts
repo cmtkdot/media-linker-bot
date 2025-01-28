@@ -51,7 +51,7 @@ EXTRACTION RULES:
 - Include any text that doesn't fit other fields
 - Nullable if no extra information
 
-Return ONLY a JSON object with this exact structure:
+Return ONLY a JSON object with this exact structure, no markdown formatting or additional text:
 {
   "analyzed_content": {
     "product_info": {
@@ -113,7 +113,8 @@ serve(async (req) => {
         { role: "user", content: caption }
       ],
       temperature: 0.1,
-      max_tokens: 500
+      max_tokens: 500,
+      response_format: { type: "json" } // Force JSON response
     });
 
     const result = completion.choices[0].message.content;
@@ -121,7 +122,9 @@ serve(async (req) => {
 
     let parsedResult;
     try {
-      parsedResult = JSON.parse(result);
+      // Clean the response string before parsing
+      const cleanedResult = result.replace(/```json\n|\n```/g, '').trim();
+      parsedResult = JSON.parse(cleanedResult);
     } catch (error) {
       console.error('Error parsing AI response:', error);
       throw new Error('Invalid AI response format');
