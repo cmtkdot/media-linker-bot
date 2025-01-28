@@ -19,7 +19,7 @@ export interface TelegramMessage {
   message_media_data?: Record<string, any>;
   is_original_caption?: boolean;
   original_message_id?: string;
-  raw_text?: string;
+  caption?: string;
   // New extracted content fields
   product_name?: string;
   product_code?: string;

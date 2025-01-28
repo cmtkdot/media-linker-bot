@@ -3,6 +3,7 @@
 ## Core Processing Flow
 
 ### 1. Webhook Reception & Initial Processing
+
 - **Entry Point**: `telegram-webhook/index.ts` (Edge Function)
   - Endpoint: `https://kzfamethztziwqiocbwz.supabase.co/functions/v1/telegram-webhook`
   - Validates incoming Telegram updates
@@ -10,17 +11,19 @@
   - Immediately triggers caption analysis
 
 ### 2. Message Processing & Queue Management
+
 - **Message Creation**:
+
   - Creates record in `messages` table with:
     ```typescript
     {
-      message_id: number
-      chat_id: number
-      sender_info: Json
-      telegram_data: Json
-      caption: string | null
-      media_group_id: string | null
-      analyzed_content: Json
+      message_id: number;
+      chat_id: number;
+      sender_info: Json;
+      telegram_data: Json;
+      caption: string | null;
+      media_group_id: string | null;
+      analyzed_content: Json;
     }
     ```
 
@@ -67,13 +70,16 @@
     ```
 
 ### 3. Media Processing System
+
 - **Process Media Queue** (Edge Function):
+
   - Endpoint: `https://kzfamethztziwqiocbwz.supabase.co/functions/v1/process-media-queue`
   - Processes pending items from unified_processing_queue
   - Handles both individual media and media groups
   - Runs every minute via cron job
 
 - **Media Group Processing**:
+
   - Groups items by media_group_id
   - Ensures all group items are synced before processing
   - Shares analyzed content across group members
@@ -87,6 +93,7 @@
   5. Updates queue status
 
 ### 4. Data Structure & Storage
+
 - **telegram_media Table Structure**:
   ```typescript
   {
@@ -129,6 +136,7 @@
   ```
 
 ### 5. Caption Analysis System
+
 - **Analysis Trigger**: `analyze-caption` Edge Function
   - Endpoint: `https://kzfamethztziwqiocbwz.supabase.co/functions/v1/analyze-caption`
   - Uses GPT-4 for intelligent caption parsing
@@ -142,7 +150,7 @@
       purchase_date?: string
       notes?: string
       analyzed_content: {
-        raw_text: string
+        caption: string
         extracted_data: Record<string, any>
         confidence: number
         timestamp: string
@@ -152,12 +160,14 @@
     ```
 
 ### 6. Error Handling & Retry Logic
+
 - Implements retry mechanism for failed operations
 - Tracks retry counts and timestamps
 - Maximum retry attempts configurable per queue type
 - Detailed error logging in processing_error fields
 
 ## Required Environment Variables
+
 ```
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_WEBHOOK_SECRET=
@@ -168,17 +178,21 @@ GLIDE_API_TOKEN=
 ```
 
 ## Development Guidelines
+
 1. **Queue Management**:
+
    - Use unified_processing_queue for all async operations
    - Implement proper error handling and retries
    - Monitor queue performance and bottlenecks
 
 2. **Media Processing**:
+
    - Validate files before storage
    - Maintain group relationships
    - Handle caption syncing efficiently
 
 3. **Database Operations**:
+
    - Use provided service functions
    - Implement proper error handling
    - Follow existing naming conventions

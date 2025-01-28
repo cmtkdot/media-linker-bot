@@ -66,7 +66,7 @@ export interface ExtractedProductInfo {
 }
 
 export interface AnalyzedContent extends ExtractedProductInfo {
-  raw_text: string;
+  caption: string;
   extracted_data: ExtractedProductInfo;
   confidence: number;
   timestamp: string;
@@ -74,7 +74,7 @@ export interface AnalyzedContent extends ExtractedProductInfo {
 }
 
 // Message Processing Status
-export type ProcessingStatus = 'pending' | 'processed' | 'error';
+export type ProcessingStatus = "pending" | "processed" | "error";
 
 export interface TelegramMessage {
   message_id: number;
@@ -96,7 +96,7 @@ export interface WebhookMessageData {
   message_id: number;
   chat_id: number;
   sender_info: Record<string, any>;
-  message_type: 'photo' | 'video' | 'document' | 'animation' | 'unknown';
+  message_type: "photo" | "video" | "document" | "animation" | "unknown";
   telegram_data: TelegramMessage;
   caption: string | null;
   media_group_id: string | null;
@@ -149,19 +149,19 @@ export interface MediaItem {
   id: string;
   created_at: string;
   updated_at: string;
-  
+
   // File information
   file_id: string;
   file_unique_id: string;
-  file_type: 'photo' | 'video' | 'document' | 'animation';
+  file_type: "photo" | "video" | "document" | "animation";
   public_url: string;
   storage_path: string;
-  
+
   // Message reference
   message_id: string;
   message_url?: string;
   caption?: string;
-  
+
   // Extracted product information (denormalized from analyzed_content)
   product_name?: string | null;
   product_code?: string | null;
@@ -169,16 +169,16 @@ export interface MediaItem {
   vendor_uid?: string | null;
   purchase_date?: string | null;
   notes?: string | null;
-  
+
   // Processing status
   processed?: boolean;
   processing_error?: string;
-  
+
   // Rich data objects
   analyzed_content: AnalyzedContent;
   telegram_data: TelegramMessage;
   message_media_data: MessageMediaData;
-  
+
   // Additional metadata
   glide_data?: Record<string, any>;
   media_metadata: {
@@ -188,8 +188,8 @@ export interface MediaItem {
     height?: number;
     duration?: number;
   };
-  
+
   // Glide integration
   telegram_media_row_id?: string;
   glide_app_url?: string;
-} 
+}
