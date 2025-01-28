@@ -1,8 +1,19 @@
 import { MediaProcessingParams, processMediaFile } from "./media-processor.ts";
-import { TelegramMessage, TelegramUpdate } from "./telegram-types.ts";
+import { TelegramMessage, TelegramUpdate, TelegramPhotoSize } from "./telegram-types.ts";
 import { SupabaseClientWithDatabase } from "./types.ts";
 import { analyzeWebhookMessage } from "./webhook-message-analyzer.ts";
 import { buildWebhookMessageData } from "./webhook-message-builder.ts";
+
+// Helper function to get highest quality photo
+function getHighestQualityPhoto(photos: TelegramPhotoSize[]): TelegramPhotoSize {
+  // Sort photos by file size (descending) and get the first one
+  // Telegram sends photos in different sizes, with the highest quality usually having the largest file size
+  return photos.sort((a, b) => {
+    const sizeA = a.file_size || 0;
+    const sizeB = b.file_size || 0;
+    return sizeB - sizeA;
+  })[0];
+}
 
 export async function handleWebhookUpdate(
   update: TelegramUpdate,
@@ -95,11 +106,10 @@ export async function handleWebhookUpdate(
     // Process media if present
     const mediaType = getMediaType(message);
     if (mediaType) {
-      // For photos, get the largest size (last item in array)
-      const mediaFile =
-        mediaType === "photo"
-          ? message.photo?.[message.photo.length - 1]
-          : message.video || message.document || message.animation;
+      // For photos, get the highest quality version
+      const mediaFile = mediaType === "photo"
+        ? getHighestQualityPhoto(message.photo || [])
+        : message.video || message.document || message.animation;
 
       if (mediaFile) {
         try {
@@ -115,6 +125,14 @@ export async function handleWebhookUpdate(
             messageUrl,
             analyzedContent: analyzedMessageContent.analyzed_content,
           };
+
+          console.log("Processing media with params:", {
+            fileId: mediaFile.file_id,
+            fileType: mediaType,
+            fileSize: mediaFile.file_size,
+            width: mediaFile.width,
+            height: mediaFile.height
+          });
 
           const result = await processMediaFile(supabase, processingParams);
 

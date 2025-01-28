@@ -606,6 +606,15 @@ export type Database = {
           vendor_uid: string | null
         }[]
       }
+      update_media_records: {
+        Args: {
+          p_message_id: string
+          p_public_url: string
+          p_storage_path: string
+          p_message_media_data: Json
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
