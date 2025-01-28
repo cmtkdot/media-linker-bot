@@ -162,6 +162,27 @@ export async function handleWebhookUpdate(
       media_group_size: messageRecord.media_group_size
     });
 
+    // Sync analyzed content across media group if this message has analyzed content
+    if (message.media_group_id && analyzedContent.analyzed_content) {
+      console.log('Syncing analyzed content to media group:', message.media_group_id);
+      
+      const { error: syncError } = await supabase
+        .from('messages')
+        .update({
+          analyzed_content: analyzedContent.analyzed_content,
+          message_media_data: messageData,
+          updated_at: new Date().toISOString()
+        })
+        .eq('media_group_id', message.media_group_id)
+        .neq('id', messageRecord.id);
+
+      if (syncError) {
+        console.error('Error syncing analyzed content to group:', syncError);
+      } else {
+        console.log('Successfully synced analyzed content to media group');
+      }
+    }
+
     // Queue message for processing if it's a media message
     if (messageType === 'photo' || messageType === 'video') {
       await queueWebhookMessage(supabase, messageData, correlationId, messageType);
