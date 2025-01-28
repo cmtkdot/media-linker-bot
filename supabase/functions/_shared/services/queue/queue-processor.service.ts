@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { processMediaItem } from '../media/media-processor.service';
+import { processMediaItem } from '../media/media-processor.ts';
 
 export async function processQueue(supabase: any, items: any[]) {
   console.log(`Processing ${items.length} queue items`);
