@@ -29,7 +29,7 @@ export const convertToMediaItem = (data: any): MediaItem => ({
       file_id: data.file_id,
       file_unique_id: data.file_unique_id,
       file_type: data.file_type,
-      public_url: data.public_url,
+      public_url: data.public_url || getPublicUrl(data.storage_path),
       storage_path: data.storage_path
     },
     telegram_data: data.telegram_data || {}
@@ -39,6 +39,14 @@ export const convertToMediaItem = (data: any): MediaItem => ({
   media_metadata: data.message_media_data?.media || {},
   analyzed_content: data.message_media_data?.analysis?.analyzed_content || {}
 });
+
+const getPublicUrl = (storagePath: string | null): string | null => {
+  if (!storagePath) return null;
+  const { data: { publicUrl } } = supabase.storage
+    .from('media')
+    .getPublicUrl(storagePath);
+  return publicUrl;
+};
 
 export const getMediaItem = async (id: string): Promise<MediaItem> => {
   const { data, error } = await supabase
@@ -95,7 +103,7 @@ export const updateMediaItem = async (id: string, updates: Partial<MediaItem>): 
       file_id: updates.file_id,
       file_unique_id: updates.file_unique_id,
       file_type: updates.file_type,
-      public_url: updates.public_url,
+      public_url: updates.public_url || getPublicUrl(updates.storage_path),
       storage_path: updates.storage_path
     }
   };
