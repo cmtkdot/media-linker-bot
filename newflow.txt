@@ -1,0 +1,154 @@
+# Telegram Media Processing Flow Documentation
+
+## 1. Webhook Reception (Entry Point)
+- Endpoint: https://kzfamethztziwqiocbwz.supabase.co/functions/v1/telegram-webhook
+- Validates incoming Telegram updates
+- Processes messages with webhook-handler.ts
+- Immediately triggers caption analysis
+
+## 2. Message Creation & Initial Processing
+### Database: messages table
+```typescript
+{
+  message_id: number
+  chat_id: number
+  sender_info: Json
+  telegram_data: Json
+  caption: string | null
+  media_group_id: string | null
+  analyzed_content: Json
+  message_url: string
+  correlation_id: uuid
+  message_media_data: Json
+  is_original_caption: boolean
+  original_message_id: uuid | null
+}
+```
+
+### Trigger: fn_queue_message_processing
+- Activates on: INSERT or UPDATE of analyzed_content, status
+- Conditions: analyzed_content IS NOT NULL AND status = 'pending'
+- Creates message_media_data JSON structure
+- Queues message in unified_processing_queue
+
+## 3. Queue Processing System
+### Database: unified_processing_queue
+```typescript
+{
+  queue_type: 'media' | 'webhook' | 'media_group'
+  message_media_data: {
+    message: {
+      url: string
+      media_group_id?: string
+      caption?: string
+      message_id: number
+      chat_id: number
+      date: number
+    }
+    sender: {
+      sender_info: Record<string, any>
+      chat_info: Record<string, any>
+    }
+    analysis: {
+      analyzed_content: Record<string, any>
+      product_name?: string
+      product_code?: string
+      quantity?: number
+      vendor_uid?: string
+      purchase_date?: string
+      notes?: string
+    }
+    meta: {
+      created_at: string
+      updated_at: string
+      status: string
+      error: string | null
+      is_original_caption: boolean
+      original_message_id: uuid | null
+      processed_at: string
+      last_retry_at: string
+      retry_count: number
+    }
+  }
+  status: 'pending' | 'processing' | 'completed' | 'failed'
+  correlation_id: uuid
+}
+```
+
+### Edge Function: process-media-queue
+- Processes pending items from unified_processing_queue
+- Groups items by media_group_id
+- Ensures all group items are present before processing
+- Updates all related records simultaneously
+
+## 4. Media Processing Flow
+1. Download media from Telegram
+2. Validate file integrity
+3. Upload to Supabase storage
+4. Create/update telegram_media records
+5. Update queue status
+
+### Database: telegram_media
+```typescript
+{
+  file_id: string
+  file_unique_id: string
+  file_type: string
+  public_url: string
+  message_id: uuid
+  message_media_data: Json
+  analyzed_content: Json
+  is_original_caption: boolean
+  original_message_id: uuid | null
+  storage_path: string
+}
+```
+
+## 5. Triggers & Functions Overview
+
+### Message Processing Triggers
+1. trg_parse_analyzed_content
+   - Parses analyzed_content into columns
+   - Updates message_media_data
+
+2. trg_queue_message_processing
+   - Queues messages for processing
+   - Handles media group syncing
+
+### Media Processing Triggers
+1. trg_process_media
+   - Prepares media for storage
+   - Updates message_media_data
+
+2. trg_sync_media_group_content
+   - Syncs analyzed content across media groups
+
+### Error Handling Triggers
+1. handle_media_processing_error_trigger
+   - Updates error information
+   - Manages retry logic
+
+## 6. Data Flow Sequence
+1. Webhook receives Telegram update
+2. Creates message record with initial data
+3. Analyzes caption if present
+4. Queues for processing via trigger
+5. Process-media-queue handles pending items
+6. Downloads and processes media files
+7. Updates telegram_media records
+8. Syncs content across media groups
+9. Updates processing status and metadata
+
+## 7. Key Features
+- Correlation ID tracking throughout flow
+- Media group synchronization
+- Automatic caption analysis
+- Robust error handling and retry logic
+- Structured JSON data storage
+- Original caption tracking
+- Automatic queue cleanup
+
+## 8. Scheduled Tasks
+- Process media queue: Every minute
+- Clean up processed items: Every 24 hours
+- Retry failed items: Based on retry count
