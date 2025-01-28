@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MediaItem } from "@/types/media";
 import { ChevronLeft, ChevronRight, PlayCircle, Edit } from "lucide-react";
 import { format } from "date-fns";
-import { getMediaCaption } from "@/utils/media-helpers";
+import { getMediaCaption, getProductInfo } from "@/utils/media-helpers";
 
 interface ProductGroupProps {
   group: MediaItem[];
@@ -15,6 +15,7 @@ const ProductGroup = ({ group, onMediaClick, onEdit }: ProductGroupProps) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const mainProduct = group[0];
   const hasMultipleMedia = group.length > 1;
+  const productInfo = getProductInfo(mainProduct);
 
   const handlePrevious = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -86,36 +87,36 @@ const ProductGroup = ({ group, onMediaClick, onEdit }: ProductGroupProps) => {
       </CardContent>
       <CardHeader className="space-y-4">
         <CardTitle className="text-2xl font-bold">
-          {mainProduct.product_name || "Untitled Product"}
+          {productInfo.name || "Untitled Product"}
         </CardTitle>
         {getMediaCaption(mainProduct) && (
           <p className="text-lg text-muted-foreground mt-4">
             {getMediaCaption(mainProduct)}
           </p>
         )}
-        {mainProduct.product_code && (
+        {productInfo.code && (
           <p className="text-sm font-medium text-sky-500 dark:text-sky-400">
-            Product Code: {mainProduct.product_code}
+            Product Code: {productInfo.code}
           </p>
         )}
-        {mainProduct.quantity && (
+        {productInfo.quantity && (
           <p className="text-sm text-muted-foreground">
-            Quantity: {mainProduct.quantity}
+            Quantity: {productInfo.quantity}
           </p>
         )}
-        {mainProduct.vendor_uid && (
+        {productInfo.vendor && (
           <p className="text-sm text-muted-foreground">
-            Vendor: {mainProduct.vendor_uid}
+            Vendor: {productInfo.vendor}
           </p>
         )}
-        {mainProduct.purchase_date && (
+        {productInfo.purchaseDate && (
           <p className="text-sm text-muted-foreground">
-            Purchase Date: {format(new Date(mainProduct.purchase_date), "MM/dd/yyyy")}
+            Purchase Date: {format(new Date(productInfo.purchaseDate), "MM/dd/yyyy")}
           </p>
         )}
-        {mainProduct.notes && (
+        {productInfo.notes && (
           <p className="text-sm text-muted-foreground">
-            Notes: {mainProduct.notes}
+            Notes: {productInfo.notes}
           </p>
         )}
       </CardHeader>
