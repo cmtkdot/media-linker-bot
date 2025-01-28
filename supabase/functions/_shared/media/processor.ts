@@ -1,8 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { MediaFile } from './types.ts';
 import { uploadMediaToStorage } from './storage.ts';
-import { processMediaQueue } from './queue-processor.ts';
-import { handleMediaError } from '../error-handler.ts';
+import { handleMediaError } from './error-handler.ts';
 
 export async function processMediaMessage(
   supabase: ReturnType<typeof createClient>,
@@ -22,6 +21,33 @@ export async function processMediaMessage(
     }
 
     console.log('Extracted media file:', mediaFile);
+
+    // Check for existing record
+    const { data: existingMedia } = await supabase
+      .from('telegram_media')
+      .select('*')
+      .eq('file_unique_id', mediaFile.file_unique_id)
+      .maybeSingle();
+
+    // If exists, check for changes
+    if (existingMedia) {
+      const hasChanges = checkForChanges(existingMedia, message);
+      if (!hasChanges) {
+        console.log('No changes detected for existing media:', existingMedia.id);
+        
+        // Log the skip
+        await supabase.from('media_processing_logs').insert({
+          message_id: messageId,
+          file_id: mediaFile.file_id,
+          file_type: mediaFile.file_type,
+          status: 'skipped',
+          correlation_id: correlationId,
+          processed_at: new Date().toISOString()
+        });
+        
+        return;
+      }
+    }
 
     // Upload to storage and get URLs
     const { publicUrl, storagePath } = await uploadMediaToStorage(
@@ -60,9 +86,7 @@ export async function processMediaMessage(
       })
       .eq('id', messageId);
 
-    if (messageError) {
-      throw messageError;
-    }
+    if (messageError) throw messageError;
 
     // Create/Update telegram_media record
     const { error: mediaError } = await supabase
@@ -83,18 +107,17 @@ export async function processMediaMessage(
         updated_at: new Date().toISOString()
       });
 
-    if (mediaError) {
-      throw mediaError;
-    }
+    if (mediaError) throw mediaError;
 
-    // Process media queue for additional updates
-    await processMediaQueue(supabase, {
-      messageId,
-      correlationId,
-      messageMediaData: updatedMediaData,
-      telegramData: message.telegram_data,
-      isOriginalCaption: message.is_original_caption,
-      originalMessageId: message.original_message_id
+    // Log successful processing
+    await supabase.from('media_processing_logs').insert({
+      message_id: messageId,
+      file_id: mediaFile.file_id,
+      file_type: mediaFile.file_type,
+      status: 'processed',
+      storage_path: storagePath,
+      correlation_id: correlationId,
+      processed_at: new Date().toISOString()
     });
 
     console.log('Media processing completed successfully');
@@ -154,4 +177,23 @@ function extractMediaFile(message: Record<string, any>): MediaFile | null {
   }
 
   return null;
+}
+
+function checkForChanges(existingMedia: any, newMessage: any): boolean {
+  // Check caption changes
+  const existingCaption = existingMedia.message_media_data?.message?.caption;
+  const newCaption = newMessage.message_media_data?.message?.caption;
+  if (existingCaption !== newCaption) return true;
+
+  // Check analyzed content changes
+  const existingAnalysis = JSON.stringify(existingMedia.message_media_data?.analysis || {});
+  const newAnalysis = JSON.stringify(newMessage.message_media_data?.analysis || {});
+  if (existingAnalysis !== newAnalysis) return true;
+
+  // Check media group changes
+  const existingGroupId = existingMedia.message_media_data?.message?.media_group_id;
+  const newGroupId = newMessage.message_media_data?.message?.media_group_id;
+  if (existingGroupId !== newGroupId) return true;
+
+  return false;
 }
