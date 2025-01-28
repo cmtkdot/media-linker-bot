@@ -25,7 +25,6 @@ interface QueueItem {
 export async function processMediaGroups(supabase: any, items: QueueItem[]) {
   const mediaGroups = new Map<string, QueueItem[]>();
   
-  // Group items by media_group_id
   items.forEach(item => {
     const groupId = item.message_media_data?.message?.media_group_id;
     if (groupId) {
@@ -46,12 +45,10 @@ export async function processMediaGroups(supabase: any, items: QueueItem[]) {
 
 async function processMediaGroup(supabase: any, groupId: string, items: QueueItem[]) {
   try {
-    // Find the original caption holder
     const originalItem = items.find(item => 
       item.message_media_data?.meta?.is_original_caption
     );
 
-    // Process all items in the group
     for (const item of items) {
       await processQueueItem(supabase, item, originalItem);
     }
@@ -69,7 +66,6 @@ export async function processQueueItem(supabase: any, item: QueueItem, originalI
     const fileUniqueId = item.message_media_data.media.file_unique_id;
     const fileType = item.message_media_data.media.file_type;
 
-    // Check for existing media
     const { data: existingMedia } = await supabase
       .from('telegram_media')
       .select('*')
@@ -81,7 +77,6 @@ export async function processQueueItem(supabase: any, item: QueueItem, originalI
       return;
     }
 
-    // Process new media
     await validateMediaFile(item.message_media_data.media, fileType);
     
     const botToken = Deno.env.get('TELEGRAM_BOT_TOKEN');
@@ -97,7 +92,6 @@ export async function processQueueItem(supabase: any, item: QueueItem, originalI
       fileExt
     );
 
-    // Create telegram_media record with original caption info if available
     const mediaData = {
       file_id: fileId,
       file_unique_id: fileUniqueId,
@@ -120,7 +114,6 @@ export async function processQueueItem(supabase: any, item: QueueItem, originalI
 
     if (insertError) throw insertError;
 
-    // Mark queue item as processed
     await supabase
       .from('unified_processing_queue')
       .update({
@@ -133,7 +126,6 @@ export async function processQueueItem(supabase: any, item: QueueItem, originalI
   } catch (error) {
     console.error(`Error processing queue item:`, error);
     
-    // Update queue item with error
     await supabase
       .from('unified_processing_queue')
       .update({

@@ -28,12 +28,12 @@ export async function handleWebhookUpdate(
     const chatId = message.chat.id.toString();
     const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
 
-    // Determine if this message should be the original caption holder
+    // Handle caption and media group logic
     let isOriginalCaption = false;
     let originalMessageId = null;
+    let analyzedContent = null;
 
     if (message.media_group_id && message.caption) {
-      // Check if there's already an original caption holder for this group
       const { data: existingHolder } = await supabase
         .from('messages')
         .select('id')
@@ -41,17 +41,12 @@ export async function handleWebhookUpdate(
         .eq('is_original_caption', true)
         .maybeSingle();
 
-      if (!existingHolder) {
-        isOriginalCaption = true;
-      } else {
-        originalMessageId = existingHolder.id;
-      }
+      isOriginalCaption = !existingHolder;
+      originalMessageId = existingHolder?.id;
     } else if (message.caption) {
       isOriginalCaption = true;
     }
 
-    // Analyze caption if present and is original caption holder
-    let analyzedContent = null;
     if (message.caption && isOriginalCaption) {
       try {
         analyzedContent = await analyzeCaptionWithAI(message.caption);
