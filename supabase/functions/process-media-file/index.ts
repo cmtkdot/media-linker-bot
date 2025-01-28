@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { withRetry, MediaProcessingError } from "../_shared/error-handler.ts";
-import { uploadMediaToStorage, validateMediaFile } from "../_shared/media-handler.ts";
+import { MediaProcessingError } from "../_shared/error-handler.ts";
+import { processMediaMessage } from "../_shared/media-processor.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -25,7 +25,8 @@ serve(async (req) => {
       fileType, 
       messageId, 
       botToken, 
-      correlationId 
+      correlationId,
+      mediaFile 
     } = await req.json();
 
     if (!fileId || !fileUniqueId || !fileType || !messageId || !botToken) {
@@ -37,69 +38,15 @@ serve(async (req) => {
       );
     }
 
-    console.log('Processing media file:', {
-      file_id: fileId,
-      file_type: fileType,
-      message_id: messageId,
-      correlation_id: correlationId
-    });
-
-    // Get file from Telegram and upload to storage
-    const { publicUrl, storagePath } = await uploadMediaToStorage(
+    const { publicUrl, storagePath } = await processMediaMessage(
       supabase,
-      new ArrayBuffer(0), // This will be replaced with actual file data in uploadMediaToStorage
+      messageId,
+      fileId,
       fileUniqueId,
       fileType,
       botToken,
-      fileId
-    );
-
-    // Update database records
-    await withRetry(
-      async () => {
-        const { data: message } = await supabase
-          .from('messages')
-          .select('message_media_data')
-          .eq('id', messageId)
-          .single();
-
-        if (!message) {
-          throw new MediaProcessingError(
-            'Message not found',
-            'NOT_FOUND',
-            { messageId },
-            false
-          );
-        }
-
-        const updatedMessageMediaData = {
-          ...message.message_media_data,
-          media: {
-            ...message.message_media_data.media,
-            file_id: fileId,
-            file_unique_id: fileUniqueId,
-            file_type: fileType,
-            public_url: publicUrl,
-            storage_path: storagePath
-          },
-          meta: {
-            ...message.message_media_data.meta,
-            status: 'processed',
-            processed_at: new Date().toISOString()
-          }
-        };
-
-        await supabase.rpc('update_media_records', {
-          p_message_id: messageId,
-          p_public_url: publicUrl,
-          p_storage_path: storagePath,
-          p_message_media_data: updatedMessageMediaData
-        });
-      },
-      'update_records',
-      messageId,
-      correlationId,
-      supabase
+      mediaFile,
+      correlationId
     );
 
     return new Response(
