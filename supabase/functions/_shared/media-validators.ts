@@ -4,7 +4,7 @@ export const validateMediaFile = async (mediaFile: any, mediaType: string) => {
   }
 
   // Validate file size if available
-  if (mediaFile.file_size && mediaFile.file_size > 100 * 1024 * 1024) { // 100MB limit
+  if (mediaFile.file_size && mediaFile.file_size > 100 * 1024 * 1024) {
     throw new Error('File size exceeds maximum allowed (100MB)');
   }
 
@@ -33,12 +33,17 @@ export const validateMediaFile = async (mediaFile: any, mediaType: string) => {
   }
 };
 
-export const getMediaType = (message: any): string | null => {
-  if (message.photo) return 'photo';
-  if (message.video) return 'video';
-  if (message.document) return 'document';
-  if (message.animation) return 'animation';
-  return null;
+export const generateSafeFileName = (fileUniqueId: string, fileType: string): string => {
+  // Remove non-ASCII characters and special characters
+  const safeId = fileUniqueId.replace(/[^\x00-\x7F]/g, '').replace(/[^a-zA-Z0-9]/g, '_');
+  
+  // Determine file extension based on type
+  const extension = fileType === 'photo' ? 'jpg' 
+    : fileType === 'video' ? 'mp4'
+    : fileType === 'document' ? 'pdf'
+    : 'bin';
+
+  return `${safeId}.${extension}`;
 };
 
 export const getMimeType = (filePath: string, defaultType: string = 'application/octet-stream'): string => {
