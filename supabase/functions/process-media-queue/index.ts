@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { processMediaItem } from "../_shared/unified-media-processor.ts";
+import { processMediaItem } from "../../_shared/unified-media-processor.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -13,13 +13,12 @@ serve(async (req) => {
   }
 
   try {
-    const supabase = createClient(
+    const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Get pending queue items
-    const { data: queueItems, error } = await supabase
+    const { data: queueItems, error } = await supabaseClient
       .from('unified_processing_queue')
       .select('*')
       .in('status', ['pending', 'processing'])
@@ -27,11 +26,13 @@ serve(async (req) => {
       .order('created_at', { ascending: true })
       .limit(10);
 
-    if (error) throw error;
+    if (error) {
+      throw error;
+    }
 
     if (!queueItems?.length) {
       return new Response(
-        JSON.stringify({ message: 'No pending items' }),
+        JSON.stringify({ message: 'No items to process' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -64,7 +65,7 @@ serve(async (req) => {
       
       try {
         // Check if group is complete
-        const { data: messages } = await supabase
+        const { data: messages } = await supabaseClient
           .from('messages')
           .select('id, media_group_size')
           .eq('media_group_id', groupId)
@@ -83,11 +84,11 @@ serve(async (req) => {
 
         // Process each item in the group
         for (const item of items) {
-          await processMediaItem(supabase, item, botToken);
+          await processMediaItem(supabaseClient, item, botToken);
         }
 
         // Update all items in group as processed
-        await supabase
+        await supabaseClient
           .from('unified_processing_queue')
           .update({
             status: 'processed',
@@ -99,7 +100,7 @@ serve(async (req) => {
         console.error(`Error processing media group ${groupId}:`, error);
         
         // Update error status for the group
-        await supabase
+        await supabaseClient
           .from('unified_processing_queue')
           .update({
             status: 'failed',
@@ -113,9 +114,9 @@ serve(async (req) => {
     // Process single items
     for (const item of singleItems) {
       try {
-        await processMediaItem(supabase, item, botToken);
+        await processMediaItem(supabaseClient, item, botToken);
         
-        await supabase
+        await supabaseClient
           .from('unified_processing_queue')
           .update({
             status: 'processed',
@@ -126,7 +127,7 @@ serve(async (req) => {
       } catch (error) {
         console.error(`Error processing item ${item.id}:`, error);
         
-        await supabase
+        await supabaseClient
           .from('unified_processing_queue')
           .update({
             status: 'failed',
