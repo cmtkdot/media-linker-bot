@@ -356,7 +356,6 @@ export type Database = {
         Row: {
           analyzed_content: Json | null
           caption: string | null
-          correlation_id: string | null
           created_at: string
           file_id: string
           file_type: string
@@ -393,7 +392,6 @@ export type Database = {
         Insert: {
           analyzed_content?: Json | null
           caption?: string | null
-          correlation_id?: string | null
           created_at?: string
           file_id: string
           file_type: string
@@ -430,7 +428,6 @@ export type Database = {
         Update: {
           analyzed_content?: Json | null
           caption?: string | null
-          correlation_id?: string | null
           created_at?: string
           file_id?: string
           file_type?: string
@@ -465,13 +462,6 @@ export type Database = {
           vendor_uid?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "telegram_media_correlation_id_fkey"
-            columns: ["correlation_id"]
-            isOneToOne: false
-            referencedRelation: "messages"
-            referencedColumns: ["correlation_id"]
-          },
           {
             foreignKeyName: "telegram_media_message_id_fkey"
             columns: ["message_id"]
@@ -578,7 +568,6 @@ export type Database = {
         Returns: {
           analyzed_content: Json | null
           caption: string | null
-          correlation_id: string | null
           created_at: string
           file_id: string
           file_type: string

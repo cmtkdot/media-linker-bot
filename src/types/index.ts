@@ -1,4 +1,5 @@
-export * from './media-types';
-export * from './queue-types';
+export * from './telegram';
 export * from './webhook';
-export type { TelegramMessage, TelegramPhotoSize, TelegramVideo, TelegramDocument } from './telegram-types';
+export * from './media';
+// Re-export from glide with a different name to avoid ambiguity
+export type { SyncResult as GlideSyncResult } from './glide';

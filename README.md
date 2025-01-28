@@ -42,14 +42,7 @@ This system provides bidirectional synchronization between Telegram media messag
 - Handles media groups without original message constraints
 - Maintains caption relationships without foreign key dependencies
 
-### 4. Storage Management
-- Public media bucket with secure access controls
-- Automatic file cleanup for deleted media
-- Proper MIME type handling
-- Sanitized file names and paths
-- Efficient storage organization
-
-### 5. Glide Integration
+### 4. Glide Integration
 - Bidirectional sync with Glide tables
 - Real-time updates in both directions
 - Batch processing support
@@ -72,12 +65,6 @@ This system provides bidirectional synchronization between Telegram media messag
 - `telegram_media`: Processed media files and metadata
 - `unified_processing_queue`: Manages async operations
 - `glide_sync_queue`: Handles Glide synchronization
-
-### Storage
-- Bucket: `media`
-- Access: Public with authenticated upload/delete
-- File Types: Images (JPEG), Videos (MP4), Documents
-- Path Format: `{file_unique_id}.{extension}`
 
 ### Edge Functions
 - `telegram-webhook`: Entry point for Telegram updates
@@ -108,19 +95,13 @@ GLIDE_API_TOKEN=
 - Track original captions without constraints
 - Handle partial group updates
 
-### 3. Storage Operations
-- Sanitize file names
-- Set proper MIME types
-- Handle upload retries
-- Validate file integrity
-
-### 4. Database Operations
+### 3. Database Operations
 - Use service functions for consistency
 - Implement proper error handling
 - Follow naming conventions
 - Handle conflicts gracefully
 
-### 5. Monitoring
+### 4. Monitoring
 - Check Edge Function logs
 - Monitor queue performance
 - Track processing errors

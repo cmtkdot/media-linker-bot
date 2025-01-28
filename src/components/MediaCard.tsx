@@ -22,7 +22,6 @@ const MediaCard = ({ item, onPreview, onEdit, relatedMedia = [] }: MediaCardProp
   // Combine current item with related media
   const allMedia = [item, ...relatedMedia.filter(m => m.id !== item.id)];
   const currentItem = allMedia[currentIndex];
-  const mediaGroupId = currentItem.message_media_data?.telegram_data?.media_group_id;
   
   // Auto-advance to video on hover if available
   useEffect(() => {
@@ -184,7 +183,7 @@ const MediaCard = ({ item, onPreview, onEdit, relatedMedia = [] }: MediaCardProp
                 View
               </Button>
               {/* Only show edit button for original caption holder or single media items */}
-              {(currentItem.is_original_caption || !mediaGroupId) && (
+              {(currentItem.is_original_caption || !currentItem.message_media_data?.message?.media_group_id) && (
                 <Button size="sm" variant="secondary" onClick={() => onEdit(currentItem)}>
                   <Edit className="w-4 h-4 mr-1" />
                   Edit

@@ -1,17 +1,16 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-export async function uploadToStorage(
+export const uploadMediaToStorage = async (
   supabase: any,
   buffer: ArrayBuffer,
   fileUniqueId: string,
   fileType: string
-): Promise<{ publicUrl: string; storagePath: string }> {
+): Promise<{ publicUrl: string; storagePath: string }> => {
   try {
-    // Generate storage path with proper extension
+    // Generate storage path
     const storagePath = `${fileUniqueId}${
       fileType === 'photo' ? '.jpg' :
       fileType === 'video' ? '.mp4' :
-      fileType === 'document' ? '.pdf' :
       '.bin'
     }`;
 
@@ -28,13 +27,15 @@ export async function uploadToStorage(
       .upload(storagePath, buffer, {
         contentType: fileType === 'photo' ? 'image/jpeg' :
                     fileType === 'video' ? 'video/mp4' :
-                    fileType === 'document' ? 'application/pdf' :
                     'application/octet-stream',
         upsert: true,
         cacheControl: '3600'
       });
 
-    if (uploadError) throw uploadError;
+    if (uploadError) {
+      console.error('Upload error:', uploadError);
+      throw uploadError;
+    }
 
     // Get public URL
     const { data: { publicUrl } } = await supabase.storage
@@ -49,7 +50,7 @@ export async function uploadToStorage(
 
     return { publicUrl, storagePath };
   } catch (error) {
-    console.error('Error uploading to storage:', error);
+    console.error('Error uploading media to storage:', error);
     throw error;
   }
-}
+};

@@ -30,20 +30,14 @@ export interface MessageMediaData {
     error: string | null;
     is_original_caption?: boolean;
     original_message_id?: string;
-    correlation_id?: string;
-    processed_at?: string;
-    last_retry_at?: string;
     retry_count?: number;
   };
-  media?: {
+  media: {
     file_id: string;
     file_unique_id: string;
     file_type: string;
-    public_url?: string;
-    storage_path?: string;
-    mime_type?: string;
+    public_url: string;
   };
-  telegram_data: Record<string, any>;
 }
 
 export interface MediaItem {

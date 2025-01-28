@@ -1,5 +1,4 @@
-import { TelegramMessage } from './telegram-types';
-import { MessageMediaData } from './media-types';
+import { TelegramMessage, AnalyzedContent, ProcessingStatus, WebhookMessageData } from './telegram-types';
 
 export interface WebhookUpdate {
   update_id: number;
@@ -12,10 +11,9 @@ export interface WebhookResponse {
   message: string;
   messageId?: string;
   data?: {
-    analyzed_content?: Record<string, any>;
+    analyzed_content?: AnalyzedContent;
     telegram_data: TelegramMessage;
-    message_media_data: MessageMediaData;
-    status: string;
+    status: ProcessingStatus;
   };
 }
 
@@ -23,21 +21,21 @@ export interface WebhookError {
   error: string;
   message_id?: number;
   chat_id?: number;
-  status: string;
+  status: ProcessingStatus;
   retry_count: number;
 }
 
-export interface ProcessedMessage {
+export interface FailedWebhookUpdate {
   id: string;
-  message_id: number;
+  message_id: string;
   chat_id: number;
-  message_type: string;
+  error_message: string;
+  error_stack?: string;
   retry_count: number;
   last_retry_at?: string;
   telegram_data: TelegramMessage;
-  message_media_data: MessageMediaData;
-  analyzed_content?: Record<string, any>;
-  status: string;
+  analyzed_content?: AnalyzedContent;
+  status: ProcessingStatus;
   created_at: string;
   updated_at: string;
 }
