@@ -61,6 +61,17 @@ export const getMediaItems = async (): Promise<MediaItem[]> => {
   return data.map(convertToMediaItem);
 };
 
+export const getMediaItemsByVendor = async (vendorUid: string): Promise<MediaItem[]> => {
+  const { data, error } = await supabase
+    .from('telegram_media')
+    .select('*')
+    .filter('message_media_data->analysis->vendor_uid', 'eq', vendorUid)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data.map(convertToMediaItem);
+};
+
 export const updateMediaItem = async (id: string, updates: Partial<MediaItem>): Promise<MediaItem> => {
   const messageMediaData = {
     ...updates.message_media_data,
