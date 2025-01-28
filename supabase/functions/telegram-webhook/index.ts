@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { processWebhookUpdate } from "../_shared/services/webhook/webhook.service.ts";
+import { handleWebhookUpdate } from "../_shared/services/webhook/webhook-handler.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -26,7 +26,7 @@ serve(async (req) => {
       correlation_id: correlationId
     });
 
-    const result = await processWebhookUpdate(supabase, update, correlationId);
+    const result = await handleWebhookUpdate(supabase, update, correlationId);
 
     return new Response(
       JSON.stringify(result),
