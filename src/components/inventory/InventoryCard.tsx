@@ -21,12 +21,17 @@ const InventoryCard = ({ item, onPreview, onEdit }: InventoryCardProps) => {
     return item.public_url || fallbackImage;
   };
 
+  // Safely get the file type with a default value
+  const getFileType = () => {
+    return item.file_type || 'unknown';
+  };
+
   return (
     <Card 
       className="group relative overflow-hidden"
       onMouseEnter={() => {
         setIsHovering(true);
-        if (videoRef.current && item.file_type === 'video') {
+        if (videoRef.current && getFileType() === 'video') {
           videoRef.current.play().catch(console.error);
         }
       }}
@@ -42,7 +47,7 @@ const InventoryCard = ({ item, onPreview, onEdit }: InventoryCardProps) => {
         <div className="relative aspect-square">
           {/* Media preview */}
           <div className="absolute inset-0 bg-gray-100">
-            {item.file_type === 'video' ? (
+            {getFileType() === 'video' ? (
               <div className="relative w-full h-full">
                 <video
                   ref={videoRef}
@@ -96,7 +101,7 @@ const InventoryCard = ({ item, onPreview, onEdit }: InventoryCardProps) => {
             {item.analyzed_content?.product_name || 'Untitled Product'}
           </p>
           <p className="text-xs text-muted-foreground">
-            {item.analyzed_content?.product_code || 'No code'} • {item.file_type.charAt(0).toUpperCase() + item.file_type.slice(1)}
+            {item.analyzed_content?.product_code || 'No code'} • {getFileType().charAt(0).toUpperCase() + getFileType().slice(1)}
           </p>
         </div>
       </CardContent>
