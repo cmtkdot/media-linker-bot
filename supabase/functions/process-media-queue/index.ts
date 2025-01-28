@@ -44,28 +44,25 @@ serve(async (req) => {
 
     for (const item of queueItems) {
       try {
-        // Get media info from both possible locations to ensure backward compatibility
-        const mediaData = item.message_media_data?.media;
-        const extractedFields = item.message_media_data?.meta?.extracted_fields;
+        // Extract media info directly from message_media_data structure
+        const mediaData = item.message_media_data?.media || {};
+        const messageData = item.message_media_data?.message || {};
+        const telegramData = item.message_media_data?.telegram_data || {};
         
-        const fileId = mediaData?.file_id || extractedFields?.file_id;
-        const fileUniqueId = mediaData?.file_unique_id || extractedFields?.file_unique_id;
-        const fileType = mediaData?.file_type || 'photo'; // Default to photo if not specified
-        
-        console.log('Processing item:', {
-          file_id: fileId,
-          file_unique_id: fileUniqueId,
-          correlation_id: item.correlation_id,
-          file_type: fileType
+        console.log('Processing media data:', {
+          file_id: mediaData.file_id,
+          file_type: mediaData.file_type,
+          message_id: messageData.message_id,
+          media_group_id: messageData.media_group_id
         });
 
-        if (!fileId || !fileUniqueId) {
-          throw new Error('Missing required media information: file_id or file_unique_id');
+        if (!mediaData.file_id) {
+          throw new Error('Missing required media data: file_id');
         }
 
         // Download file from Telegram
         const fileInfoResponse = await fetch(
-          `https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`
+          `https://api.telegram.org/bot${botToken}/getFile?file_id=${mediaData.file_id}`
         );
         const fileInfo = await fileInfoResponse.json();
         
@@ -78,8 +75,9 @@ serve(async (req) => {
         );
         const fileBuffer = await fileResponse.arrayBuffer();
 
-        // Generate storage path
-        const storagePath = `${fileUniqueId}${
+        // Generate storage path using file_unique_id and type
+        const fileType = mediaData.file_type || 'photo';
+        const storagePath = `${mediaData.file_unique_id}${
           fileType === 'photo' ? '.jpg' :
           fileType === 'video' ? '.mp4' :
           fileType === 'document' ? '.pdf' :
@@ -104,26 +102,26 @@ serve(async (req) => {
           .from('media')
           .getPublicUrl(storagePath);
 
-        // Update telegram_media record
+        // Update telegram_media record with complete data structure
         const mediaRecord = {
-          file_id: fileId,
-          file_unique_id: fileUniqueId,
+          file_id: mediaData.file_id,
+          file_unique_id: mediaData.file_unique_id,
           file_type: fileType,
           public_url: publicUrl,
           storage_path: storagePath,
           message_media_data: {
             ...item.message_media_data,
             media: {
-              file_id: fileId,
-              file_unique_id: fileUniqueId,
-              file_type: fileType,
+              ...mediaData,
               public_url: publicUrl,
               storage_path: storagePath
             }
           },
+          telegram_data: telegramData,
           correlation_id: item.correlation_id,
-          telegram_data: item.message_media_data?.telegram_data || {},
-          processed: true
+          processed: true,
+          message_id: messageData.message_id,
+          caption: messageData.caption
         };
 
         const { error: mediaError } = await supabaseClient
@@ -141,9 +139,7 @@ serve(async (req) => {
             message_media_data: {
               ...item.message_media_data,
               media: {
-                file_id: fileId,
-                file_unique_id: fileUniqueId,
-                file_type: fileType,
+                ...mediaData,
                 public_url: publicUrl,
                 storage_path: storagePath
               },
