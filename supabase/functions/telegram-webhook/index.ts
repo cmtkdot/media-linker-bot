@@ -44,15 +44,39 @@ serve(async (req) => {
     const chatId = message.chat.id.toString();
     const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
 
-    // Log incoming media group message
+    // Handle original caption logic for media groups
+    let isOriginalCaption = false;
+    let originalMessageId = null;
+
     if (message.media_group_id) {
       console.log('Processing media group message:', {
         media_group_id: message.media_group_id,
         message_id: message.message_id,
         has_caption: !!message.caption,
-        photo_count: message.photo?.length || 0,
         correlation_id: correlationId
       });
+
+      // Check if this message has a caption
+      if (message.caption) {
+        // Check if there's already a message with caption in this group
+        const { data: existingCaptionHolder } = await supabaseClient
+          .from('messages')
+          .select('id')
+          .eq('media_group_id', message.media_group_id)
+          .eq('is_original_caption', true)
+          .maybeSingle();
+
+        if (!existingCaptionHolder) {
+          // This is the first message with caption in the group
+          isOriginalCaption = true;
+        } else {
+          // There's already a caption holder, reference it
+          originalMessageId = existingCaptionHolder.id;
+        }
+      }
+    } else if (message.caption) {
+      // Single message with caption is always original
+      isOriginalCaption = true;
     }
 
     // Process message content and get analyzed content immediately
@@ -80,7 +104,7 @@ serve(async (req) => {
       });
     }
 
-    // Prepare message data
+    // Prepare message data with original caption info
     const messageData = {
       message_id: message.message_id,
       chat_id: message.chat.id,
@@ -92,6 +116,8 @@ serve(async (req) => {
       correlation_id: correlationId,
       analyzed_content: analyzedContent,
       status: messageStatus,
+      is_original_caption: isOriginalCaption,
+      original_message_id: originalMessageId,
       ...productInfo
     };
 
@@ -113,7 +139,7 @@ serve(async (req) => {
     }
 
     // If this is a media group message, ensure all messages in group are properly linked
-    if (message.media_group_id && messageRecord) {
+    if (message.media_group_id && messageRecord && isOriginalCaption) {
       console.log('Syncing media group messages:', {
         media_group_id: message.media_group_id,
         current_message_id: messageRecord.id,
@@ -128,9 +154,11 @@ serve(async (req) => {
           .update({
             analyzed_content: analyzedContent,
             status: 'processed',
+            original_message_id: messageRecord.id,
             ...productInfo
           })
-          .eq('media_group_id', message.media_group_id);
+          .eq('media_group_id', message.media_group_id)
+          .neq('id', messageRecord.id); // Don't update the original message
 
         if (groupUpdateError) {
           console.error('Error updating media group:', {
@@ -146,6 +174,8 @@ serve(async (req) => {
       record_id: messageRecord?.id,
       correlation_id: correlationId,
       status: messageRecord?.status,
+      is_original_caption: isOriginalCaption,
+      original_message_id: originalMessageId,
       has_analyzed_content: !!messageRecord?.analyzed_content,
       media_group_id: messageRecord?.media_group_id
     });
@@ -158,7 +188,9 @@ serve(async (req) => {
         correlationId,
         status: messageRecord?.status,
         mediaGroupId: message.media_group_id,
-        groupSize: existingGroupMessages.length + 1
+        groupSize: existingGroupMessages.length + 1,
+        isOriginalCaption,
+        originalMessageId
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
