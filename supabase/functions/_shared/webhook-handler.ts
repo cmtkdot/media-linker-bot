@@ -1,5 +1,9 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { uploadMediaToStorage, validateMediaFile } from "./media-handler.ts";
+import {
+  logMediaProcessing,
+  updateMediaRecords,
+  uploadMediaToStorage,
+  validateMediaFile,
+} from "./media-handler.ts";
 import { TelegramMessage, TelegramUpdate } from "./telegram-types.ts";
 import { analyzeWebhookMessage } from "./webhook-message-analyzer.ts";
 import { buildWebhookMessageData } from "./webhook-message-builder.ts";
@@ -29,7 +33,9 @@ export async function handleWebhookUpdate(
 
     // Generate message URL
     const chatId = message.chat.id.toString();
-    const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
+    const messageUrl = `https://t.me/c/${chatId.substring(4)}/${
+      message.message_id
+    }`;
 
     // Check for existing messages in the same media group
     let existingGroupMessages = [];
@@ -41,15 +47,25 @@ export async function handleWebhookUpdate(
         .order("created_at", { ascending: true });
 
       existingGroupMessages = groupMessages || [];
-      console.log("Found existing group messages:", existingGroupMessages.length);
+      console.log(
+        "Found existing group messages:",
+        existingGroupMessages.length
+      );
     }
 
     // Analyze message content
-    const analyzedMessageContent = await analyzeWebhookMessage(message, existingGroupMessages);
+    const analyzedMessageContent = await analyzeWebhookMessage(
+      message,
+      existingGroupMessages
+    );
     console.log("Message analysis result:", analyzedMessageContent);
 
     // Build message data structure
-    const messageData = buildWebhookMessageData(message, messageUrl, analyzedMessageContent);
+    const messageData = buildWebhookMessageData(
+      message,
+      messageUrl,
+      analyzedMessageContent
+    );
     console.log("Built message data structure");
 
     // Create message record first
@@ -85,16 +101,17 @@ export async function handleWebhookUpdate(
     // Process media if present
     const mediaType = getMediaType(message);
     if (mediaType) {
-      const mediaFile = mediaType === "photo"
-        ? message.photo[0]  // We'll get the highest quality directly from Telegram
-        : message.video || message.document || message.animation;
+      const mediaFile =
+        mediaType === "photo"
+          ? message.photo[0] // We'll get the highest quality directly from Telegram
+          : message.video || message.document || message.animation;
 
       if (mediaFile) {
         try {
           console.log("Processing media file:", {
             file_id: mediaFile.file_id,
             file_type: mediaType,
-            message_id: messageRecord.id
+            message_id: messageRecord.id,
           });
 
           // Validate media file
@@ -118,17 +135,17 @@ export async function handleWebhookUpdate(
               file_unique_id: mediaFile.file_unique_id,
               file_type: mediaType,
               public_url: publicUrl,
-              storage_path: storagePath
+              storage_path: storagePath,
             },
             meta: {
               ...messageData.meta,
-              status: 'processed',
-              processed_at: new Date().toISOString()
-            }
+              status: "processed",
+              processed_at: new Date().toISOString(),
+            },
           };
 
-          // Create telegram_media record after successful upload
-          const { error: mediaError } = await supabase
+          // Create telegram_media record first with initial data
+          const { data: telegramMedia, error: mediaError } = await supabase
             .from("telegram_media")
             .insert({
               file_id: mediaFile.file_id,
@@ -140,12 +157,41 @@ export async function handleWebhookUpdate(
               correlation_id: correlationId,
               public_url: publicUrl,
               storage_path: storagePath,
-              processed: true
-            });
+              processed: false, // Will be set to true after transaction
+            })
+            .select()
+            .single();
 
           if (mediaError) {
             throw mediaError;
           }
+
+          // Now update both messages and telegram_media tables in a transaction
+          await updateMediaRecords(supabase, {
+            messageId: messageRecord.id,
+            publicUrl,
+            storagePath,
+            messageMediaData: updatedMessageMediaData,
+          });
+
+          // After successful transaction, mark telegram_media as processed
+          const { error: updateError } = await supabase
+            .from("telegram_media")
+            .update({ processed: true })
+            .eq("id", telegramMedia.id);
+
+          if (updateError) {
+            throw updateError;
+          }
+
+          // Log successful processing
+          await logMediaProcessing(supabase, {
+            messageId: messageRecord.id,
+            fileId: mediaFile.file_id,
+            fileType: mediaType,
+            storagePath,
+            correlationId,
+          });
 
           console.log("Successfully processed media:", {
             file_unique_id: mediaFile.file_unique_id,
@@ -157,7 +203,8 @@ export async function handleWebhookUpdate(
           await supabase
             .from("messages")
             .update({
-              processing_error: error instanceof Error ? error.message : String(error),
+              processing_error:
+                error instanceof Error ? error.message : String(error),
               status: "error",
             })
             .eq("id", messageRecord.id);

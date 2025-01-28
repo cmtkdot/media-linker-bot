@@ -9,20 +9,44 @@ interface StorageResult {
   isExisting: boolean;
 }
 
-export const getMimeType = (fileType: string): string => {
-  return fileType === "photo"
-    ? "image/jpeg"
-    : fileType === "video"
-    ? "video/mp4"
-    : fileType === "document"
-    ? "application/pdf"
-    : "application/octet-stream";
+const mimeTypes: { [key: string]: string } = {
+  // Images
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  gif: "image/gif",
+  webp: "image/webp",
+  // Videos
+  mp4: "video/mp4",
+  mov: "video/quicktime",
+  webm: "video/webm",
+  // Documents
+  pdf: "application/pdf",
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 };
 
-export const generateSafeFileName = (fileUniqueId: string, fileType: string): string => {
-  const safeId = fileUniqueId
-    .replace(/[^\x00-\x7F]/g, "")
-    .replace(/[^a-zA-Z0-9]/g, "_");
+export function getMimeType(fileType: string): string {
+  switch (fileType) {
+    case "photo":
+      return "image/jpeg";
+    case "video":
+      return "video/mp4";
+    case "document":
+      return "application/pdf";
+    default:
+      return "application/octet-stream";
+  }
+}
+
+export function generateFileName(
+  fileUniqueId: string,
+  fileType: string
+): string {
+  // Remove special characters, keeping only alphanumeric
+  const safeId = fileUniqueId.replace(/[^a-zA-Z0-9]/g, "_");
+
+  // Determine file extension based on type
   const extension =
     fileType === "photo"
       ? "jpg"
@@ -33,49 +57,64 @@ export const generateSafeFileName = (fileUniqueId: string, fileType: string): st
       : "bin";
 
   return `${safeId}.${extension}`;
-};
+}
 
-export const validateMediaFile = async (mediaFile: any, mediaType: string) => {
+export function getMediaType(message: Record<string, any>): string | null {
+  if (message.photo) return "photo";
+  if (message.video) return "video";
+  if (message.document) return "document";
+  if (message.animation) return "animation";
+  return null;
+}
+
+export async function validateMediaFile(
+  mediaFile: Record<string, any>,
+  mediaType: string
+): Promise<void> {
   if (!mediaFile?.file_id) {
-    throw new Error('Invalid media file: missing file_id');
+    throw new Error("Invalid media file: missing file_id");
   }
 
+  // Validate file size if available
   if (mediaFile.file_size && mediaFile.file_size > 100 * 1024 * 1024) {
-    throw new Error('File size exceeds maximum allowed (100MB)');
+    // 100MB limit
+    throw new Error("File size exceeds maximum allowed (100MB)");
   }
 
+  // Validate media type specific requirements
   switch (mediaType) {
-    case 'photo':
+    case "photo":
       if (!mediaFile.width || !mediaFile.height) {
-        throw new Error('Invalid photo: missing dimensions');
+        throw new Error("Invalid photo: missing dimensions");
       }
       break;
-    case 'video':
+    case "video":
       if (!mediaFile.duration) {
-        throw new Error('Invalid video: missing duration');
+        throw new Error("Invalid video: missing duration");
       }
       break;
-    case 'document':
+    case "document":
+      // Documents are more permissive, just ensure file_id exists
       break;
-    case 'animation':
+    case "animation":
       if (!mediaFile.duration) {
-        throw new Error('Invalid animation: missing duration');
+        throw new Error("Invalid animation: missing duration");
       }
       break;
     default:
       throw new Error(`Unsupported media type: ${mediaType}`);
   }
-};
+}
 
-export const uploadMediaToStorage = async (
-  supabase: any,
+export async function uploadMediaToStorage(
+  supabase: SupabaseClient,
   buffer: ArrayBuffer,
   fileUniqueId: string,
   fileType: string,
   botToken?: string,
   fileId?: string,
   retryCount = 0
-): Promise<StorageResult> => {
+): Promise<StorageResult> {
   console.log("Starting media upload to storage:", {
     fileUniqueId,
     fileType,
@@ -83,7 +122,7 @@ export const uploadMediaToStorage = async (
   });
 
   try {
-    const fileName = generateSafeFileName(fileUniqueId, fileType);
+    const fileName = generateFileName(fileUniqueId, fileType);
     const contentType = getMimeType(fileType);
 
     // Check if file already exists
@@ -113,10 +152,11 @@ export const uploadMediaToStorage = async (
         throw new Error(`Existing file not accessible: ${response.status}`);
       } catch (error) {
         console.error("Existing file verification failed:", error);
+        // Continue with upload if verification fails
       }
     }
 
-    // For photos, use the provided file_id directly
+    // For photos, use the provided file_id directly since Telegram already gives us the best quality
     let uploadBuffer = buffer;
     if (fileType === "photo" && botToken && fileId) {
       console.log("Getting photo from Telegram");
@@ -129,14 +169,14 @@ export const uploadMediaToStorage = async (
       }
 
       const data = await response.json();
-      
+
       if (!data.ok || !data.result.file_path) {
-        throw new Error('Failed to get file path from Telegram');
+        throw new Error("Failed to get file path from Telegram");
       }
 
       const downloadUrl = `https://api.telegram.org/file/bot${botToken}/${data.result.file_path}`;
       const fileResponse = await fetch(downloadUrl);
-      
+
       if (!fileResponse.ok) {
         throw new Error(`Failed to download file: ${fileResponse.statusText}`);
       }
@@ -205,4 +245,67 @@ export const uploadMediaToStorage = async (
     console.error("Error in uploadMediaToStorage:", error);
     throw error;
   }
-};
+}
+
+export async function logMediaProcessing(
+  supabase: SupabaseClient,
+  {
+    messageId,
+    fileId,
+    fileType,
+    storagePath,
+    correlationId,
+    status = "processed",
+    error = null,
+  }: {
+    messageId: string;
+    fileId: string;
+    fileType: string;
+    storagePath: string;
+    correlationId: string;
+    status?: string;
+    error?: string | null;
+  }
+) {
+  try {
+    await supabase.from("media_processing_logs").insert({
+      message_id: messageId,
+      file_id: fileId,
+      file_type: fileType,
+      status,
+      storage_path: storagePath,
+      correlation_id: correlationId,
+      error_message: error,
+      processed_at: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Failed to log media processing:", error);
+    // Non-blocking - we don't throw here as logging failure shouldn't stop processing
+  }
+}
+
+export async function updateMediaRecords(
+  supabase: SupabaseClient,
+  {
+    messageId,
+    publicUrl,
+    storagePath,
+    messageMediaData,
+  }: {
+    messageId: string;
+    publicUrl: string;
+    storagePath: string;
+    messageMediaData: Record<string, any>;
+  }
+) {
+  const { error } = await supabase.rpc("update_media_records", {
+    p_message_id: messageId,
+    p_public_url: publicUrl,
+    p_storage_path: storagePath,
+    p_message_media_data: messageMediaData,
+  });
+
+  if (error) {
+    throw error;
+  }
+}
