@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { processMediaFiles } from './media-processor.ts';
 import { withDatabaseRetry } from './database-retry.ts';
 import { analyzeCaptionWithAI } from './caption-analyzer.ts';
@@ -29,6 +29,35 @@ export async function handleWebhookUpdate(
     const chatId = message.chat.id.toString();
     const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
 
+    // Analyze caption if present
+    let analyzedContent = null;
+    if (message.caption) {
+      try {
+        const { data: analysis, error } = await supabase.functions.invoke('analyze-caption', {
+          body: { caption: message.caption }
+        });
+
+        if (error) throw error;
+        
+        // Extract the analyzed_content.product_info structure
+        analyzedContent = analysis?.analyzed_content?.product_info || null;
+        
+        console.log('Caption analysis result:', {
+          caption: message.caption,
+          analyzed_content: analyzedContent,
+          correlation_id: correlationId
+        });
+      } catch (error) {
+        console.error('Error analyzing caption:', {
+          error,
+          caption: message.caption,
+          correlation_id: correlationId
+        });
+        // Continue processing even if analysis fails
+        analyzedContent = null;
+      }
+    }
+
     // Create message media data structure
     const messageMediaData = {
       message: {
@@ -42,6 +71,9 @@ export async function handleWebhookUpdate(
       sender: {
         sender_info: message.from || message.sender_chat || {},
         chat_info: message.chat || {}
+      },
+      analysis: {
+        analyzed_content: analyzedContent
       },
       meta: {
         created_at: new Date().toISOString(),
@@ -63,14 +95,17 @@ export async function handleWebhookUpdate(
         caption: message.caption,
         media_group_id: message.media_group_id,
         message_url: messageUrl,
+        analyzed_content: analyzedContent,
         status: 'pending',
-        correlation_id: correlationId
+        correlation_id: correlationId,
+        message_media_data: messageMediaData
       };
 
       console.log('Creating/updating message record:', {
         message_id: message.message_id,
         chat_id: message.chat.id,
-        correlation_id: correlationId
+        correlation_id: correlationId,
+        has_analyzed_content: !!analyzedContent
       });
 
       const { data: existingMessage } = await supabase
@@ -102,16 +137,15 @@ export async function handleWebhookUpdate(
       }
     });
 
-    // Insert into unified_processing_queue with simplified queue_type
-    const queueType = message.photo || message.video || message.document || message.animation 
-      ? 'media' 
-      : 'webhook';
+    // Insert into unified_processing_queue
+    const queueType = message.media_group_id ? 'media_group' :
+      (message.photo || message.video || message.document || message.animation ? 'media' : 'webhook');
 
     const { error: queueError } = await supabase
       .from('unified_processing_queue')
       .insert({
         queue_type: queueType,
-        data: messageMediaData,
+        message_media_data: messageMediaData,
         status: 'pending',
         correlation_id: correlationId,
         chat_id: message.chat.id,
@@ -126,7 +160,8 @@ export async function handleWebhookUpdate(
     console.log('Message queued successfully:', {
       queue_type: queueType,
       message_id: messageRecord?.id,
-      correlation_id: correlationId
+      correlation_id: correlationId,
+      has_analyzed_content: !!analyzedContent
     });
 
     return {
@@ -134,7 +169,8 @@ export async function handleWebhookUpdate(
       message: 'Update processed successfully',
       messageId: messageRecord?.id,
       correlationId,
-      queueType
+      queueType,
+      analyzedContent
     };
 
   } catch (error) {
