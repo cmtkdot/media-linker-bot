@@ -1,5 +1,3 @@
-import { Json } from "@/integrations/supabase/types";
-
 export interface MessageMediaData {
   message: {
     url: string;
@@ -30,9 +28,6 @@ export interface MessageMediaData {
     is_original_caption: boolean;
     original_message_id: string | null;
     correlation_id?: string;
-    processed_at?: string;
-    last_retry_at?: string;
-    retry_count?: number;
   };
   media?: {
     file_id: string;

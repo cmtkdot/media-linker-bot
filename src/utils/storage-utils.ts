@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { MediaItem } from "@/types/media";
+import { MediaFile, MediaProcessingResult } from "@/types/media-types";
 
 export const generateSafeFileName = (fileUniqueId: string, fileType: string): string => {
   // Remove non-ASCII characters and special characters
@@ -19,10 +19,17 @@ export const uploadToStorage = async (
   fileUniqueId: string,
   fileType: string,
   mimeType: string
-): Promise<string> => {
+): Promise<MediaProcessingResult> => {
   const fileName = generateSafeFileName(fileUniqueId, fileType);
   
   try {
+    console.log('Uploading file to storage:', {
+      file_unique_id: fileUniqueId,
+      file_name: fileName,
+      size: buffer.byteLength,
+      mime_type: mimeType
+    });
+
     const { error: uploadError } = await supabase.storage
       .from('media')
       .upload(fileName, buffer, {
@@ -37,9 +44,16 @@ export const uploadToStorage = async (
       .from('media')
       .getPublicUrl(fileName);
 
-    return publicUrl;
+    return {
+      success: true,
+      publicUrl,
+      storagePath: fileName
+    };
   } catch (error) {
     console.error('Error uploading to storage:', error);
-    throw error;
+    return {
+      success: false,
+      error: error.message
+    };
   }
 };
