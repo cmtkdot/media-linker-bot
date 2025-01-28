@@ -86,25 +86,10 @@ serve(async (req) => {
       correlationId
     );
 
-    // Check for existing media group messages
-    let existingGroupMessages = [];
-    if (message.media_group_id) {
-      const { data: groupMessages } = await supabaseClient
-        .from('messages')
-        .select('*')
-        .eq('media_group_id', message.media_group_id)
-        .order('created_at', { ascending: true });
-      
-      existingGroupMessages = groupMessages || [];
-      
-      console.log('Found existing group messages:', {
-        media_group_id: message.media_group_id,
-        existing_count: existingGroupMessages.length,
-        correlation_id: correlationId
-      });
-    }
+    // Extract raw text from caption or analyzed content
+    const rawText = analyzedContent?.raw_text || message.caption || null;
 
-    // Prepare message data with original caption info
+    // Prepare message data with original caption info and raw text
     const messageData = {
       message_id: message.message_id,
       chat_id: message.chat.id,
@@ -118,13 +103,44 @@ serve(async (req) => {
       status: messageStatus,
       is_original_caption: isOriginalCaption,
       original_message_id: originalMessageId,
+      raw_text: rawText,
       ...productInfo
+    };
+
+    // Create message media data structure
+    const messageMediaData = {
+      message: {
+        url: messageUrl,
+        media_group_id: message.media_group_id,
+        caption: message.caption,
+        message_id: message.message_id,
+        chat_id: message.chat.id,
+        date: message.date
+      },
+      sender: {
+        sender_info: message.from || message.sender_chat || {},
+        chat_info: message.chat
+      },
+      analysis: {
+        analyzed_content: analyzedContent
+      },
+      meta: {
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        status: messageStatus,
+        is_original_caption: isOriginalCaption,
+        original_message_id: originalMessageId,
+        raw_text: rawText
+      }
     };
 
     // Create or update message record
     const { data: messageRecord, error: messageError } = await supabaseClient
       .from('messages')
-      .upsert(messageData)
+      .upsert({
+        ...messageData,
+        message_media_data: messageMediaData
+      })
       .select()
       .single();
 
@@ -143,7 +159,6 @@ serve(async (req) => {
       console.log('Syncing media group messages:', {
         media_group_id: message.media_group_id,
         current_message_id: messageRecord.id,
-        existing_count: existingGroupMessages.length,
         correlation_id: correlationId
       });
 
@@ -155,10 +170,11 @@ serve(async (req) => {
             analyzed_content: analyzedContent,
             status: 'processed',
             original_message_id: messageRecord.id,
+            raw_text: rawText,
             ...productInfo
           })
           .eq('media_group_id', message.media_group_id)
-          .neq('id', messageRecord.id); // Don't update the original message
+          .neq('id', messageRecord.id);
 
         if (groupUpdateError) {
           console.error('Error updating media group:', {
@@ -170,16 +186,6 @@ serve(async (req) => {
       }
     }
 
-    console.log('Message record created/updated:', {
-      record_id: messageRecord?.id,
-      correlation_id: correlationId,
-      status: messageRecord?.status,
-      is_original_caption: isOriginalCaption,
-      original_message_id: originalMessageId,
-      has_analyzed_content: !!messageRecord?.analyzed_content,
-      media_group_id: messageRecord?.media_group_id
-    });
-
     return new Response(
       JSON.stringify({
         success: true,
@@ -188,9 +194,9 @@ serve(async (req) => {
         correlationId,
         status: messageRecord?.status,
         mediaGroupId: message.media_group_id,
-        groupSize: existingGroupMessages.length + 1,
         isOriginalCaption,
-        originalMessageId
+        originalMessageId,
+        rawText
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

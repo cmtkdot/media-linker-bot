@@ -280,6 +280,7 @@ export type Database = {
           product_name: string | null
           purchase_date: string | null
           quantity: number | null
+          raw_text: string | null
           retry_count: number | null
           sender_info: Json
           status: string | null
@@ -309,6 +310,7 @@ export type Database = {
           product_name?: string | null
           purchase_date?: string | null
           quantity?: number | null
+          raw_text?: string | null
           retry_count?: number | null
           sender_info?: Json
           status?: string | null
@@ -338,6 +340,7 @@ export type Database = {
           product_name?: string | null
           purchase_date?: string | null
           quantity?: number | null
+          raw_text?: string | null
           retry_count?: number | null
           sender_info?: Json
           status?: string | null
