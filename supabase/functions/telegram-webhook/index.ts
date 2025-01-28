@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
+import { analyzeCaptionWithAI } from "../_shared/caption-analyzer.ts";
 
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN') || '';
 const TELEGRAM_WEBHOOK_SECRET = Deno.env.get('TELEGRAM_WEBHOOK_SECRET') || '';
@@ -43,6 +44,49 @@ serve(async (req) => {
     const chatId = message.chat.id.toString();
     const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
 
+    // Determine if this message should be the original caption holder
+    let isOriginalCaption = false;
+    let originalMessageId = null;
+
+    if (message.media_group_id && message.caption) {
+      // Check if there's already an original caption holder for this group
+      const { data: existingHolder } = await supabaseClient
+        .from('messages')
+        .select('id')
+        .eq('media_group_id', message.media_group_id)
+        .eq('is_original_caption', true)
+        .maybeSingle();
+
+      if (!existingHolder) {
+        isOriginalCaption = true;
+      } else {
+        originalMessageId = existingHolder.id;
+      }
+    } else if (message.caption) {
+      // If it's a single message with caption, it's automatically the original
+      isOriginalCaption = true;
+    }
+
+    // Analyze caption if present and is original caption holder
+    let analyzedContent = null;
+    if (message.caption && isOriginalCaption) {
+      try {
+        analyzedContent = await analyzeCaptionWithAI(message.caption);
+        console.log('Caption analyzed:', { 
+          message_id: message.message_id,
+          correlation_id: correlationId,
+          analyzed_content: analyzedContent,
+          is_original_caption: isOriginalCaption
+        });
+      } catch (error) {
+        console.error('Error analyzing caption:', {
+          error,
+          message_id: message.message_id,
+          correlation_id: correlationId
+        });
+      }
+    }
+
     // Create message media data structure
     const messageMediaData = {
       message: {
@@ -55,17 +99,30 @@ serve(async (req) => {
       },
       sender: {
         sender_info: message.from || message.sender_chat || {},
-        chat_info: message.chat
+        chat_info: message.chat || {}
+      },
+      analysis: {
+        analyzed_content: analyzedContent,
+        product_name: analyzedContent?.extracted_data?.product_name,
+        product_code: analyzedContent?.extracted_data?.product_code,
+        quantity: analyzedContent?.extracted_data?.quantity,
+        vendor_uid: analyzedContent?.extracted_data?.vendor_uid,
+        purchase_date: analyzedContent?.extracted_data?.purchase_date,
+        notes: analyzedContent?.extracted_data?.notes
       },
       meta: {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         status: 'pending',
-        error: null
+        error: null,
+        correlation_id: correlationId,
+        is_original_caption: isOriginalCaption,
+        original_message_id: originalMessageId,
+        retry_count: 0
       }
     };
 
-    // Prepare message data
+    // Create or update message record
     const messageData = {
       message_id: message.message_id,
       chat_id: message.chat.id,
@@ -75,11 +132,22 @@ serve(async (req) => {
       media_group_id: message.media_group_id,
       message_url: messageUrl,
       correlation_id: correlationId,
-      status: 'pending',
-      message_media_data: messageMediaData
+      is_original_caption: isOriginalCaption,
+      original_message_id: originalMessageId,
+      message_media_data: messageMediaData,
+      analyzed_content: analyzedContent,
+      status: 'pending'
     };
 
-    // Create message record
+    console.log('Creating/updating message record:', {
+      message_id: message.message_id,
+      chat_id: message.chat.id,
+      correlation_id: correlationId,
+      is_original_caption: isOriginalCaption,
+      original_message_id: originalMessageId,
+      media_group_id: message.media_group_id
+    });
+
     const { data: messageRecord, error: messageError } = await supabaseClient
       .from('messages')
       .upsert(messageData)
@@ -89,27 +157,69 @@ serve(async (req) => {
     if (messageError) {
       console.error('Error creating/updating message:', {
         error: messageError,
-        media_group_id: message.media_group_id,
         message_id: message.message_id,
         correlation_id: correlationId
       });
       throw messageError;
     }
 
+    // Insert into unified_processing_queue
+    const queueType = message.photo || message.video || message.document || message.animation 
+      ? 'media' 
+      : 'webhook';
+
+    const { error: queueError } = await supabaseClient
+      .from('unified_processing_queue')
+      .insert({
+        queue_type: queueType,
+        data: messageMediaData,
+        status: 'pending',
+        correlation_id: correlationId,
+        chat_id: message.chat.id,
+        message_id: message.message_id,
+        message_media_data: messageMediaData
+      });
+
+    if (queueError) {
+      console.error('Error queueing message:', {
+        error: queueError,
+        message_id: messageRecord.id,
+        correlation_id: correlationId
+      });
+      throw queueError;
+    }
+
+    console.log('Message queued successfully:', {
+      queue_type: queueType,
+      message_id: messageRecord.id,
+      correlation_id: correlationId,
+      is_original_caption: isOriginalCaption,
+      status: 'pending'
+    });
+
     return new Response(
       JSON.stringify({
         success: true,
-        message: 'Message queued for processing',
-        messageId: messageRecord?.id,
+        message: 'Update processed successfully',
+        messageId: messageRecord.id,
         correlationId,
-        status: messageRecord?.status,
-        mediaGroupId: message.media_group_id
+        queueType,
+        isOriginalCaption,
+        status: 'pending'
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    console.error('Error in webhook handler:', error);
+    console.error('Error in webhook handler:', {
+      error: error.message,
+      stack: error.stack,
+      update_id: update?.update_id,
+      message_id: message?.message_id,
+      chat_id: message?.chat?.id,
+      correlation_id: correlationId
+    });
+    
     return new Response(
       JSON.stringify({ error: error.message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
