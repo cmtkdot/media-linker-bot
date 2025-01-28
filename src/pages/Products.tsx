@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Card } from "@/components/ui/card";
 import { MediaItem } from "@/types/media";
 import { useQuery } from "@tanstack/react-query";
 import ProductGroup from "@/components/ProductGroup";
@@ -6,13 +7,11 @@ import MediaEditDialog from "@/components/MediaEditDialog";
 import ProductMediaViewer from "@/components/ProductMediaViewer";
 import { supabase } from "@/integrations/supabase/client";
 import { getMediaCaption } from "@/utils/media-helpers";
-import { useToast } from "@/components/ui/use-toast";
 
 const Products = () => {
   const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [editItem, setEditItem] = useState<MediaItem | null>(null);
-  const { toast } = useToast();
 
   const { data: products = [], refetch } = useQuery({
     queryKey: ['products'],
@@ -24,27 +23,18 @@ const Products = () => {
 
       if (error) throw error;
 
-      return data.map((item: any): MediaItem => ({
-        ...item,
-        file_type: item.file_type as MediaItem['file_type'],
-        telegram_data: item.telegram_data || {},
-        glide_data: item.glide_data || {},
-        media_metadata: item.media_metadata || {},
-        message_media_data: item.message_media_data || {
-          message: {},
-          sender: {},
-          analysis: {},
-          meta: {},
-          media: {
-            file_id: item.file_id,
-            file_unique_id: item.file_unique_id,
-            file_type: item.file_type,
-            public_url: item.public_url,
-            storage_path: item.storage_path
-          }
-        },
-        analyzed_content: item.analyzed_content || {},
-      }));
+      return data.map((item: any): MediaItem => {
+        const messageData = item.telegram_data || {};
+        return {
+          ...item,
+          file_type: item.file_type as MediaItem['file_type'],
+          telegram_data: item.telegram_data as Record<string, any>,
+          glide_data: item.glide_data as Record<string, any>,
+          media_metadata: item.media_metadata as Record<string, any>,
+          message_media_data: item.message_media_data as Record<string, any>,
+          analyzed_content: item.analyzed_content as Record<string, any>,
+        };
+      });
     }
   });
 
@@ -60,10 +50,6 @@ const Products = () => {
             message: {
               ...editItem.message_media_data?.message,
               caption: getMediaCaption(editItem)
-            },
-            meta: {
-              ...editItem.message_media_data?.meta,
-              updated_at: new Date().toISOString()
             }
           },
           product_name: editItem.product_name,
@@ -72,25 +58,14 @@ const Products = () => {
           vendor_uid: editItem.vendor_uid,
           purchase_date: editItem.purchase_date,
           notes: editItem.notes,
-          caption: getMediaCaption(editItem)
         })
         .eq('id', editItem.id);
 
       if (error) throw error;
 
-      toast({
-        title: "Success",
-        description: "Media item updated successfully",
-      });
-
       await refetch();
     } catch (error) {
       console.error('Error saving changes:', error);
-      toast({
-        title: "Error",
-        description: "Failed to update media item",
-        variant: "destructive",
-      });
     }
   };
 
@@ -116,25 +91,11 @@ const Products = () => {
   };
 
   const handleMediaClick = (media: MediaItem, group: MediaItem[]) => {
-    if (media.message_media_data?.meta?.status === 'processing') {
-      toast({
-        title: "Processing",
-        description: "This media item is still being processed",
-      });
-      return;
-    }
     setSelectedMedia(media);
     setViewerOpen(true);
   };
 
   const handleEdit = (item: MediaItem) => {
-    if (item.message_media_data?.meta?.status === 'processing') {
-      toast({
-        title: "Processing",
-        description: "Cannot edit while media is being processed",
-      });
-      return;
-    }
     setEditItem(item);
   };
 

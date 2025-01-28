@@ -1,20 +1,20 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { WebhookUpdate, WebhookResponse } from "../_shared/webhook-types.ts";
-import { QueueItem } from "../_shared/queue/types.ts";
-import { buildWebhookMessageData } from "../_shared/webhook-message-builder.ts";
-import { analyzeWebhookMessage } from "../_shared/webhook-message-analyzer.ts";
+import { handleWebhookUpdate } from "../_shared/webhook-handler.ts";
+import { withDatabaseRetry } from "../_shared/database-retry.ts";
 
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN') || '';
 const TELEGRAM_WEBHOOK_SECRET = Deno.env.get('TELEGRAM_WEBHOOK_SECRET') || '';
 
 serve(async (req) => {
   try {
+    // Handle CORS
     if (req.method === 'OPTIONS') {
       return new Response('ok', { headers: corsHeaders });
     }
 
+    // Validate webhook secret
     const secretHeader = req.headers.get('X-Telegram-Bot-Api-Secret-Token');
     if (!secretHeader || secretHeader !== TELEGRAM_WEBHOOK_SECRET) {
       console.error('Invalid webhook secret');
@@ -24,152 +24,63 @@ serve(async (req) => {
       );
     }
 
+    // Initialize Supabase client with retry wrapper
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const update = await req.json() as WebhookUpdate;
+    const update = await req.json();
     const correlationId = crypto.randomUUID();
-    const message = update.message || update.channel_post;
 
-    if (!message) {
-      console.log('No message in update');
-      return new Response(
-        JSON.stringify({ message: 'No message in update' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    console.log('Processing webhook update:', {
+    console.log('Received webhook update:', {
       update_id: update.update_id,
-      message_id: message.message_id,
-      chat_id: message.chat.id,
-      media_group_id: message.media_group_id,
-      has_caption: !!message.caption
-    });
-
-    const chatId = message.chat.id.toString();
-    const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
-    const messageType = determineMessageType(message);
-
-    // Analyze message content
-    const analyzedContent = await analyzeWebhookMessage(message);
-    
-    // Build message data structure using shared utility
-    const messageData = buildWebhookMessageData(message, messageUrl, analyzedContent);
-
-    console.log('Creating message record with data:', {
-      message_id: message.message_id,
-      chat_id: message.chat.id,
-      message_type: messageType,
-      media_group_id: message.media_group_id,
+      has_message: !!update.message,
+      has_channel_post: !!update.channel_post,
       correlation_id: correlationId
     });
 
-    // Create message record
-    const { data: messageRecord, error: messageError } = await supabaseClient
-      .from('messages')
-      .insert({
-        message_id: message.message_id,
-        chat_id: message.chat.id,
-        sender_info: message.from || message.sender_chat || {},
-        message_type: messageType,
-        telegram_data: message,
-        message_url: messageUrl,
-        correlation_id: correlationId,
-        caption: message.caption,
-        text: message.text,
-        media_group_id: message.media_group_id,
-        media_group_size: message.media_group_id ? 1 : null,
-        status: 'pending',
-        is_original_caption: analyzedContent.is_original_caption,
-        original_message_id: analyzedContent.original_message_id,
-        analyzed_content: analyzedContent.analyzed_content,
-        message_media_data: messageData,
-        last_group_message_at: new Date().toISOString()
-      })
-      .select()
-      .single();
+    // Process webhook update with retry logic
+    const result = await withDatabaseRetry(
+      async () => handleWebhookUpdate(update, supabaseClient, correlationId),
+      0,
+      'webhook_handler'
+    );
 
-    if (messageError) {
-      console.error('Error creating message record:', messageError);
-      throw messageError;
-    }
-
-    console.log('Message record created:', {
-      record_id: messageRecord.id,
-      message_id: messageRecord.message_id,
-      chat_id: messageRecord.chat_id,
-      message_type: messageRecord.message_type
+    console.log('Webhook processing completed:', {
+      success: result.success,
+      message_id: result.messageId,
+      correlation_id: correlationId
     });
 
-    // Queue for processing if it's a media message
-    if (messageType === 'photo' || messageType === 'video') {
-      console.log('Queueing message for processing:', {
-        message_id: message.message_id,
-        media_group_id: message.media_group_id,
-        message_type: messageType
-      });
-
-      const queueItem: QueueItem = {
-        id: messageRecord.id,
-        queue_type: message.media_group_id ? 'media_group' : 'media',
-        message_media_data: messageData,
-        correlation_id: correlationId,
-        status: 'pending'
-      };
-
-      const { error: queueError } = await supabaseClient
-        .from('unified_processing_queue')
-        .insert({
-          ...queueItem,
-          chat_id: message.chat.id,
-          message_id: message.message_id,
-          priority: message.media_group_id ? 2 : 1
-        });
-
-      if (queueError) {
-        console.error('Error queueing message:', queueError);
-        throw queueError;
-      }
-    }
-
-    const response: WebhookResponse = {
-      success: true,
-      message: 'Update processed successfully',
-      messageId: messageRecord.id,
-      data: {
-        telegram_data: message,
-        message_media_data: messageData,
-        status: messageRecord.status
-      }
-    };
-
     return new Response(
-      JSON.stringify(response),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify(result),
+      { 
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json' 
+        } 
+      }
     );
 
   } catch (error) {
-    console.error('Error in webhook handler:', error);
+    console.error('Error in webhook handler:', {
+      error: error.message,
+      stack: error.stack
+    });
+
     return new Response(
       JSON.stringify({ 
         error: error.message,
         details: error.stack
       }),
       { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json' 
+        }, 
         status: 500 
       }
     );
   }
 });
-
-function determineMessageType(message: any): string {
-  if (message.photo && message.photo.length > 0) return 'photo';
-  if (message.video) return 'video';
-  if (message.document) return 'document';
-  if (message.animation) return 'animation';
-  return 'text';
-}

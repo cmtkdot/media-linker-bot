@@ -1,56 +1,79 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { generateSafeFileName, getMimeType } from './media-validators.ts';
+
+interface StorageOptions {
+  maxSize?: number;
+  compress?: boolean;
+}
 
 export const uploadMediaToStorage = async (
   supabase: any,
   buffer: ArrayBuffer,
   fileUniqueId: string,
-  fileType: string
+  fileType: string,
+  options: StorageOptions = {}
 ): Promise<{ publicUrl: string; storagePath: string }> => {
   try {
-    // Generate storage path
-    const storagePath = `${fileUniqueId}${
-      fileType === 'photo' ? '.jpg' :
-      fileType === 'video' ? '.mp4' :
-      '.bin'
-    }`;
+    // Generate safe filename with proper extension
+    const fileName = generateSafeFileName(fileUniqueId, fileType);
+    const contentType = getMimeType(fileName);
+    
+    // Validate file size
+    if (options.maxSize && buffer.byteLength > options.maxSize) {
+      throw new Error(`File size exceeds maximum allowed (${options.maxSize} bytes)`);
+    }
 
     console.log('Uploading file to storage:', {
-      file_unique_id: fileUniqueId,
-      storage_path: storagePath,
-      size: buffer.byteLength,
-      file_type: fileType
+      file_name: fileName,
+      content_type: contentType,
+      size: buffer.byteLength
     });
 
-    // Upload to storage with proper content type
+    // Upload to storage
     const { error: uploadError } = await supabase.storage
       .from('media')
-      .upload(storagePath, buffer, {
-        contentType: fileType === 'photo' ? 'image/jpeg' :
-                    fileType === 'video' ? 'video/mp4' :
-                    'application/octet-stream',
+      .upload(fileName, buffer, {
+        contentType,
         upsert: true,
         cacheControl: '3600'
       });
 
-    if (uploadError) {
-      console.error('Upload error:', uploadError);
-      throw uploadError;
-    }
+    if (uploadError) throw uploadError;
 
     // Get public URL
     const { data: { publicUrl } } = await supabase.storage
       .from('media')
-      .getPublicUrl(storagePath);
+      .getPublicUrl(fileName);
 
     console.log('File uploaded successfully:', {
-      file_unique_id: fileUniqueId,
-      public_url: publicUrl,
-      storage_path: storagePath
+      file_name: fileName,
+      public_url: publicUrl
     });
 
-    return { publicUrl, storagePath };
+    return { 
+      publicUrl,
+      storagePath: fileName
+    };
   } catch (error) {
     console.error('Error uploading media to storage:', error);
+    throw error;
+  }
+};
+
+export const deleteMediaFromStorage = async (
+  supabase: any,
+  storagePath: string
+): Promise<void> => {
+  try {
+    const { error } = await supabase.storage
+      .from('media')
+      .remove([storagePath]);
+
+    if (error) throw error;
+
+    console.log('File deleted from storage:', storagePath);
+  } catch (error) {
+    console.error('Error deleting media from storage:', error);
     throw error;
   }
 };

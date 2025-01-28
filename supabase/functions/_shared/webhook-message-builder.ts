@@ -28,7 +28,6 @@ export interface WebhookMessageData {
     last_retry_at: string | null;
     retry_count: number;
   };
-  telegram_data: Record<string, any>;
 }
 
 export function buildWebhookMessageData(
@@ -67,7 +66,6 @@ export function buildWebhookMessageData(
       processed_at: null,
       last_retry_at: null,
       retry_count: 0
-    },
-    telegram_data: message // Include the full telegram message data
+    }
   };
 }

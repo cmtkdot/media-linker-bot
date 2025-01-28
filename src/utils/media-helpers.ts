@@ -1,43 +1,65 @@
 import { MediaItem } from "@/types/media";
 
-interface MediaAnalysis {
-  product_name?: string;
-  product_code?: string;
-  quantity?: number;
-  vendor_uid?: string;
-  purchase_date?: string;
-  notes?: string;
-  analyzed_content?: Record<string, any>;
+export function getMediaCaption(item: MediaItem): string | null {
+  return item.message_media_data?.message?.caption || null;
 }
 
-export const getMediaCaption = (media: MediaItem): string => {
-  // First try to get caption from message_media_data
-  const caption = media.message_media_data?.message?.caption;
-  if (caption) return caption;
+export function getMediaUrl(item: MediaItem): string {
+  return item.public_url;
+}
 
-  // Fallback to direct caption field
-  return media.caption || '';
-};
+export function getMediaType(item: MediaItem): string {
+  return item.file_type;
+}
 
-export const getProductInfo = (media: MediaItem) => {
-  // Extract from message_media_data first
-  const analysis = (media.message_media_data?.analysis || {}) as MediaAnalysis;
+export function isVideo(item: MediaItem): boolean {
+  return item.file_type === 'video';
+}
+
+export function isPhoto(item: MediaItem): boolean {
+  return item.file_type === 'photo';
+}
+
+export function isDocument(item: MediaItem): boolean {
+  return item.file_type === 'document';
+}
+
+export function parseAnalyzedContent(item: MediaItem) {
+  const analyzedContent = item.analyzed_content?.extracted_data || {};
   
   return {
-    name: analysis.product_name || media.product_name || '',
-    code: analysis.product_code || media.product_code || '',
-    quantity: analysis.quantity || media.quantity || 0,
-    vendor: analysis.vendor_uid || media.vendor_uid || '',
-    purchaseDate: analysis.purchase_date || media.purchase_date || null,
-    notes: analysis.notes || media.notes || '',
-    status: media.message_media_data?.meta?.status || 'pending'
+    productName: analyzedContent.product_name || null,
+    productCode: analyzedContent.product_code || null,
+    quantity: analyzedContent.quantity || null,
+    vendorUid: analyzedContent.vendor_uid || null,
+    purchaseDate: analyzedContent.purchase_date || null,
+    notes: analyzedContent.notes || null
   };
-};
+}
 
-export const getStoragePath = (fileUniqueId: string, fileType: string): string => {
-  return `${fileUniqueId}${
-    fileType === 'photo' ? '.jpg' :
-    fileType === 'video' ? '.mp4' :
-    '.bin'
-  }`;
+export function getProductInfo(item: MediaItem) {
+  const analyzedContent = item.message_media_data?.analysis?.analyzed_content || {};
+  const extractedData = analyzedContent.extracted_data || {};
+  
+  return {
+    name: extractedData.product_name || null,
+    code: extractedData.product_code || null,
+    quantity: extractedData.quantity || null,
+    vendor: extractedData.vendor_uid || null,
+    purchaseDate: extractedData.purchase_date || null,
+    notes: extractedData.notes || null
+  };
+}
+
+export const setMediaCaption = (item: MediaItem, caption: string): MediaItem => {
+  return {
+    ...item,
+    message_media_data: {
+      ...item.message_media_data,
+      message: {
+        ...item.message_media_data.message,
+        caption
+      }
+    }
+  };
 };

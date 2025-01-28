@@ -14,7 +14,6 @@ export interface QueueItem {
       file_unique_id: string;
       file_type: string;
       public_url?: string;
-      storage_path?: string;
     };
     meta: {
       is_original_caption: boolean;
@@ -33,11 +32,6 @@ export interface QueueItem {
       purchase_date?: string;
       notes?: string;
     };
-    sender: {
-      sender_info: Record<string, any>;
-      chat_info: Record<string, any>;
-    };
-    telegram_data: Record<string, any>;
   };
   queue_type: 'media' | 'webhook' | 'media_group';
   status: 'pending' | 'processing' | 'completed' | 'failed';
