@@ -1,21 +1,21 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { QueueItem, ProcessingResult } from './types/queue-types.ts';
-import { uploadToStorage } from './services/storage/storage-service.ts';
-import { downloadTelegramFile } from './services/telegram/telegram-service.ts';
+import { MessageMediaData } from '../../types/message-types';
+import { uploadToStorage } from '../storage/storage-service';
+import { downloadTelegramFile } from '../telegram/telegram-service';
 
 export async function processMediaItem(
   supabase: any,
-  item: QueueItem,
+  messageMediaData: MessageMediaData,
   botToken: string
-): Promise<ProcessingResult> {
+): Promise<{ success: boolean; error?: string; mediaId?: string }> {
   try {
     console.log('Processing media item:', {
-      correlation_id: item.correlation_id,
-      message_id: item.message_media_data?.message?.message_id,
-      file_id: item.message_media_data?.media?.file_id
+      correlation_id: messageMediaData.meta.correlation_id,
+      message_id: messageMediaData.message.message_id,
+      file_id: messageMediaData.media?.file_id
     });
 
-    const mediaData = item.message_media_data?.media;
+    const mediaData = messageMediaData.media;
     if (!mediaData?.file_id || !mediaData?.file_unique_id || !mediaData?.file_type) {
       throw new Error('Missing required media data fields');
     }
@@ -40,13 +40,13 @@ export async function processMediaItem(
         file_type: mediaData.file_type,
         public_url: publicUrl,
         storage_path: storagePath,
-        message_media_data: item.message_media_data,
-        correlation_id: item.correlation_id,
-        message_id: item.message_id,
-        analyzed_content: item.message_media_data?.analysis?.analyzed_content || {},
-        caption: item.message_media_data?.message?.caption,
-        is_original_caption: item.message_media_data?.meta?.is_original_caption,
-        original_message_id: item.message_media_data?.meta?.original_message_id
+        message_media_data: messageMediaData,
+        correlation_id: messageMediaData.meta.correlation_id,
+        message_id: messageMediaData.message.message_id,
+        analyzed_content: messageMediaData.analysis.analyzed_content || {},
+        caption: messageMediaData.message.caption,
+        is_original_caption: messageMediaData.meta.is_original_caption,
+        original_message_id: messageMediaData.meta.original_message_id
       })
       .select()
       .single();
@@ -54,7 +54,7 @@ export async function processMediaItem(
     if (error) throw error;
 
     console.log('Successfully processed media item:', {
-      correlation_id: item.correlation_id,
+      correlation_id: messageMediaData.meta.correlation_id,
       media_id: mediaRecord.id,
       public_url: publicUrl
     });
