@@ -371,6 +371,7 @@ export type Database = {
           purchase_order_uid: string | null
           quantity: number | null
           sender_info: Json | null
+          storage_path: string | null
           supabase_json: Json | null
           telegram_data: Json
           telegram_media_row_id: string | null
@@ -406,6 +407,7 @@ export type Database = {
           purchase_order_uid?: string | null
           quantity?: number | null
           sender_info?: Json | null
+          storage_path?: string | null
           supabase_json?: Json | null
           telegram_data?: Json
           telegram_media_row_id?: string | null
@@ -441,6 +443,7 @@ export type Database = {
           purchase_order_uid?: string | null
           quantity?: number | null
           sender_info?: Json | null
+          storage_path?: string | null
           supabase_json?: Json | null
           telegram_data?: Json
           telegram_media_row_id?: string | null
@@ -609,6 +612,7 @@ export type Database = {
           purchase_order_uid: string | null
           quantity: number | null
           sender_info: Json | null
+          storage_path: string | null
           supabase_json: Json | null
           telegram_data: Json
           telegram_media_row_id: string | null
