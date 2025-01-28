@@ -33,9 +33,7 @@ export async function handleWebhookUpdate(
 
     // Generate message URL
     const chatId = message.chat.id.toString();
-    const messageUrl = `https://t.me/c/${chatId.substring(4)}/${
-      message.message_id
-    }`;
+    const messageUrl = `https://t.me/c/${chatId.substring(4)}/${message.message_id}`;
 
     // Check for existing messages in the same media group
     let existingGroupMessages = [];
@@ -47,10 +45,7 @@ export async function handleWebhookUpdate(
         .order("created_at", { ascending: true });
 
       existingGroupMessages = groupMessages || [];
-      console.log(
-        "Found existing group messages:",
-        existingGroupMessages.length
-      );
+      console.log("Found existing group messages:", existingGroupMessages.length);
     }
 
     // Analyze message content
@@ -103,7 +98,7 @@ export async function handleWebhookUpdate(
     if (mediaType) {
       const mediaFile =
         mediaType === "photo"
-          ? message.photo[0] // We'll get the highest quality directly from Telegram
+          ? message.photo[0]
           : message.video || message.document || message.animation;
 
       if (mediaFile) {
@@ -120,7 +115,7 @@ export async function handleWebhookUpdate(
           // Get file from Telegram and upload to storage
           const { publicUrl, storagePath } = await uploadMediaToStorage(
             supabase,
-            new ArrayBuffer(0), // This will be replaced in uploadMediaToStorage for photos
+            new ArrayBuffer(0),
             mediaFile.file_unique_id,
             mediaType,
             botToken,
@@ -144,20 +139,23 @@ export async function handleWebhookUpdate(
             },
           };
 
-          // Create telegram_media record first with initial data
+          // Create telegram_media record using message_media_data
           const { data: telegramMedia, error: mediaError } = await supabase
             .from("telegram_media")
             .insert({
-              file_id: mediaFile.file_id,
-              file_unique_id: mediaFile.file_unique_id,
-              file_type: mediaType,
               message_id: messageRecord.id,
-              telegram_data: message,
+              file_id: updatedMessageMediaData.media.file_id,
+              file_unique_id: updatedMessageMediaData.media.file_unique_id,
+              file_type: updatedMessageMediaData.media.file_type,
+              public_url: updatedMessageMediaData.media.public_url,
+              storage_path: updatedMessageMediaData.media.storage_path,
+              telegram_data: updatedMessageMediaData.telegram_data,
               message_media_data: updatedMessageMediaData,
+              analyzed_content: updatedMessageMediaData.analysis.analyzed_content,
               correlation_id: correlationId,
-              public_url: publicUrl,
-              storage_path: storagePath,
-              processed: false, // Will be set to true after transaction
+              is_original_caption: analyzedMessageContent.is_original_caption,
+              original_message_id: analyzedMessageContent.original_message_id,
+              processed: false,
             })
             .select()
             .single();
