@@ -2,42 +2,46 @@ import { Json } from "@/integrations/supabase/types";
 
 export interface MessageMediaData {
   message: {
-    url: string;
+    url?: string;
     media_group_id?: string;
     caption?: string;
-    message_id: number;
-    chat_id: number;
-    date: number;
+    message_id?: number;
+    chat_id?: number;
+    date?: number;
   };
   sender: {
-    sender_info: Record<string, any>;
-    chat_info: Record<string, any>;
+    sender_info?: Record<string, any>;
+    chat_info?: Record<string, any>;
   };
   analysis: {
-    analyzed_content: Record<string, any>;
+    analyzed_content?: Record<string, any>;
     product_name?: string;
     product_code?: string;
     quantity?: number;
     vendor_uid?: string;
     purchase_date?: string;
     notes?: string;
-    caption?: string;
   };
   meta: {
     created_at: string;
     updated_at: string;
-    status: "pending" | "processed" | "error" | "processing";
+    status: string;
     error: string | null;
     is_original_caption?: boolean;
     original_message_id?: string;
+    correlation_id?: string;
+    processed_at?: string;
+    last_retry_at?: string;
     retry_count?: number;
   };
   media: {
-    file_id: string;
-    file_unique_id: string;
-    file_type: string;
-    public_url: string;
+    file_id?: string;
+    file_unique_id?: string;
+    file_type?: string;
+    public_url?: string;
+    storage_path?: string;
   };
+  telegram_data: Record<string, any>;
 }
 
 export interface MediaItem {
@@ -48,11 +52,8 @@ export interface MediaItem {
   file_id: string;
   file_unique_id: string;
   file_type: string;
-  public_url: string;
-
-  message_id: string;
-  message_url?: string;
-  media_group_id?: string;
+  public_url?: string;
+  storage_path?: string;
 
   product_name?: string;
   product_code?: string;
@@ -60,7 +61,6 @@ export interface MediaItem {
   vendor_uid?: string;
   purchase_date?: string;
   notes?: string;
-  caption?: string;
 
   processed?: boolean;
   processing_error?: string;
@@ -73,10 +73,10 @@ export interface MediaItem {
 
   telegram_media_row_id?: string;
   glide_app_url?: string;
-  glide_json?: Json;
-  last_synced_at?: string;
-  message_data?: Json;
-  purchase_order_uid?: string;
+  correlation_id?: string;
+  message_id: string;
+  caption?: string;
+  message_url?: string;
 
   is_original_caption?: boolean;
   original_message_id?: string;
@@ -84,13 +84,4 @@ export interface MediaItem {
 
 export interface MediaItemUpdate extends Partial<MediaItem> {
   id: string;
-}
-
-export interface SyncResult {
-  synced_count: number;
-  error_count: number;
-}
-
-export interface TableResult {
-  table_name: string;
 }

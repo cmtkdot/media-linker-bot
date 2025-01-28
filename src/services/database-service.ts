@@ -7,15 +7,32 @@ export const convertToMediaItem = (data: any): MediaItem => ({
   message_media_data: data.message_media_data || {
     message: {},
     sender: {},
-    analysis: {},
+    analysis: {
+      analyzed_content: {},
+      product_name: data.product_name,
+      product_code: data.product_code,
+      quantity: data.quantity,
+      vendor_uid: data.vendor_uid,
+      purchase_date: data.purchase_date,
+      notes: data.notes
+    },
     meta: {
       created_at: data.created_at,
       updated_at: data.updated_at,
-      status: 'pending',
-      error: null
+      status: data.processed ? 'processed' : 'pending',
+      error: data.processing_error,
+      is_original_caption: data.is_original_caption,
+      original_message_id: data.original_message_id,
+      correlation_id: data.correlation_id
     },
-    media: {},
-    telegram_data: {}
+    media: {
+      file_id: data.file_id,
+      file_unique_id: data.file_unique_id,
+      file_type: data.file_type,
+      public_url: data.public_url,
+      storage_path: data.storage_path
+    },
+    telegram_data: data.telegram_data || {}
   },
   telegram_data: data.message_media_data?.telegram_data || {},
   glide_data: data.glide_data || {},
@@ -45,21 +62,44 @@ export const getMediaItems = async (): Promise<MediaItem[]> => {
 };
 
 export const updateMediaItem = async (id: string, updates: Partial<MediaItem>): Promise<MediaItem> => {
-  // Update message_media_data meta with is_original_caption if it exists
-  if (updates.is_original_caption !== undefined) {
-    updates.message_media_data = {
-      ...updates.message_media_data,
-      meta: {
-        ...updates.message_media_data?.meta,
-        is_original_caption: updates.is_original_caption,
-        original_message_id: updates.original_message_id
-      }
-    };
-  }
+  // Ensure message_media_data is properly structured
+  const messageMediaData = {
+    ...updates.message_media_data,
+    analysis: {
+      ...updates.message_media_data?.analysis,
+      product_name: updates.product_name,
+      product_code: updates.product_code,
+      quantity: updates.quantity,
+      vendor_uid: updates.vendor_uid,
+      purchase_date: updates.purchase_date,
+      notes: updates.notes
+    },
+    meta: {
+      ...updates.message_media_data?.meta,
+      updated_at: new Date().toISOString(),
+      status: updates.processed ? 'processed' : 'pending',
+      error: updates.processing_error
+    },
+    media: {
+      ...updates.message_media_data?.media,
+      file_id: updates.file_id,
+      file_unique_id: updates.file_unique_id,
+      file_type: updates.file_type,
+      public_url: updates.public_url,
+      storage_path: updates.storage_path
+    }
+  };
+
+  // Prepare the update payload
+  const updatePayload = {
+    ...updates,
+    message_media_data: messageMediaData,
+    updated_at: new Date().toISOString()
+  };
 
   const { data, error } = await supabase
     .from('telegram_media')
-    .update(updates)
+    .update(updatePayload as any)
     .eq('id', id)
     .select()
     .single();

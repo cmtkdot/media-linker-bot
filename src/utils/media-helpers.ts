@@ -5,35 +5,35 @@ export function getMediaCaption(item: MediaItem): string | null {
 }
 
 export function getMediaUrl(item: MediaItem): string {
-  return item.public_url || item.message_media_data?.media?.public_url || '';
+  return item.message_media_data?.media?.public_url || '';
 }
 
 export function getMediaType(item: MediaItem): string {
-  return item.file_type;
+  return item.message_media_data?.media?.file_type || item.file_type;
 }
 
 export function isVideo(item: MediaItem): boolean {
-  return item.file_type === 'video';
+  return getMediaType(item) === 'video';
 }
 
 export function isPhoto(item: MediaItem): boolean {
-  return item.file_type === 'photo';
+  return getMediaType(item) === 'photo';
 }
 
 export function isDocument(item: MediaItem): boolean {
-  return item.file_type === 'document';
+  return getMediaType(item) === 'document';
 }
 
 export function parseAnalyzedContent(item: MediaItem) {
-  const analyzedContent = item.message_media_data?.analysis?.analyzed_content || {};
+  const analysis = item.message_media_data?.analysis || {};
   
   return {
-    productName: analyzedContent.product_name || null,
-    productCode: analyzedContent.product_code || null,
-    quantity: analyzedContent.quantity || null,
-    vendorUid: analyzedContent.vendor_uid || null,
-    purchaseDate: analyzedContent.purchase_date || null,
-    notes: analyzedContent.notes || null
+    productName: analysis.product_name || null,
+    productCode: analysis.product_code || null,
+    quantity: analysis.quantity || null,
+    vendorUid: analysis.vendor_uid || null,
+    purchaseDate: analysis.purchase_date || null,
+    notes: analysis.notes || null
   };
 }
 
