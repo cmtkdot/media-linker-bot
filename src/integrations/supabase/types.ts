@@ -255,8 +255,8 @@ export type Database = {
           correlation_id: string | null
           created_at: string | null
           error_message: string | null
-          file_id: string
-          file_type: string
+          file_id: string | null
+          file_type: string | null
           id: string
           last_retry_at: string | null
           message_id: string | null
@@ -269,8 +269,8 @@ export type Database = {
           correlation_id?: string | null
           created_at?: string | null
           error_message?: string | null
-          file_id: string
-          file_type: string
+          file_id?: string | null
+          file_type?: string | null
           id?: string
           last_retry_at?: string | null
           message_id?: string | null
@@ -283,8 +283,8 @@ export type Database = {
           correlation_id?: string | null
           created_at?: string | null
           error_message?: string | null
-          file_id?: string
-          file_type?: string
+          file_id?: string | null
+          file_type?: string | null
           id?: string
           last_retry_at?: string | null
           message_id?: string | null
