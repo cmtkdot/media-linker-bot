@@ -1,7 +1,8 @@
-import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { SupabaseClient } from "@supabase/supabase-js";
 import {
   TelegramAnimation,
   TelegramDocument,
+  TelegramMessage,
   TelegramPhoto,
   TelegramVideo,
 } from "./telegram-types.ts";
@@ -65,7 +66,7 @@ export function generateFileName(
   return `${safeId}.${extension}`;
 }
 
-export function getMediaType(message: Record<string, any>): string | null {
+export function getMediaType(message: TelegramMessage): string | null {
   if (message.photo) return "photo";
   if (message.video) return "video";
   if (message.document) return "document";
@@ -73,8 +74,38 @@ export function getMediaType(message: Record<string, any>): string | null {
   return null;
 }
 
+// Remove the duplicate interface and keep only the type definition
+type TelegramMediaFile =
+  | TelegramPhoto
+  | TelegramVideo
+  | TelegramDocument
+  | TelegramAnimation;
+
+interface MessageMediaData {
+  message: {
+    url?: string;
+    caption?: string;
+    media_group_id?: string;
+  };
+  media: {
+    file_id: string;
+    file_unique_id: string;
+    file_type: string;
+    public_url?: string;
+    storage_path?: string;
+  };
+  meta: {
+    status: "pending" | "processing" | "processed" | "error";
+    processed_at?: string;
+    error?: string;
+  };
+  analysis: {
+    analyzed_content?: Record<string, unknown>;
+  };
+}
+
 export async function validateMediaFile(
-  mediaFile: Record<string, any>,
+  mediaFile: TelegramMediaFile,
   mediaType: string
 ): Promise<void> {
   if (!mediaFile?.file_id) {
@@ -90,12 +121,12 @@ export async function validateMediaFile(
   // Validate media type specific requirements
   switch (mediaType) {
     case "photo":
-      if (!mediaFile.width || !mediaFile.height) {
+      if (!("width" in mediaFile) || !("height" in mediaFile)) {
         throw new Error("Invalid photo: missing dimensions");
       }
       break;
     case "video":
-      if (!mediaFile.duration) {
+      if (!("duration" in mediaFile)) {
         throw new Error("Invalid video: missing duration");
       }
       break;
@@ -103,7 +134,7 @@ export async function validateMediaFile(
       // Documents are more permissive, just ensure file_id exists
       break;
     case "animation":
-      if (!mediaFile.duration) {
+      if (!("duration" in mediaFile)) {
         throw new Error("Invalid animation: missing duration");
       }
       break;
@@ -111,12 +142,6 @@ export async function validateMediaFile(
       throw new Error(`Unsupported media type: ${mediaType}`);
   }
 }
-
-type TelegramMediaFile =
-  | TelegramPhoto
-  | TelegramVideo
-  | TelegramDocument
-  | TelegramAnimation;
 
 export async function uploadMediaToStorage(
   supabase: SupabaseClient,
@@ -132,7 +157,7 @@ export async function uploadMediaToStorage(
     fileUniqueId,
     fileType,
     dimensions:
-      mediaFile && "width" in mediaFile
+      mediaFile && "width" in mediaFile && "height" in mediaFile
         ? {
             width: mediaFile.width,
             height: mediaFile.height,
@@ -176,16 +201,19 @@ export async function uploadMediaToStorage(
       }
     }
 
-    // For photos, use the provided file_id directly since Telegram already gives us the best quality
+    // For photos, use the provided file_id directly
     let uploadBuffer = buffer;
     if (fileType === "photo" && botToken && fileId) {
       console.log("Getting photo from Telegram:", {
         file_id: fileId,
         file_unique_id: fileUniqueId,
-        dimensions: {
-          width: mediaFile?.width,
-          height: mediaFile?.height,
-        },
+        dimensions:
+          mediaFile && "width" in mediaFile && "height" in mediaFile
+            ? {
+                width: mediaFile.width,
+                height: mediaFile.height,
+              }
+            : undefined,
       });
 
       const response = await fetch(
@@ -332,7 +360,7 @@ export async function updateMediaRecords(
     messageId: string;
     publicUrl: string;
     storagePath: string;
-    messageMediaData: Record<string, any>;
+    messageMediaData: MessageMediaData;
   }
 ) {
   const { error } = await supabase.rpc("update_media_records", {
