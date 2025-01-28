@@ -107,6 +107,26 @@ export async function handleWebhookUpdate(
         message_id: messageRecord.id,
       });
 
+      // Create initial telegram_media record
+      const { error: telegramMediaError } = await supabase
+        .from("telegram_media")
+        .insert({
+          message_id: messageRecord.id,
+          file_id: mediaFile.file_id,
+          file_unique_id: mediaFile.file_unique_id,
+          file_type: mediaType,
+          message_media_data: messageData,
+          correlation_id: correlationId,
+          telegram_data: message,
+          is_original_caption: analyzedMessageContent.is_original_caption,
+          original_message_id: analyzedMessageContent.original_message_id,
+        });
+
+      if (telegramMediaError) {
+        console.error("Error creating telegram_media record:", telegramMediaError);
+        throw telegramMediaError;
+      }
+
       try {
         // Process media using the dedicated processor
         await processMediaMessage(supabase, messageRecord, botToken);
