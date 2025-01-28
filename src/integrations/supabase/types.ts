@@ -560,6 +560,12 @@ export type Database = {
           table_name: string
         }[]
       }
+      get_original_caption_holder: {
+        Args: {
+          media_group_id: string
+        }
+        Returns: string
+      }
       handle_retry_logic: {
         Args: Record<PropertyKey, never>
         Returns: undefined
