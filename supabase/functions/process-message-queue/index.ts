@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { processMessageQueue } from "../_shared/queue-processor.ts";
+import { processMessageQueue } from "../_shared/media/queue-processor.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -18,13 +18,18 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    const botToken = Deno.env.get('TELEGRAM_BOT_TOKEN');
+    if (!botToken) {
+      throw new Error('TELEGRAM_BOT_TOKEN is not set');
+    }
+
     const correlationId = crypto.randomUUID();
-    await processMessageQueue(supabase, correlationId);
+    const result = await processMessageQueue(supabase, correlationId, botToken);
 
     return new Response(
       JSON.stringify({ 
         message: 'Queue processing completed',
-        correlationId 
+        ...result
       }),
       { 
         headers: { 
