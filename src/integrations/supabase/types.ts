@@ -551,7 +551,15 @@ export type Database = {
           retry_count?: number | null
           status?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "unified_processing_queue_correlation_id_fkey"
+            columns: ["correlation_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["correlation_id"]
+          },
+        ]
       }
     }
     Views: {
