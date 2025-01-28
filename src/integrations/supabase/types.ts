@@ -423,12 +423,10 @@ export type Database = {
           file_unique_id: string
           glide_app_url: string | null
           glide_data: Json
-          glide_json: Json | null
           id: string
           is_original_caption: boolean | null
           last_synced_at: string | null
           media_metadata: Json
-          message_data: Json | null
           message_id: string
           message_media_data: Json | null
           message_url: string | null
@@ -442,9 +440,7 @@ export type Database = {
           purchase_date: string | null
           purchase_order_uid: string | null
           quantity: number | null
-          sender_info: Json | null
           storage_path: string | null
-          supabase_json: Json | null
           telegram_data: Json
           telegram_media_row_id: string | null
           updated_at: string
@@ -460,12 +456,10 @@ export type Database = {
           file_unique_id: string
           glide_app_url?: string | null
           glide_data?: Json
-          glide_json?: Json | null
           id?: string
           is_original_caption?: boolean | null
           last_synced_at?: string | null
           media_metadata?: Json
-          message_data?: Json | null
           message_id: string
           message_media_data?: Json | null
           message_url?: string | null
@@ -479,9 +473,7 @@ export type Database = {
           purchase_date?: string | null
           purchase_order_uid?: string | null
           quantity?: number | null
-          sender_info?: Json | null
           storage_path?: string | null
-          supabase_json?: Json | null
           telegram_data?: Json
           telegram_media_row_id?: string | null
           updated_at?: string
@@ -497,12 +489,10 @@ export type Database = {
           file_unique_id?: string
           glide_app_url?: string | null
           glide_data?: Json
-          glide_json?: Json | null
           id?: string
           is_original_caption?: boolean | null
           last_synced_at?: string | null
           media_metadata?: Json
-          message_data?: Json | null
           message_id?: string
           message_media_data?: Json | null
           message_url?: string | null
@@ -516,9 +506,7 @@ export type Database = {
           purchase_date?: string | null
           purchase_order_uid?: string | null
           quantity?: number | null
-          sender_info?: Json | null
           storage_path?: string | null
-          supabase_json?: Json | null
           telegram_data?: Json
           telegram_media_row_id?: string | null
           updated_at?: string
@@ -578,12 +566,10 @@ export type Database = {
           file_unique_id: string
           glide_app_url: string | null
           glide_data: Json
-          glide_json: Json | null
           id: string
           is_original_caption: boolean | null
           last_synced_at: string | null
           media_metadata: Json
-          message_data: Json | null
           message_id: string
           message_media_data: Json | null
           message_url: string | null
@@ -597,9 +583,7 @@ export type Database = {
           purchase_date: string | null
           purchase_order_uid: string | null
           quantity: number | null
-          sender_info: Json | null
           storage_path: string | null
-          supabase_json: Json | null
           telegram_data: Json
           telegram_media_row_id: string | null
           updated_at: string

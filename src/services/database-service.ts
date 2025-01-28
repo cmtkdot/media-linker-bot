@@ -4,11 +4,23 @@ import { Json } from "@/integrations/supabase/types";
 
 export const convertToMediaItem = (data: any): MediaItem => ({
   ...data,
-  message_media_data: data.message_media_data as MessageMediaData,
-  telegram_data: data.telegram_data as Record<string, any>,
-  glide_data: data.glide_data as Record<string, any>,
-  media_metadata: data.media_metadata as Record<string, any>,
-  analyzed_content: data.analyzed_content as Record<string, any>,
+  message_media_data: data.message_media_data || {
+    message: {},
+    sender: {},
+    analysis: {},
+    meta: {
+      created_at: data.created_at,
+      updated_at: data.updated_at,
+      status: 'pending',
+      error: null
+    },
+    media: {},
+    telegram_data: {}
+  },
+  telegram_data: data.message_media_data?.telegram_data || {},
+  glide_data: data.glide_data || {},
+  media_metadata: data.message_media_data?.media || {},
+  analyzed_content: data.message_media_data?.analysis?.analyzed_content || {}
 });
 
 export const getMediaItem = async (id: string): Promise<MediaItem> => {
@@ -47,7 +59,7 @@ export const updateMediaItem = async (id: string, updates: Partial<MediaItem>): 
 
   const { data, error } = await supabase
     .from('telegram_media')
-    .update(updates as any)
+    .update(updates)
     .eq('id', id)
     .select()
     .single();

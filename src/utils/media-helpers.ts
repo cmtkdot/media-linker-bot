@@ -5,7 +5,7 @@ export function getMediaCaption(item: MediaItem): string | null {
 }
 
 export function getMediaUrl(item: MediaItem): string {
-  return item.public_url;
+  return item.public_url || item.message_media_data?.media?.public_url || '';
 }
 
 export function getMediaType(item: MediaItem): string {
@@ -25,7 +25,7 @@ export function isDocument(item: MediaItem): boolean {
 }
 
 export function parseAnalyzedContent(item: MediaItem) {
-  const analyzedContent = item.analyzed_content?.extracted_data || {};
+  const analyzedContent = item.message_media_data?.analysis?.analyzed_content || {};
   
   return {
     productName: analyzedContent.product_name || null,
@@ -38,16 +38,15 @@ export function parseAnalyzedContent(item: MediaItem) {
 }
 
 export function getProductInfo(item: MediaItem) {
-  const analyzedContent = item.message_media_data?.analysis?.analyzed_content || {};
-  const extractedData = analyzedContent.extracted_data || {};
+  const analysis = item.message_media_data?.analysis || {};
   
   return {
-    name: extractedData.product_name || null,
-    code: extractedData.product_code || null,
-    quantity: extractedData.quantity || null,
-    vendor: extractedData.vendor_uid || null,
-    purchaseDate: extractedData.purchase_date || null,
-    notes: extractedData.notes || null
+    name: analysis.product_name || null,
+    code: analysis.product_code || null,
+    quantity: analysis.quantity || null,
+    vendor: analysis.vendor_uid || null,
+    purchaseDate: analysis.purchase_date || null,
+    notes: analysis.notes || null
   };
 }
 

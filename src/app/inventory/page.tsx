@@ -23,11 +23,23 @@ const InventoryPage = () => {
       return data.map((item): MediaItem => ({
         ...item,
         file_type: item.file_type as MediaItem['file_type'],
-        telegram_data: item.telegram_data as Record<string, any>,
-        glide_data: item.glide_data as Record<string, any>,
-        media_metadata: item.media_metadata as Record<string, any>,
-        analyzed_content: item.analyzed_content as Record<string, any>,
-        message_media_data: item.message_media_data as Record<string, any>
+        telegram_data: item.message_media_data?.telegram_data || {},
+        glide_data: item.glide_data || {},
+        media_metadata: item.message_media_data?.media || {},
+        analyzed_content: item.message_media_data?.analysis?.analyzed_content || {},
+        message_media_data: item.message_media_data || {
+          message: {},
+          sender: {},
+          analysis: {},
+          meta: {
+            created_at: item.created_at,
+            updated_at: item.updated_at,
+            status: 'pending',
+            error: null
+          },
+          media: {},
+          telegram_data: {}
+        }
       }));
     }
   });
