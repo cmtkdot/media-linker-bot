@@ -1,12 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
-function analyzeProductContent(input: string) {
+function analyzeWithRegex(input: string) {
   const analyzed_content = {
     product_info: {
       product_name: null as string | null,
@@ -18,12 +13,10 @@ function analyzeProductContent(input: string) {
     }
   };
 
-  // Regular expressions
   const hashtagRegex = /#([A-Za-z]+)(\d{5,6})/;
   const quantityRegex = /x\s*(\d+)/;
   const notesRegex = /\((.*?)\)/g;
   
-  // Extract product name (everything before #)
   const hashIndex = input.indexOf('#');
   if (hashIndex > -1) {
     analyzed_content.product_info.product_name = input.substring(0, hashIndex).trim();
@@ -31,36 +24,28 @@ function analyzeProductContent(input: string) {
     analyzed_content.product_info.product_name = input.split('x')[0].trim();
   }
 
-  // Extract product code and parse vendor/date
   const hashMatch = hashtagRegex.exec(input);
   if (hashMatch) {
     analyzed_content.product_info.product_code = hashMatch[0].substring(1);
     analyzed_content.product_info.vendor_uid = hashMatch[1];
     
-    // Parse date
     const dateStr = hashMatch[2];
     if (dateStr.length === 5) {
-      // Format: mDDyy
       const month = dateStr.substring(0, 1).padStart(2, '0');
       const day = dateStr.substring(1, 3);
-      const year = dateStr.substring(3);
       analyzed_content.product_info.purchase_date = `2024-${month}-${day}`;
     } else if (dateStr.length === 6) {
-      // Format: mmDDyy
       const month = dateStr.substring(0, 2);
       const day = dateStr.substring(2, 4);
-      const year = dateStr.substring(4);
       analyzed_content.product_info.purchase_date = `2024-${month}-${day}`;
     }
   }
 
-  // Extract quantity
   const quantityMatch = quantityRegex.exec(input);
   if (quantityMatch) {
     analyzed_content.product_info.quantity = parseInt(quantityMatch[1]);
   }
 
-  // Extract notes (anything in parentheses)
   const notes = [];
   let notesMatch;
   while ((notesMatch = notesRegex.exec(input)) !== null) {
@@ -70,7 +55,7 @@ function analyzeProductContent(input: string) {
     analyzed_content.product_info.notes = notes.join('; ');
   }
 
-  return { analyzed_content };
+  return analyzed_content;
 }
 
 async function analyzeWithAI(caption: string) {
@@ -99,7 +84,7 @@ async function analyzeWithAI(caption: string) {
               - Quantity (number after x)
               - Notes (text in parentheses)
               
-              Format the response as a JSON object matching:
+              Format as JSON:
               {
                 "product_info": {
                   "product_name": string | null,
@@ -126,15 +111,30 @@ async function analyzeWithAI(caption: string) {
     }
 
     const data = await response.json();
-    const aiAnalysis = JSON.parse(data.choices[0].message.content);
-    console.log('AI Analysis:', aiAnalysis);
-
-    return aiAnalysis;
+    return JSON.parse(data.choices[0].message.content);
   } catch (error) {
     console.error('Error in AI analysis:', error);
-    // Fallback to regex analysis if AI fails
-    return analyzeProductContent(caption);
+    return null;
   }
+}
+
+function mergeAnalysis(aiResult: any, regexResult: any) {
+  const merged = {
+    product_info: {
+      product_name: aiResult?.product_info?.product_name || regexResult.product_info.product_name,
+      product_code: aiResult?.product_info?.product_code || regexResult.product_info.product_code,
+      vendor_uid: aiResult?.product_info?.vendor_uid || regexResult.product_info.vendor_uid,
+      purchase_date: aiResult?.product_info?.purchase_date || regexResult.product_info.purchase_date,
+      quantity: aiResult?.product_info?.quantity || regexResult.product_info.quantity,
+      notes: aiResult?.product_info?.notes || regexResult.product_info.notes
+    }
+  };
+
+  return {
+    analyzed_content: merged,
+    analysis_source: aiResult ? 'ai+regex' : 'regex',
+    timestamp: new Date().toISOString()
+  };
 }
 
 serve(async (req) => {
@@ -143,34 +143,21 @@ serve(async (req) => {
   }
 
   try {
-    const { caption, messageId, chatId, mediaGroupId } = await req.json();
+    const { caption } = await req.json();
     
     if (!caption) {
       throw new Error('Caption is required');
     }
 
-    console.log('Analyzing caption:', {
-      caption,
-      messageId,
-      chatId,
-      mediaGroupId
-    });
+    console.log('Analyzing caption:', caption);
 
-    // First try AI analysis
-    const aiResult = await analyzeWithAI(caption);
-    
-    // If AI fails or returns invalid data, fallback to regex
-    const regexResult = analyzeProductContent(caption);
-    
-    // Merge results, preferring AI results when available
-    const finalResult = {
-      analyzed_content: {
-        product_info: {
-          ...regexResult.analyzed_content.product_info,
-          ...aiResult.product_info
-        }
-      }
-    };
+    // Run both analyses in parallel
+    const [aiResult, regexResult] = await Promise.all([
+      analyzeWithAI(caption),
+      Promise.resolve(analyzeWithRegex(caption))
+    ]);
+
+    const finalResult = mergeAnalysis(aiResult, regexResult);
 
     console.log('Analysis result:', finalResult);
 
@@ -191,10 +178,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message,
-        data: {
-          analyzed_content: {} // Fallback empty analysis
-        }
+        error: error.message
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
