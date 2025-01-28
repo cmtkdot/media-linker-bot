@@ -1,15 +1,6 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleMediaError } from './error-handler.ts';
 import { processMediaMessage } from './processor.ts';
-
-interface QueueProcessorOptions {
-  messageId: string;
-  correlationId: string;
-  messageMediaData: Record<string, any>;
-  telegramData: Record<string, any>;
-  isOriginalCaption: boolean;
-  originalMessageId?: string;
-}
 
 export async function processMessageQueue(
   supabase: ReturnType<typeof createClient>,
