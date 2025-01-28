@@ -4,12 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, Play, RefreshCw, ListChecks } from "lucide-react";
+import { Loader2, Play, RefreshCw } from "lucide-react";
 
 export const ProcessFlowSection = () => {
   const [isProcessingMessages, setIsProcessingMessages] = useState(false);
   const [isProcessingMediaGroups, setIsProcessingMediaGroups] = useState(false);
-  const [isCheckingQueue, setIsCheckingQueue] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -64,33 +63,6 @@ export const ProcessFlowSection = () => {
       });
     } finally {
       setIsProcessingMediaGroups(false);
-    }
-  };
-
-  const handleCheckQueue = async () => {
-    setIsCheckingQueue(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('process-media-queue', {
-        body: { operation: 'processAll' }
-      });
-
-      if (error) throw error;
-
-      toast({
-        title: "Queue Processing Complete",
-        description: `Processed ${data.processed || 0} items from queue`,
-      });
-
-      await queryClient.invalidateQueries({ queryKey: ['glide-sync-queue'] });
-    } catch (error: any) {
-      console.error('Error checking queue:', error);
-      toast({
-        title: "Queue Check Failed",
-        description: error.message || "Failed to process queue",
-        variant: "destructive",
-      });
-    } finally {
-      setIsCheckingQueue(false);
     }
   };
 
@@ -149,31 +121,6 @@ export const ProcessFlowSection = () => {
                 <>
                   <RefreshCw className="w-4 h-4 mr-2" />
                   Process Media Groups
-                </>
-              )}
-            </Button>
-          </div>
-
-          <div className="p-4 rounded-lg bg-muted">
-            <h3 className="font-semibold mb-2">Step 3: Process Queue Items</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              Process media files and sync with storage
-            </p>
-            <Button 
-              onClick={handleCheckQueue}
-              disabled={isCheckingQueue}
-              className="w-full"
-              size="lg"
-            >
-              {isCheckingQueue ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Processing Queue...
-                </>
-              ) : (
-                <>
-                  <ListChecks className="w-4 h-4 mr-2" />
-                  Process Queue Items
                 </>
               )}
             </Button>
