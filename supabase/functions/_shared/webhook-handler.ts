@@ -56,7 +56,7 @@ export async function handleWebhookUpdate(
 
     // Get existing group messages if part of media group
     let existingGroupMessages;
-    let mediaGroupSize = null;
+    let mediaGroupSize = 0;
     
     if (message.media_group_id) {
       const { data: groupMessages } = await supabase
@@ -71,14 +71,11 @@ export async function handleWebhookUpdate(
       if (groupMessages?.[0]?.media_group_size) {
         mediaGroupSize = groupMessages[0].media_group_size;
       } else {
-        // For new groups, count media items in the message
-        mediaGroupSize = 0;
+        // Count media items in the message
         if (message.photo) mediaGroupSize += 1;
         if (message.video) mediaGroupSize += 1;
         if (message.document) mediaGroupSize += 1;
         if (message.animation) mediaGroupSize += 1;
-        
-        // If no media found, set to 1 as minimum
         mediaGroupSize = Math.max(mediaGroupSize, 1);
       }
 
@@ -183,16 +180,32 @@ export async function handleWebhookUpdate(
       }
     }
 
-    // Queue message for processing if it's a media message
+    // Only queue for processing if all media group items are present
     if (messageType === 'photo' || messageType === 'video') {
-      await queueWebhookMessage(supabase, messageData, correlationId, messageType);
-      console.log('Queued message for processing:', {
-        message_id: message.message_id,
-        message_type: messageType,
-        correlation_id: correlationId,
-        media_group_id: message.media_group_id,
-        media_group_size: mediaGroupSize
-      });
+      if (message.media_group_id) {
+        const { count } = await supabase
+          .from('messages')
+          .select('id', { count: 'exact' })
+          .eq('media_group_id', message.media_group_id);
+
+        if (count >= mediaGroupSize) {
+          console.log('All media group items present, queueing for processing:', {
+            media_group_id: message.media_group_id,
+            items_count: count,
+            media_group_size: mediaGroupSize
+          });
+          await queueWebhookMessage(supabase, messageData, correlationId, messageType);
+        } else {
+          console.log('Waiting for more media group items before queueing:', {
+            media_group_id: message.media_group_id,
+            current_count: count,
+            expected_size: mediaGroupSize
+          });
+        }
+      } else {
+        // Single media item, queue immediately
+        await queueWebhookMessage(supabase, messageData, correlationId, messageType);
+      }
     }
 
     return {
