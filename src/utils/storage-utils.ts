@@ -3,15 +3,15 @@ import { MediaFile, MediaProcessingResult } from "@/types/media-types";
 
 export const generateSafeFileName = (fileUniqueId: string, fileType: string): string => {
   // Remove non-ASCII characters and special characters
-  const safeId = fileUniqueId.replace(/[^\x00-\x7F]/g, '').replace(/[^a-zA-Z0-9]/g, '_');
+  const safeName = fileUniqueId.replace(/[^\x00-\x7F]/g, '').replace(/[^a-zA-Z0-9]/g, '_');
   
-  // Determine file extension based on type
-  const extension = fileType === 'photo' ? 'jpg' 
-    : fileType === 'video' ? 'mp4'
-    : fileType === 'document' ? 'pdf'
-    : 'bin';
-
-  return `${safeId}.${extension}`;
+  // Add appropriate extension based on file type
+  const extension = fileType === 'photo' ? '.jpg' : 
+                   fileType === 'video' ? '.mp4' : 
+                   fileType === 'document' ? '.pdf' : 
+                   '.bin';
+                   
+  return `${safeName}${extension}`;
 };
 
 export const uploadToStorage = async (
@@ -34,8 +34,7 @@ export const uploadToStorage = async (
       .from('media')
       .upload(fileName, buffer, {
         contentType: mimeType,
-        upsert: true,
-        cacheControl: '3600'
+        upsert: true
       });
 
     if (uploadError) throw uploadError;
