@@ -1,34 +1,42 @@
-import { SupabaseClient } from "@supabase/supabase-js";
-import { MediaProcessingLog } from "./types";
-import { uploadMediaToStorage } from "./storage";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { MediaFile, MediaProcessingLog } from './types.ts';
+import { uploadMediaToStorage } from './storage.ts';
 
 export async function processMediaMessage(
-  supabase: SupabaseClient,
+  supabase: ReturnType<typeof createClient>,
   message: Record<string, any>,
   botToken: string
 ): Promise<void> {
   const messageId = message.id;
   const correlationId = message.correlation_id;
-  const mediaData = message.message_media_data?.media || {};
   
+  console.log('Processing media message:', { messageId, correlationId });
+
   try {
+    // Extract media file data
+    const mediaFile = extractMediaFile(message);
+    if (!mediaFile) {
+      throw new Error('No valid media file found in message');
+    }
+
+    console.log('Extracted media file:', mediaFile);
+
     // Upload to storage and get URLs
     const { publicUrl, storagePath, isExisting } = await uploadMediaToStorage(
       supabase,
       new ArrayBuffer(0),
-      mediaData.file_unique_id,
-      mediaData.file_type,
-      {
-        botToken,
-        fileId: mediaData.file_id
-      }
+      mediaFile.file_unique_id,
+      mediaFile.file_type,
+      botToken,
+      mediaFile.file_id,
+      mediaFile
     );
 
     // Update message_media_data with storage info
     const updatedMediaData = {
       ...message.message_media_data,
       media: {
-        ...mediaData,
+        ...mediaFile,
         public_url: publicUrl,
         storage_path: storagePath
       },
@@ -49,15 +57,38 @@ export async function processMediaMessage(
       })
       .eq('id', messageId);
 
+    // Update telegram_media table
+    await supabase
+      .from('telegram_media')
+      .upsert({
+        message_id: messageId,
+        file_id: mediaFile.file_id,
+        file_unique_id: mediaFile.file_unique_id,
+        file_type: mediaFile.file_type,
+        public_url: publicUrl,
+        storage_path: storagePath,
+        message_media_data: updatedMediaData,
+        correlation_id: correlationId,
+        telegram_data: message.telegram_data,
+        is_original_caption: message.is_original_caption,
+        original_message_id: message.original_message_id,
+        processed: true,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'message_id'
+      });
+
     // Log processing status
     await logMediaProcessing(supabase, {
       messageId,
-      fileId: mediaData.file_id,
-      fileType: mediaData.file_type,
+      fileId: mediaFile.file_id,
+      fileType: mediaFile.file_type,
       status: isExisting ? 'duplicate' : 'processed',
       storagePath,
       correlationId
     });
+
+    console.log('Media processing completed successfully');
 
   } catch (error) {
     console.error('Media processing error:', error);
@@ -74,8 +105,8 @@ export async function processMediaMessage(
     // Log error
     await logMediaProcessing(supabase, {
       messageId,
-      fileId: mediaData.file_id,
-      fileType: mediaData.file_type,
+      fileId: message.message_media_data?.media?.file_id,
+      fileType: message.message_media_data?.media?.file_type,
       status: 'error',
       errorMessage: error.message,
       correlationId
@@ -85,8 +116,49 @@ export async function processMediaMessage(
   }
 }
 
+function extractMediaFile(message: Record<string, any>): MediaFile | null {
+  const telegramData = message.telegram_data;
+  
+  if (telegramData.video) {
+    return {
+      file_id: telegramData.video.file_id,
+      file_unique_id: telegramData.video.file_unique_id,
+      file_type: 'video',
+      mime_type: telegramData.video.mime_type,
+      file_size: telegramData.video.file_size,
+      width: telegramData.video.width,
+      height: telegramData.video.height,
+      duration: telegramData.video.duration
+    };
+  }
+  
+  if (telegramData.photo) {
+    const largestPhoto = telegramData.photo[telegramData.photo.length - 1];
+    return {
+      file_id: largestPhoto.file_id,
+      file_unique_id: largestPhoto.file_unique_id,
+      file_type: 'photo',
+      file_size: largestPhoto.file_size,
+      width: largestPhoto.width,
+      height: largestPhoto.height
+    };
+  }
+
+  if (telegramData.document) {
+    return {
+      file_id: telegramData.document.file_id,
+      file_unique_id: telegramData.document.file_unique_id,
+      file_type: 'document',
+      mime_type: telegramData.document.mime_type,
+      file_size: telegramData.document.file_size
+    };
+  }
+
+  return null;
+}
+
 async function logMediaProcessing(
-  supabase: SupabaseClient,
+  supabase: ReturnType<typeof createClient>,
   log: MediaProcessingLog
 ): Promise<void> {
   try {

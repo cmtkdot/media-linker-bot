@@ -19,6 +19,8 @@ serve(async (req) => {
       throw new Error('Missing required parameters');
     }
 
+    console.log('Processing request:', { messageId, correlationId });
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''

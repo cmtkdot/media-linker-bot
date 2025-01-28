@@ -1,22 +1,22 @@
-import { SupabaseClient } from "@supabase/supabase-js";
-import { MediaProcessingResult, MediaStorageOptions } from "./types";
-import { generateFileName, getMimeType, delay } from "./utils";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { MediaFile, MediaProcessingResult } from './types.ts';
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000;
 
 export async function uploadMediaToStorage(
-  supabase: SupabaseClient,
+  supabase: ReturnType<typeof createClient>,
   buffer: ArrayBuffer,
   fileUniqueId: string,
   fileType: string,
-  options: MediaStorageOptions = {}
+  botToken: string,
+  fileId: string,
+  mediaFile: MediaFile
 ): Promise<MediaProcessingResult> {
-  const { botToken, fileId, retryCount = 0 } = options;
+  console.log('Starting media upload:', { fileUniqueId, fileType, mediaFile });
+
   const fileName = generateFileName(fileUniqueId, fileType);
   
-  console.log('Starting media upload:', { fileUniqueId, fileType, retryCount });
-
   try {
     // Check for existing file
     const { data: existingFile } = await supabase.storage
@@ -24,6 +24,7 @@ export async function uploadMediaToStorage(
       .list('', { search: fileName });
 
     if (existingFile && existingFile.length > 0) {
+      console.log('Found existing file:', fileName);
       const { data: { publicUrl } } = await supabase.storage
         .from('media')
         .getPublicUrl(fileName);
@@ -44,33 +45,28 @@ export async function uploadMediaToStorage(
       }
     }
 
-    // Get file from Telegram if needed
-    let uploadBuffer = buffer;
-    if (botToken && fileId) {
-      uploadBuffer = await getTelegramFile(botToken, fileId);
-    }
+    // Get file from Telegram
+    const fileBuffer = await getTelegramFile(botToken, fileId);
+    console.log('Retrieved file from Telegram:', { size: fileBuffer.byteLength });
 
     const { error: uploadError } = await supabase.storage
       .from('media')
-      .upload(fileName, uploadBuffer, {
+      .upload(fileName, fileBuffer, {
         contentType: getMimeType(fileType),
         upsert: true,
         cacheControl: '3600'
       });
 
     if (uploadError) {
-      if (retryCount < MAX_RETRIES) {
-        console.log(`Retrying upload (${retryCount + 1}/${MAX_RETRIES})...`);
-        await delay(RETRY_DELAY * Math.pow(2, retryCount));
-        return uploadMediaToStorage(supabase, uploadBuffer, fileUniqueId, fileType, 
-          { ...options, retryCount: retryCount + 1 });
-      }
+      console.error('Upload error:', uploadError);
       throw uploadError;
     }
 
     const { data: { publicUrl } } = await supabase.storage
       .from('media')
       .getPublicUrl(fileName);
+
+    console.log('Upload successful:', { publicUrl, fileName });
 
     return {
       publicUrl,
@@ -84,6 +80,8 @@ export async function uploadMediaToStorage(
 }
 
 async function getTelegramFile(botToken: string, fileId: string): Promise<ArrayBuffer> {
+  console.log('Getting file from Telegram:', fileId);
+  
   const response = await fetch(
     `https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`
   );
@@ -105,4 +103,28 @@ async function getTelegramFile(botToken: string, fileId: string): Promise<ArrayB
   }
 
   return await fileResponse.arrayBuffer();
+}
+
+function generateFileName(fileUniqueId: string, fileType: string): string {
+  const safeId = fileUniqueId.replace(/[^\x00-\x7F]/g, '').replace(/[^a-zA-Z0-9]/g, '_');
+  
+  const extension = fileType === 'photo' ? 'jpg' 
+    : fileType === 'video' ? 'mp4'
+    : fileType === 'document' ? 'pdf'
+    : 'bin';
+
+  return `${safeId}.${extension}`;
+}
+
+function getMimeType(fileType: string): string {
+  switch (fileType) {
+    case 'photo':
+      return 'image/jpeg';
+    case 'video':
+      return 'video/mp4';
+    case 'document':
+      return 'application/pdf';
+    default:
+      return 'application/octet-stream';
+  }
 }
