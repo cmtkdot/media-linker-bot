@@ -1,11 +1,10 @@
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
-export type FilterOptions = {
+interface FilterOptions {
   channels: string[];
   vendors: string[];
-};
+}
 
 export const useMediaFilters = () => {
   const [search, setSearch] = useState("");
@@ -17,29 +16,35 @@ export const useMediaFilters = () => {
   const { data: filterOptions } = useQuery<FilterOptions>({
     queryKey: ['filter-options'],
     queryFn: async () => {
-      // Get unique channels from message_media_data->telegram_data->chat->title
-      const channelsResult = await supabase
+      // Get unique channels from message_media_data->sender->chat_info->title
+      const { data: channelsData } = await supabase
         .from('telegram_media')
-        .select('message_media_data')
-        .not('message_media_data->telegram_data->chat->title', 'is', null);
+        .select('message_media_data->sender->chat_info->title')
+        .not('message_media_data->sender->chat_info->title', 'is', null);
 
       // Get unique vendors from message_media_data->analysis->vendor_uid
-      const vendorsResult = await supabase
+      const { data: vendorsData } = await supabase
         .from('telegram_media')
-        .select('message_media_data')
+        .select('message_media_data->analysis->vendor_uid')
         .not('message_media_data->analysis->vendor_uid', 'is', null);
 
-      const channels = [...new Set(channelsResult.data?.map(item => {
-        const messageData = item.message_media_data as Record<string, any>;
-        return messageData?.telegram_data?.chat?.title as string;
-      }).filter(Boolean) || [])];
-      
-      const vendors = [...new Set(vendorsResult.data?.map(item => {
-        const messageData = item.message_media_data as Record<string, any>;
-        return messageData?.analysis?.vendor_uid as string;
-      }).filter(Boolean) || [])];
+      // Extract unique values
+      const channels = Array.from(new Set(
+        channelsData
+          ?.map(item => item.message_media_data?.sender?.chat_info?.title)
+          .filter(Boolean) || []
+      ));
 
-      return { channels, vendors };
+      const vendors = Array.from(new Set(
+        vendorsData
+          ?.map(item => item.message_media_data?.analysis?.vendor_uid)
+          .filter(Boolean) || []
+      ));
+
+      return {
+        channels,
+        vendors
+      };
     }
   });
 
@@ -54,6 +59,6 @@ export const useMediaFilters = () => {
     setSelectedVendor,
     selectedSort,
     setSelectedSort,
-    filterOptions
+    filterOptions: filterOptions || { channels: [], vendors: [] }
   };
 };
