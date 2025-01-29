@@ -248,6 +248,13 @@ export type Database = {
             referencedRelation: "telegram_media"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "glide_sync_queue_record_id_fkey"
+            columns: ["record_id"]
+            isOneToOne: false
+            referencedRelation: "telegram_media_messages"
+            referencedColumns: ["telegram_media_id"]
+          },
         ]
       }
       media_processing_logs: {
@@ -301,6 +308,13 @@ export type Database = {
             referencedRelation: "messages"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "media_processing_logs_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "telegram_media_messages"
+            referencedColumns: ["message_id"]
+          },
         ]
       }
       messages: {
@@ -308,11 +322,15 @@ export type Database = {
           analyzed_content: Json | null
           caption: string | null
           chat_id: number
+          correlation_id: string | null
           created_at: string
+          error_count: number | null
           id: string
           is_original_caption: boolean | null
+          last_error: string | null
           last_group_message_at: string | null
           last_retry_at: string | null
+          last_status_change: string | null
           max_retries: number | null
           media_group_id: string | null
           media_group_size: number | null
@@ -331,6 +349,7 @@ export type Database = {
           retry_count: number | null
           sender_info: Json
           status: string | null
+          status_history: Json | null
           telegram_data: Json
           text: string | null
           updated_at: string
@@ -340,11 +359,15 @@ export type Database = {
           analyzed_content?: Json | null
           caption?: string | null
           chat_id: number
+          correlation_id?: string | null
           created_at?: string
+          error_count?: number | null
           id?: string
           is_original_caption?: boolean | null
+          last_error?: string | null
           last_group_message_at?: string | null
           last_retry_at?: string | null
+          last_status_change?: string | null
           max_retries?: number | null
           media_group_id?: string | null
           media_group_size?: number | null
@@ -363,6 +386,7 @@ export type Database = {
           retry_count?: number | null
           sender_info?: Json
           status?: string | null
+          status_history?: Json | null
           telegram_data?: Json
           text?: string | null
           updated_at?: string
@@ -372,11 +396,15 @@ export type Database = {
           analyzed_content?: Json | null
           caption?: string | null
           chat_id?: number
+          correlation_id?: string | null
           created_at?: string
+          error_count?: number | null
           id?: string
           is_original_caption?: boolean | null
+          last_error?: string | null
           last_group_message_at?: string | null
           last_retry_at?: string | null
+          last_status_change?: string | null
           max_retries?: number | null
           media_group_id?: string | null
           media_group_size?: number | null
@@ -395,6 +423,7 @@ export type Database = {
           retry_count?: number | null
           sender_info?: Json
           status?: string | null
+          status_history?: Json | null
           telegram_data?: Json
           text?: string | null
           updated_at?: string
@@ -406,12 +435,14 @@ export type Database = {
         Row: {
           analyzed_content: Json | null
           caption: string | null
+          correlation_id: string | null
           created_at: string
           duration: number | null
           file_id: string | null
           file_size: number | null
           file_type: string | null
           file_unique_id: string | null
+          glide_app_url: string | null
           glide_data: Json | null
           height: number | null
           id: string
@@ -439,7 +470,7 @@ export type Database = {
           retry_count: number | null
           status: string | null
           storage_path: string | null
-          telegram_data: Json | null
+          telegram_media_row_id: string | null
           updated_at: string
           vendor_uid: string | null
           width: number | null
@@ -447,12 +478,14 @@ export type Database = {
         Insert: {
           analyzed_content?: Json | null
           caption?: string | null
+          correlation_id?: string | null
           created_at?: string
           duration?: number | null
           file_id?: string | null
           file_size?: number | null
           file_type?: string | null
           file_unique_id?: string | null
+          glide_app_url?: string | null
           glide_data?: Json | null
           height?: number | null
           id?: string
@@ -480,7 +513,7 @@ export type Database = {
           retry_count?: number | null
           status?: string | null
           storage_path?: string | null
-          telegram_data?: Json | null
+          telegram_media_row_id?: string | null
           updated_at?: string
           vendor_uid?: string | null
           width?: number | null
@@ -488,12 +521,14 @@ export type Database = {
         Update: {
           analyzed_content?: Json | null
           caption?: string | null
+          correlation_id?: string | null
           created_at?: string
           duration?: number | null
           file_id?: string | null
           file_size?: number | null
           file_type?: string | null
           file_unique_id?: string | null
+          glide_app_url?: string | null
           glide_data?: Json | null
           height?: number | null
           id?: string
@@ -521,24 +556,62 @@ export type Database = {
           retry_count?: number | null
           status?: string | null
           storage_path?: string | null
-          telegram_data?: Json | null
+          telegram_media_row_id?: string | null
           updated_at?: string
           vendor_uid?: string | null
           width?: number | null
         }
         Relationships: [
           {
+            foreignKeyName: "telegram_media_correlation_id_fkey"
+            columns: ["correlation_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["correlation_id"]
+          },
+          {
             foreignKeyName: "telegram_media_message_id_fkey"
             columns: ["message_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "messages"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "telegram_media_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "telegram_media_messages"
+            referencedColumns: ["message_id"]
           },
         ]
       }
     }
     Views: {
-      [_ in never]: never
+      telegram_media_messages: {
+        Row: {
+          analyzed_content: Json | null
+          caption: string | null
+          file_id: string | null
+          file_type: string | null
+          file_unique_id: string | null
+          is_original_caption: boolean | null
+          media_group_id: string | null
+          message_id: string | null
+          message_media_data: Json | null
+          notes: string | null
+          original_message_id: string | null
+          po_uid: string | null
+          product_code: string | null
+          product_name: string | null
+          public_url: string | null
+          purchase_date: string | null
+          quantity: number | null
+          storage_path: string | null
+          telegram_media_id: string | null
+          vendor_uid: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       check_media_sync_status: {
@@ -550,13 +623,14 @@ export type Database = {
           unsynced_records: number
         }[]
       }
-      cleanup_old_messages: {
+      check_storage_metrics: {
         Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      cleanup_orphaned_media: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
+        Returns: {
+          total_files: number
+          total_size: number
+          avg_file_size: number
+          files_last_24h: number
+        }[]
       }
       create_glide_sync_table: {
         Args: {
@@ -596,7 +670,31 @@ export type Database = {
           message_date: string
         }[]
       }
-      maintenance_cleanup: {
+      insert_webhook_message: {
+        Args: {
+          p_message_id: number
+          p_chat_id: number
+          p_sender_info: Json
+          p_message_type: string
+          p_telegram_data: Json
+          p_media_group_id: string
+          p_caption: string
+          p_message_url: string
+          p_analyzed_content: Json
+          p_is_original_caption: boolean
+          p_original_message_id: string
+          p_message_media_data: Json
+          p_correlation_id: string
+          p_status: string
+          p_processed_at: string
+        }
+        Returns: {
+          id: string
+          message_id: number
+          status: string
+        }[]
+      }
+      maintenance_cleanup_consolidated: {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
@@ -607,12 +705,14 @@ export type Database = {
         Returns: {
           analyzed_content: Json | null
           caption: string | null
+          correlation_id: string | null
           created_at: string
           duration: number | null
           file_id: string | null
           file_size: number | null
           file_type: string | null
           file_unique_id: string | null
+          glide_app_url: string | null
           glide_data: Json | null
           height: number | null
           id: string
@@ -640,11 +740,17 @@ export type Database = {
           retry_count: number | null
           status: string | null
           storage_path: string | null
-          telegram_data: Json | null
+          telegram_media_row_id: string | null
           updated_at: string
           vendor_uid: string | null
           width: number | null
         }[]
+      }
+      set_status_source: {
+        Args: {
+          source: string
+        }
+        Returns: undefined
       }
       sync_telegram_media_with_messages: {
         Args: Record<PropertyKey, never>
@@ -674,9 +780,17 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      validate_storage_consistency: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          inconsistent_records: number
+          missing_files: number
+          orphaned_files: number
+        }[]
+      }
     }
     Enums: {
-      [_ in never]: never
+      message_status: "pending" | "media_ready" | "processed" | "error"
     }
     CompositeTypes: {
       message_media_data_type: {
