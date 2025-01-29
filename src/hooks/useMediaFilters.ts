@@ -17,11 +17,11 @@ export const useMediaFilters = () => {
   const { data: filterOptions } = useQuery<FilterOptions>({
     queryKey: ['filter-options'],
     queryFn: async () => {
-      // Get unique channels
+      // Get unique channels from message_media_data
       const channelsResult = await supabase
         .from('telegram_media')
-        .select('telegram_data')
-        .not('telegram_data->chat->title', 'is', null);
+        .select('message_media_data')
+        .not('message_media_data->telegram_data->chat->title', 'is', null);
 
       // Get unique vendors from message_media_data
       const vendorsResult = await supabase
@@ -30,10 +30,10 @@ export const useMediaFilters = () => {
         .not('message_media_data->analysis->vendor_uid', 'is', null);
 
       const channels = [...new Set(channelsResult.data?.map(item => 
-        (item.telegram_data as any).chat?.title).filter(Boolean) || [])];
+        (item.message_media_data?.telegram_data?.chat?.title as string)).filter(Boolean) || [])];
       
       const vendors = [...new Set(vendorsResult.data?.map(item => 
-        (item.message_media_data as any).analysis?.vendor_uid).filter(Boolean) || [])];
+        (item.message_media_data?.analysis?.vendor_uid as string)).filter(Boolean) || [])];
 
       return { channels, vendors };
     }
