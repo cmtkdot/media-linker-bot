@@ -29,11 +29,15 @@ export const useMediaFilters = () => {
         .select('message_media_data')
         .not('message_media_data->analysis->vendor_uid', 'is', null);
 
-      const channels = [...new Set(channelsResult.data?.map(item => 
-        (item.message_media_data?.telegram_data?.chat?.title as string)).filter(Boolean) || [])];
+      const channels = [...new Set(channelsResult.data?.map(item => {
+        const messageData = item.message_media_data as Record<string, any>;
+        return messageData?.telegram_data?.chat?.title as string;
+      }).filter(Boolean) || [])];
       
-      const vendors = [...new Set(vendorsResult.data?.map(item => 
-        (item.message_media_data?.analysis?.vendor_uid as string)).filter(Boolean) || [])];
+      const vendors = [...new Set(vendorsResult.data?.map(item => {
+        const messageData = item.message_media_data as Record<string, any>;
+        return messageData?.analysis?.vendor_uid as string;
+      }).filter(Boolean) || [])];
 
       return { channels, vendors };
     }
